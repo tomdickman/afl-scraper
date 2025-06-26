@@ -1,5 +1,5 @@
 import argparse
-from scraper import scrape
+from scraper import scrape, scrape_matches
 from utils import health_check, smoke_test
 
 def _run():
@@ -8,7 +8,7 @@ def _run():
         description='Handles various scraping tasks to ascertain AFL statistics',
         formatter_class=argparse.RawTextHelpFormatter
     )
-    
+
     parser.add_argument(
         'command',
         choices=['health', 'scrape', 'smoke'],
@@ -19,9 +19,9 @@ def _run():
             "  smoke - Execute a smoke test to check for potential site changes affecting scraping"
         )
     )
-    
+
     args = parser.parse_args()
-    
+
     match args.command:
         case 'health':
             if health_check():
@@ -30,12 +30,12 @@ def _run():
                 print('❌   Failed')
         case 'scrape':
             print("🕷️   Scraping...")
-            print(scrape())
+            print(scrape_matches(1))
         case 'smoke':
             smoke_test()
         case _:
             print("❌   Unknown Command")
-    
+
 
 
 if __name__ == "__main__":
