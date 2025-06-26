@@ -1,42 +1,41 @@
-import argparse
-from scraper import scrape, scrape_matches
+import click
+from scraper import scrape_matches
 from utils import health_check, smoke_test
 
-def _run():
-    parser = argparse.ArgumentParser(
-        prog='AFL Scraper',
-        description='Handles various scraping tasks to ascertain AFL statistics',
-        formatter_class=argparse.RawTextHelpFormatter
-    )
+@click.group()
+def cli():
+    """Handles various scraping tasks to ascertain AFL statistics."""
+    pass
 
-    parser.add_argument(
-        'command',
-        choices=['health', 'scrape', 'smoke'],
-        help=(
-            "Command to execute:\n"
-            "  health - Run a system health check.\n"
-            "  scrape - Execute the web scraper routine.\n"
-            "  smoke - Execute a smoke test to check for potential site changes affecting scraping"
-        )
-    )
+@cli.command(name="health")
+def health():
+    """Run a system health check."""
+    if health_check():
+        click.echo("✅   Pass")
+    else:
+        click.echo("❌   Failed")
 
-    args = parser.parse_args()
+@cli.command(name="scrape")
+@click.option(
+    '--headless/--no-headless',
+    default=True,
+    help='Run the scraper in headless mode (default: headless).'
+)
+@click.option(
+    '--round-id',
+    type=str,
+    default="1",
+    help='Round ID to scrape (uses "0" for Opening Round).'
+)
+def scrape(round_id, headless):
+    """Execute the web scraper routine."""
+    click.echo("🕷️   Scraping...")
+    click.echo(scrape_matches(round_id, headless=headless))
 
-    match args.command:
-        case 'health':
-            if health_check():
-                print('✅   Pass')
-            else:
-                print('❌   Failed')
-        case 'scrape':
-            print("🕷️   Scraping...")
-            print(scrape_matches(1))
-        case 'smoke':
-            smoke_test()
-        case _:
-            print("❌   Unknown Command")
-
-
+@cli.command(name="smoke")
+def smoke():
+    """Execute a smoke test to check for potential site changes affecting scraping."""
+    smoke_test()
 
 if __name__ == "__main__":
-    _run()
+    cli()

@@ -14,9 +14,9 @@ def scrape() -> str:
 
         return text
 
-def scrape_matches(round_number: int):
+def scrape_matches(round_number: int, headless: bool):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=headless)
         page = get_fixture_page(browser)
         page = navigate_to_round(page, round_number)
         matches_locator = page.locator(CLASSNAMES['FIXTURE_MATCHES'])
