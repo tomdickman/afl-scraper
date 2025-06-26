@@ -1,6 +1,22 @@
-from playwright.sync_api import Page, Locator
+from playwright.sync_api import Browser, Page, Locator
 from typing import Dict
 from .css_selectors import CLASSNAMES
+from .paths import PATHS
+
+def get_fixture_page(browser: Browser) -> Page:
+    '''
+    Fetches the Page instance of the root fixture page
+    
+    Args:
+        browser (Browser): the playwright brower session
+        
+    Returns:
+        Page: the playwright page instance of the fixture page
+    '''
+    page = browser.new_page()
+    page.goto(PATHS['FIXTURE'])
+
+    return page
 
 def get_round_buttons(page: Page) -> Dict[str, Locator]:
     '''

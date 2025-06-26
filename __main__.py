@@ -1,6 +1,6 @@
 import argparse
 from scraper import scrape
-from utils import health_check
+from utils import health_check, smoke_test
 
 def _run():
     parser = argparse.ArgumentParser(
@@ -11,11 +11,12 @@ def _run():
     
     parser.add_argument(
         'command',
-        choices=['health', 'scrape'],
+        choices=['health', 'scrape', 'smoke'],
         help=(
             "Command to execute:\n"
             "  health - Run a system health check.\n"
-            "  scrape - Execute the web scraper routine."
+            "  scrape - Execute the web scraper routine.\n"
+            "  smoke - Execute a smoke test to check for potential site changes affecting scraping"
         )
     )
     
@@ -30,6 +31,8 @@ def _run():
         case 'scrape':
             print("🕷️   Scraping...")
             print(scrape())
+        case 'smoke':
+            smoke_test()
         case _:
             print("❌   Unknown Command")
     
