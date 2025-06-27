@@ -4,12 +4,16 @@ from utils import health_check, smoke_test
 
 @click.group()
 def cli():
-    """Handles various scraping tasks to ascertain AFL statistics."""
+    """
+    Handles various scraping tasks to ascertain AFL statistics.
+    """
     pass
 
 @cli.command(name="health")
 def health():
-    """Run a system health check."""
+    """
+    Run a system health check.
+    """
     if health_check():
         click.echo("✅   Pass")
     else:
@@ -28,13 +32,17 @@ def health():
     help='Round ID to scrape (uses "0" for Opening Round).'
 )
 def scrape(round_id, headless):
-    """Execute the web scraper routine."""
+    """
+    Execute the web scraper routine.
+    """
     click.echo("🕷️   Scraping...")
     click.echo(scrape_matches(round_id, headless=headless))
 
 @cli.command(name="smoke")
 def smoke():
-    """Execute a smoke test to check for potential site changes affecting scraping."""
+    """
+    Execute a smoke test to check for potential site changes affecting scraping.
+    """
     smoke_test()
 
 if __name__ == "__main__":
