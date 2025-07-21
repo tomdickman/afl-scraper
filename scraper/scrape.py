@@ -1,5 +1,7 @@
 
 from playwright.sync_api import sync_playwright
+from typing import Dict
+
 from .paths import PATHS
 from .css_selectors import CLASSNAMES
 from .fixture import navigate_to_round, get_fixture_page, get_round_buttons
@@ -31,4 +33,21 @@ def scrape_matches(round_number: int, headless: bool):
                 'round_id': round_id
             })
 
-        return match_ids
+        print(match_ids)
+
+        browser.close()
+
+def scrape_match(id: int, headless: bool):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=headless)
+
+        page = browser.new_page()
+        page.goto(PATHS['MATCH'] + '/' + id)
+        page.click('[data-tab="#player-stats"]')
+        page.wait_for_timeout(200)
+
+        match_info = page.locator(".mc-header__match-info .mc-header__round-wrapper")
+
+        print(match_info.inner_text())
+
+        browser.close()

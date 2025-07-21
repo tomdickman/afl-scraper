@@ -1,5 +1,5 @@
 import click
-from scraper import scrape_matches
+from scraper import scrape_matches, scrape_match
 from utils import health_check, smoke_test
 
 @click.group()
@@ -19,24 +19,50 @@ def health():
     else:
         click.echo("❌   Failed")
 
-@cli.command(name="scrape")
-@click.option(
-    '--headless/--no-headless',
-    default=True,
-    help='Run the scraper in headless mode (default: headless).'
-)
-@click.option(
-    '--round-id',
-    type=str,
-    default="1",
-    help='Round ID to scrape (uses "0" for Opening Round).'
-)
-def scrape(round_id, headless):
+@cli.group(name="scrape")
+def scrape():
     """
     Execute the web scraper routine.
     """
     click.echo("🕷️   Scraping...")
-    click.echo(scrape_matches(round_id, headless=headless))
+
+@scrape.command(
+    "round",
+    help="Scrape details of all the matches in a specific round for current season"
+)
+@click.argument(
+    "id",
+    nargs=1,
+    type=str,
+    default="1",
+)
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    help="Run the scraper in headless mode (default: headless)."
+)
+def round(id, headless):
+    print(f"Scraping round ID {id}...")
+    click.echo(scrape_matches(id, headless=headless))
+
+@scrape.command(
+    "match",
+    help="Scrape details of all the matches in a specific round for current season"
+)
+@click.argument(
+    "id",
+    nargs=1,
+    type=str,
+    default="1",
+)
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    help="Run the scraper in headless mode (default: headless)."
+)
+def match(id, headless):
+    print(f"Scraping match ID {id}...")
+    click.echo(scrape_match(id, headless=headless))
 
 @cli.command(name="smoke")
 def smoke():
