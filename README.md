@@ -6,3 +6,4 @@ A set of CLI scripts written in `python` to scrape AFL stats from various source
 
 - `uv` for dependency package management
 - `playwright` for browser automation and scraping JS heavy sites
+- `click` for CLI command definitions
