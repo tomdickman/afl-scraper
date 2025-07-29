@@ -1,6 +1,4 @@
-
 from playwright.sync_api import sync_playwright
-from typing import Dict
 
 from .paths import PATHS
 from .css_selectors import CLASSNAMES
@@ -46,7 +44,7 @@ def scrape_match(id: int, headless: bool):
         page.click('[data-tab="#player-stats"]')
         page.wait_for_timeout(200)
 
-        match_info = page.locator(".mc-header__match-info .mc-header__round-wrapper")
+        match_info = page.locator(CLASSNAMES['MATCH_TEAMS'])
 
         print(match_info.inner_text())
 
