@@ -65,11 +65,16 @@ def match(id, headless):
     click.echo(scrape_match(id, headless=headless))
 
 @cli.command(name="smoke")
-def smoke():
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    help="Run the scraper in headless mode (default: headless)."
+)
+def smoke(headless):
     """
     Execute a smoke test to check for potential site changes affecting scraping.
     """
-    smoke_test()
+    smoke_test(headless)
 
 if __name__ == "__main__":
     cli()
