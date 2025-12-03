@@ -1,6 +1,6 @@
 from playwright.sync_api import sync_playwright
 
-from scraper import get_fixture_page, get_round_buttons
+from ..scraper import get_fixture_page, get_round_buttons
 
 def smoke_test_fixture(headless: bool = True) -> bool:
     '''

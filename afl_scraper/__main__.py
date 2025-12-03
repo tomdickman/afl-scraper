@@ -1,6 +1,6 @@
 import click
-from scraper import scrape_matches, scrape_match
-from utils import health_check, smoke_test
+from .scraper import scrape_matches, scrape_match
+from .utils import health_check, smoke_test
 
 @click.group()
 def cli():

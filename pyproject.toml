@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "afl-scraper"
 version = "0.1.0"
@@ -9,3 +13,6 @@ dependencies = [
     "pandas>=2.3.3",
     "playwright>=1.52.0",
 ]
+
+[project.scripts]
+afl-scraper = "afl_scraper.__main__:cli"

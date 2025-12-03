@@ -1,5 +1,5 @@
 from playwright.sync_api import sync_playwright
-from parser import display_player_stats, extract_table_data
+from ..parser import display_player_stats, extract_table_data
 
 from .paths import PATHS
 from .css_selectors import CLASSNAMES
