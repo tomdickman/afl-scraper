@@ -1,9 +1,9 @@
 from playwright.sync_api import sync_playwright
-from ..parser import display_player_stats, extract_table_data
+from ..parser import extract_player_stats, extract_table_data
 
 from .paths import PATHS
 from .css_selectors import CLASSNAMES
-from .fixture import navigate_to_round, get_fixture_page, get_round_buttons
+from .fixture import navigate_to_round, get_fixture_page
 
 import pandas as pd
 
@@ -41,8 +41,7 @@ def scrape_match(id: int, headless: bool) -> pd.DataFrame:
 
         print(match_info.inner_text())
 
-        # TODO: Scrape match data from table here.
-        page = display_player_stats(page)
+        page = extract_player_stats(page)
         df = extract_table_data(page)
 
         browser.close()

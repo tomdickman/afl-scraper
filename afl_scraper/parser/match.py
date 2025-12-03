@@ -9,7 +9,7 @@ Functions for parsing data from an individual match page.
 '''
 
 
-def display_player_stats(page: Page) -> Page:
+def extract_player_stats(page: Page) -> Page:
     '''
     Carry out interactions on the match page to display the
     player statistics table.
