@@ -1,20 +1,31 @@
+from datetime import datetime
 from playwright.sync_api import Browser, Page, Locator
 from typing import Dict
+from urllib.parse import urlencode
 from .css_selectors import CLASSNAMES
 from .paths import PATHS
+from .season_ids import SEASON_ID
 
-def get_fixture_page(browser: Browser) -> Page:
+def get_fixture_page(browser: Browser, year: int | None = None) -> Page:
     '''
     Fetches the Page instance of the root fixture page
 
     Args:
-        browser (Browser): the playwright brower session
+        browser (Browser):  the playwright brower session
+        year (int):         the four digit year to get fixture for, defaults to the
+                            current year if none selected.
 
     Returns:
         Page: the playwright page instance of the fixture page
     '''
     page = browser.new_page()
-    page.goto(PATHS['FIXTURE'])
+
+    params = {
+        'Competition': 1,
+        'Season': SEASON_ID[year if (year != None) else datetime.now().year]
+    }
+
+    page.goto(f'{PATHS['FIXTURE']}?{urlencode(params)}')
 
     return page
 
@@ -54,8 +65,8 @@ def navigate_to_round(page: Page, round_number: int) -> Page:
 
     round_buttons[round_no].click()
 
-    # TODO: Determine a reliable site state we can look for instead.
-    # At best this will be flakey.
+    # TODO: Replace with a reliable site state we can look for instead
+    # of using a timeout.
     page.wait_for_timeout(200)
 
     return page

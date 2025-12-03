@@ -47,7 +47,7 @@ def round(id, headless):
 
 @scrape.command(
     "match",
-    help="Scrape details of all the matches in a specific round for current season"
+    help="Scrape details a specific match by ID"
 )
 @click.argument(
     "id",

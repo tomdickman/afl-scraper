@@ -1,18 +1,11 @@
 from playwright.sync_api import sync_playwright
+from parser import display_player_stats, extract_table_data
 
 from .paths import PATHS
 from .css_selectors import CLASSNAMES
 from .fixture import navigate_to_round, get_fixture_page, get_round_buttons
 
-def scrape() -> str:
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(PATHS['FIXTURE'])
-        text = navigate_to_round(page, 0)
-        browser.close()
-
-        return text
+import pandas as pd
 
 def scrape_matches(round_number: int, headless: bool):
     with sync_playwright() as p:
@@ -35,7 +28,7 @@ def scrape_matches(round_number: int, headless: bool):
 
         browser.close()
 
-def scrape_match(id: int, headless: bool):
+def scrape_match(id: int, headless: bool) -> pd.DataFrame:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
 
@@ -48,4 +41,9 @@ def scrape_match(id: int, headless: bool):
 
         print(match_info.inner_text())
 
+        # TODO: Scrape match data from table here.
+        page = display_player_stats(page)
+        df = extract_table_data(page)
+
         browser.close()
+        return df

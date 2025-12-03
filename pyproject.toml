@@ -6,5 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.2.1",
+    "pandas>=2.3.3",
     "playwright>=1.52.0",
 ]
