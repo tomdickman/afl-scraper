@@ -1,5 +1,5 @@
 from playwright.sync_api import sync_playwright
-from ..parser import extract_player_stats, extract_table_data
+from ..parser import extract_match_details, extract_player_stats, extract_table_data
 
 from .paths import PATHS
 from .css_selectors import CLASSNAMES
@@ -34,12 +34,9 @@ def scrape_match(id: int, headless: bool) -> pd.DataFrame:
 
         page = browser.new_page()
         page.goto(PATHS['MATCH'] + '/' + id)
-        page.click('[data-tab="#player-stats"]')
-        page.wait_for_timeout(200)
 
-        match_info = page.locator(CLASSNAMES['MATCH_TEAMS'])
-
-        print(match_info.inner_text())
+        match_info = extract_match_details(page)
+        print(match_info)
 
         page = extract_player_stats(page)
         df = extract_table_data(page)

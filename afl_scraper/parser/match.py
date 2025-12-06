@@ -1,12 +1,37 @@
+import pandas as pd
+import re
+
 from playwright.sync_api import Locator, Page
 from typing import List
 
-import pandas as pd
-import re
+from ..models import RawMatchDetails
+
+from .css_selectors import CLASSNAMES
 
 '''
 Functions for parsing data from an individual match page.
 '''
+
+def extract_match_details(page: Page) -> RawMatchDetails:
+    teams_info = page.locator(CLASSNAMES['MATCH_TEAMS'])
+    round_date_time_info = page.locator(CLASSNAMES['MATCH_DATE_TIME'])
+    venue_info = page.locator(CLASSNAMES['MATCH_VENUE'])
+
+    teams = teams_info.inner_text().split(' v ')
+    round, date_info, time_info = round_date_time_info.inner_text().split(' • ')
+    venue, _land = re.sub(r"\s+", "", venue_info.inner_text()).split('•')
+
+    if len(teams) != 2:
+        raise ValueError("Could not parse team names from page")
+
+    return {
+        'home_team': teams[0],
+        'away_team': teams[1],
+        'round': round,
+        'date': date_info,
+        'time': time_info,
+        'venue': venue
+    }
 
 
 def extract_player_stats(page: Page) -> Page:
