@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 @dataclass
 class RawMatchDetails:
     home_team: str

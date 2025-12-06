@@ -16,3 +16,8 @@ dependencies = [
 
 [project.scripts]
 afl-scraper = "afl_scraper.__main__:cli"
+
+[dependency-groups]
+dev = [
+    "black>=25.11.0",
+]

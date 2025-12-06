@@ -1,5 +1,6 @@
 from playwright.sync_api import sync_playwright
 
+
 def health_check():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -10,4 +11,4 @@ def health_check():
         data = page.inner_text("h1")
         browser.close()
 
-        return data == 'AFL Tables'
+        return data == "AFL Tables"
