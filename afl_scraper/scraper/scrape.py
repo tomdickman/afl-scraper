@@ -1,5 +1,5 @@
 from playwright.sync_api import sync_playwright
-from ..parser import extract_match_details, extract_player_stats, extract_table_data
+from ..parser import extract_player_stats, extract_table_data
 
 from .paths import PATHS
 from .css_selectors import CLASSNAMES
@@ -27,18 +27,15 @@ def scrape_matches(round_number: int, headless: bool):
         browser.close()
 
 
-def scrape_match(id: int, headless: bool) -> pd.DataFrame:
+def scrape_match(id: int, headless: bool):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
 
         page = browser.new_page()
         page.goto(PATHS["MATCH"] + "/" + id)
 
-        match_info = extract_match_details(page)
-        print(match_info)
-
         page = extract_player_stats(page)
-        df = extract_table_data(page)
+        data = extract_table_data(page)
 
         browser.close()
-        return df
+        return data

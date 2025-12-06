@@ -4,7 +4,7 @@ import re
 from playwright.sync_api import Locator, Page
 from typing import List
 
-from ..models import RawMatchDetails
+from ..models import RawMatchDetails, RawMatchData
 
 from .css_selectors import CLASSNAMES
 
@@ -13,7 +13,7 @@ Functions for parsing data from an individual match page.
 """
 
 
-def extract_match_details(page: Page) -> RawMatchDetails:
+def _extract_match_details(page: Page) -> RawMatchDetails:
     teams_info = page.locator(CLASSNAMES["MATCH_TEAMS"])
     round_date_time_info = page.locator(CLASSNAMES["MATCH_DATE_TIME"])
     venue_info = page.locator(CLASSNAMES["MATCH_VENUE"])
@@ -101,7 +101,7 @@ def _extract_data_rows(table: Locator, column_count: int) -> List[List[str]]:
     return data_rows
 
 
-def extract_table_data(page: Page) -> pd.DataFrame:
+def extract_table_data(page: Page) -> RawMatchData:
     """
     Extract tabular data from the stats table on the page.
 
@@ -127,8 +127,24 @@ def extract_table_data(page: Page) -> pd.DataFrame:
     if not columns:
         raise ValueError("No column headers found in table")
 
-    data_rows = _extract_data_rows(table, len(columns))
+    # Open the team selector
+    page.locator("button#teams-dropdown-button").click()
+    # Select home team
+    page.locator(".select__options-wrapper").locator("li:nth-child(2)").click()
 
-    # Create and return DataFrame
-    df = pd.DataFrame(data_rows, columns=columns)
-    return df
+    home_data_rows = _extract_data_rows(table, len(columns))
+    home_df = pd.DataFrame(home_data_rows, columns=columns)
+
+    # Open the team selector
+    page.locator("button#teams-dropdown-button").click()
+    # Select away team
+    page.locator(".select__options-wrapper").locator("li:nth-child(3)").click()
+
+    away_data_rows = _extract_data_rows(table, len(columns))
+    away_df = pd.DataFrame(away_data_rows, columns=columns)
+
+    return {
+        "details": _extract_match_details(page),
+        "home_team_stats": home_df,
+        "away_team_stats": away_df,
+    }

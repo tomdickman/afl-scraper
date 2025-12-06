@@ -1,1 +1,1 @@
-from .match_details import RawMatchDetails
+from .match_details import RawMatchDetails, RawMatchData
