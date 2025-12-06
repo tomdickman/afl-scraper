@@ -8,3 +8,7 @@ A set of CLI scripts written in `python` to scrape AFL stats from various source
 - `pandas` because using dataframes is mint
 - `playwright` for browser automation and scraping JS heavy sites
 - `click` for CLI command definitions
+
+### Dev dependencies
+
+- `black` for opinionated code formatting
