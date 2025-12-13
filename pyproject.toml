@@ -20,4 +20,12 @@ afl-scraper = "afl_scraper.__main__:cli"
 [dependency-groups]
 dev = [
     "black>=25.11.0",
+    "pytest>=9.0.2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
