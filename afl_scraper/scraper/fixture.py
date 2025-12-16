@@ -40,7 +40,7 @@ def get_round_buttons(page: Page) -> Dict[str, Locator]:
     Returns:
         Dict: a dictionary of Locator instances for the links
         to each round, keyed by the string value of the round
-        number. Example: { 'OR': Locator, '1': Locator, ... }
+        number. Example: `{ 'OR': Locator, '1': Locator, ... }`
     """
 
     page.wait_for_selector(FIXTURE_CLASSNAMES["ROUND_NAV"])
