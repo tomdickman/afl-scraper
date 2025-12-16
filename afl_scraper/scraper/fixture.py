@@ -2,9 +2,8 @@ from datetime import datetime
 from playwright.sync_api import Browser, Page, Locator
 from typing import Dict
 from urllib.parse import urlencode
-from .css_selectors import CLASSNAMES
-from .paths import PATHS
-from .season_ids import SEASON_ID
+
+from .constants import FIXTURE_CLASSNAMES, PATHS, SEASON_ID
 
 
 def get_fixture_page(browser: Browser, year: int | None = None) -> Page:
@@ -44,9 +43,9 @@ def get_round_buttons(page: Page) -> Dict[str, Locator]:
         number. Example: { 'OR': Locator, '1': Locator, ... }
     """
 
-    page.wait_for_selector(CLASSNAMES["ROUND_NAV"])
+    page.wait_for_selector(FIXTURE_CLASSNAMES["ROUND_NAV"])
 
-    round_nav = page.locator(CLASSNAMES["ROUND_NAV"])
+    round_nav = page.locator(FIXTURE_CLASSNAMES["ROUND_NAV"])
 
     round_buttons = round_nav.get_by_role("button")
 
@@ -75,4 +74,4 @@ def navigate_to_round(page: Page, round_number: int) -> Page:
 
 
 def get_match_links(page: Page) -> Locator:
-    return page.locator(CLASSNAMES["FIXTURES_MATCHES"])
+    return page.locator(FIXTURE_CLASSNAMES["MATCHES"])

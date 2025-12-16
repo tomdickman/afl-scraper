@@ -4,9 +4,9 @@ import re
 from playwright.sync_api import Locator, Page
 from typing import List
 
+from ..constants import FIXTURE_CLASSNAMES
 from ..models import RawMatchDetails, RawMatchData
 
-from .css_selectors import CLASSNAMES
 
 """
 Functions for parsing data from an individual match page.
@@ -14,9 +14,9 @@ Functions for parsing data from an individual match page.
 
 
 def _extract_match_details(page: Page) -> RawMatchDetails:
-    teams_info = page.locator(CLASSNAMES["MATCH_TEAMS"])
-    round_date_time_info = page.locator(CLASSNAMES["MATCH_DATE_TIME"])
-    venue_info = page.locator(CLASSNAMES["MATCH_VENUE"])
+    teams_info = page.locator(FIXTURE_CLASSNAMES["MATCH_TEAMS"])
+    round_date_time_info = page.locator(FIXTURE_CLASSNAMES["MATCH_DATE_TIME"])
+    venue_info = page.locator(FIXTURE_CLASSNAMES["MATCH_VENUE"])
 
     teams = teams_info.inner_text().split(" v ")
     round, date_info, time_info = round_date_time_info.inner_text().split(" • ")

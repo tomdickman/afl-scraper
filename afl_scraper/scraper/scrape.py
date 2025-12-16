@@ -1,11 +1,8 @@
 from playwright.sync_api import sync_playwright
-from ..parser import extract_player_stats, extract_table_data
 
-from .paths import PATHS
-from .css_selectors import CLASSNAMES
+from .constants import FIXTURE_CLASSNAMES, PATHS
 from .fixture import navigate_to_round, get_fixture_page
-
-import pandas as pd
+from .parser import extract_player_stats, extract_table_data
 
 
 def scrape_matches(round_number: int, headless: bool):
@@ -13,7 +10,7 @@ def scrape_matches(round_number: int, headless: bool):
         browser = p.chromium.launch(headless=headless)
         page = get_fixture_page(browser)
         page = navigate_to_round(page, round_number)
-        matches_locator = page.locator(CLASSNAMES["FIXTURE_MATCHES"])
+        matches_locator = page.locator(FIXTURE_CLASSNAMES["MATCHES"])
 
         match_ids = []
 
