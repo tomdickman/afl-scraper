@@ -47,31 +47,34 @@ def get_round_buttons(page: Page) -> Dict[str, Locator]:
 
     round_nav = page.locator(FIXTURE_CLASSNAMES["ROUND_NAV"])
 
-    round_buttons = round_nav.get_by_role("button")
+    round_buttons = round_nav.get_by_role("button").all()
 
     keyed_buttons = {}
 
-    for btn in round_buttons.all():
+    for btn in round_buttons:
         key = btn.inner_text()
         keyed_buttons[key] = btn
 
     return keyed_buttons
 
 
-def navigate_to_round(page: Page, round_number: int) -> Page:
-    # Handle the Opening Round case, passing in round `0` maps to 'OR'
-    round_no = str(round_number) if round_number != 0 else "OR"
+def navigate_to_round(page: Page, round_number: str) -> Page:
+    """Navigate to a specific round by round number.
 
+    Args:
+        page (Page): The page to navigate
+        round_number (str): The round number, OR for Opening Round, finals maintain
+            their string acronym (QF, SF, PF, GF etc.)
+
+    Returns:
+        Page: _description_
+    """
     round_buttons = get_round_buttons(page)
 
-    round_buttons[round_no].click()
+    round_buttons[round_number].click()
 
     # TODO: Replace with a reliable site state we can look for instead
     # of using a timeout.
     page.wait_for_timeout(200)
 
     return page
-
-
-def get_match_links(page: Page) -> Locator:
-    return page.locator(FIXTURE_CLASSNAMES["MATCHES"])

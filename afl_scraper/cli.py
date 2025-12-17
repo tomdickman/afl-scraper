@@ -1,5 +1,6 @@
 import click
-from .scraper import scrape_matches, scrape_match
+from datetime import datetime
+from .scraper import scrape_match_ids, scrape_match
 from .utils import health_check, smoke_test
 
 
@@ -45,9 +46,17 @@ def scrape():
     default=True,
     help="Run the scraper in headless mode (default: headless).",
 )
-def round(id, headless):
-    print(f"Scraping round ID {id}...")
-    click.echo(scrape_matches(id, headless=headless))
+@click.option(
+    "--year",
+    default=datetime.now().year,
+    type=int,
+    help="The year, defaults to current if not included."
+)
+def round(id, headless, year):
+    print(f"Scraping round '{id}' of {year}...")
+    ids = scrape_match_ids(id, year, headless)
+    for id in ids:
+        click.echo(scrape_match(id, headless))
 
 
 @scrape.command("match", help="Scrape details a specific match by ID")
