@@ -1,17 +1,17 @@
 from datetime import datetime
-from playwright.sync_api import Browser, Page, Locator
+from playwright.sync_api import BrowserContext, Page, Locator
 from typing import Dict
 from urllib.parse import urlencode
 
 from .constants import FIXTURE_CLASSNAMES, PATHS, SEASON_ID
 
 
-def get_fixture_page(browser: Browser, year: int | None = None) -> Page:
+def get_fixture_page(browser: BrowserContext, year: int | None = None) -> Page:
     """
     Fetches the Page instance of the root fixture page
 
     Args:
-        browser (Browser):  the playwright brower session
+        browser (BrowserContext):  the playwright browser context
         year (int):         the four digit year to get fixture for, defaults to the
                             current year if none selected.
 

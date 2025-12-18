@@ -1,6 +1,7 @@
 import click
 from datetime import datetime
-from .scraper import scrape_match_ids, scrape_match
+
+from .scraper import scrape_match_ids, scrape_match, sync_browser_context
 from .utils import health_check, smoke_test
 
 
@@ -50,13 +51,15 @@ def scrape():
     "--year",
     default=datetime.now().year,
     type=int,
-    help="The year, defaults to current if not included."
+    help="The year, defaults to current if not included.",
 )
 def round(id, headless, year):
     print(f"Scraping round '{id}' of {year}...")
-    ids = scrape_match_ids(id, year, headless)
-    for id in ids:
-        click.echo(scrape_match(id, headless))
+    with sync_browser_context(headless) as browser:
+        ids = scrape_match_ids(browser, id, year)
+        click.echo(ids)
+        for id in ids:
+            click.echo(scrape_match(browser, id))
 
 
 @scrape.command("match", help="Scrape details a specific match by ID")
@@ -73,7 +76,8 @@ def round(id, headless, year):
 )
 def match(id, headless):
     print(f"Scraping match ID {id}...")
-    click.echo(scrape_match(id, headless=headless))
+    with sync_browser_context(headless) as browser:
+        click.echo(scrape_match(browser, id))
 
 
 @cli.command(name="smoke")
