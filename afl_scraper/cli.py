@@ -1,6 +1,7 @@
 import click
 from datetime import datetime
 
+from .pipelines import match_pipeline
 from .scraper import scrape_match_ids, scrape_match, sync_browser_context
 from .utils import health_check, smoke_test
 
@@ -76,8 +77,7 @@ def round(id, headless, year):
 )
 def match(id, headless):
     print(f"Scraping match ID {id}...")
-    with sync_browser_context(headless) as browser:
-        click.echo(scrape_match(browser, id))
+    match_pipeline(id, headless)
 
 
 @cli.command(name="smoke")
