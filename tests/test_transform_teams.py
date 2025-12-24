@@ -1,7 +1,7 @@
 """Unit tests for the teams transformation module."""
 
 import pytest
-from src.transformer.teams import transform_team_name
+from afl_scraper.transformer.teams import transform_team_name
 
 
 class TestTransformTeamName:
