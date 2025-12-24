@@ -6,12 +6,12 @@ Module responsible for loading data into various locations for use.
 
 Connection stings refer to required environment variables which are expected to be present, they are:
 
-`DB_NAME`: The database name
-`DB_HOST`: The hostname of the database
-`DB_PASSWORD_APP`: The password for the database app (consumer) connection
-`DB_PASSWORD_OWNER`: The password for the database owner (required for migrations)
-`DB_USER_APP`: The user name of the database app (consumer) connection
-`DB_USER_OWNER`: The user name of the database owner (required for migrations)
+- `DB_NAME`: The database name
+- `DB_HOST`: The hostname of the database
+- `DB_PASSWORD_APP`: The password for the database app (consumer) connection
+- `DB_PASSWORD_OWNER`: The password for the database owner (required for migrations)
+- `DB_USER_APP`: The user name of the database app (consumer) connection
+- `DB_USER_OWNER`: The user name of the database owner (required for migrations)
 
 ## RBDMS
 
