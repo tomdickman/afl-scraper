@@ -9,9 +9,11 @@ description = "Data scraper for AFL matches and player statistics"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.17.2",
     "click>=8.2.1",
     "pandas>=2.3.3",
     "playwright>=1.52.0",
+    "psycopg[binary]>=3.3.2",
 ]
 
 [project.scripts]
