@@ -5,16 +5,16 @@ Revises: c6230ed6782e
 Create Date: 2025-12-28 09:18:26.674021
 
 """
+
 from pathlib import Path
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f6ae240437b5'
-down_revision: Union[str, Sequence[str], None] = 'c6230ed6782e'
+revision: str = "f6ae240437b5"
+down_revision: Union[str, Sequence[str], None] = "c6230ed6782e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

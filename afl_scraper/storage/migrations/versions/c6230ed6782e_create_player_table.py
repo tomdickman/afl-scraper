@@ -18,11 +18,11 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def upgrade():
+def upgrade() -> None:
     sql = Path("afl_scraper/storage/tables/player.sql").read_text()
 
     op.execute(sql)
 
 
-def downgrade():
+def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS player;")
