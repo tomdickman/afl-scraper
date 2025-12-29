@@ -1,6 +1,5 @@
 from playwright.sync_api import BrowserContext
 
-from .browser import sync_browser_context
 from .constants import FIXTURE_CLASSNAMES, PATHS
 from .fixture import navigate_to_round, get_fixture_page
 from .parser import display_player_stats, extract_table_data

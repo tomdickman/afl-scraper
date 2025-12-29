@@ -26,4 +26,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS table;")
+    op.execute("DROP TABLE IF EXISTS team;")
