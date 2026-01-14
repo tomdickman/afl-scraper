@@ -23,10 +23,18 @@ def _extract_match_details(page: Page) -> RawMatchDetails:
     teams = teams_info.inner_text().split(" v ")
     round, date_info, time_info = round_date_time_info.inner_text().split(" • ")
     venue, _land = re.sub(r"\s+", "", venue_info.inner_text()).split("•")
-    home_team_total, away_team_total = (int(total.inner_text()) for total in totals_locator.all())
-    home_score_split, away_score_split = (score_split.inner_text() for score_split in score_splits_locator.all())
-    home_goals, home_behinds = (int(home_score) for home_score in home_score_split.split("."))
-    away_goals, away_behinds = (int(away_score) for away_score in away_score_split.split("."))
+    home_team_total, away_team_total = (
+        int(total.inner_text()) for total in totals_locator.all()
+    )
+    home_score_split, away_score_split = (
+        score_split.inner_text() for score_split in score_splits_locator.all()
+    )
+    home_goals, home_behinds = (
+        int(home_score) for home_score in home_score_split.split(".")
+    )
+    away_goals, away_behinds = (
+        int(away_score) for away_score in away_score_split.split(".")
+    )
 
     if len(teams) != 2:
         raise ValueError("Could not parse team names from page")
