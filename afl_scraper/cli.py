@@ -1,7 +1,7 @@
 import click
 from datetime import datetime
 
-from .pipelines import match_pipeline
+from .pipelines import match_pipeline, players_pipeline
 from .scraper import scrape_match_ids, scrape_match, sync_browser_context
 from .utils import health_check, smoke_test
 
@@ -78,6 +78,17 @@ def round(id, headless, year):
 def match(id, headless):
     print(f"Scraping match ID {id}...")
     match_pipeline(id, headless)
+
+
+@scrape.command("players", help="Scrape player details for a specific year")
+@click.argument("year", nargs=1, type=int, default=2025)
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    help="Run the scraper in headless mode (default: headless).",
+)
+def players(year, headless):
+    players_pipeline(year, headless)
 
 
 @cli.command(name="smoke")
