@@ -2,7 +2,12 @@ from playwright.sync_api import BrowserContext
 
 from .constants import FIXTURE_CLASSNAMES, PATHS
 from .fixture import navigate_to_round, get_fixture_page
-from .parser import display_player_stats, extract_table_data, scrape_players_links
+from .parser import (
+    display_player_stats,
+    extract_table_data,
+    scrape_player,
+    scrape_players_links,
+)
 
 
 def scrape_match_ids(browser: BrowserContext, round_number: int, year: int = None):
@@ -30,8 +35,17 @@ def scrape_match(browser: BrowserContext, id: int):
 
 def scrape_players(browser: BrowserContext, year: int):
     page = browser.new_page()
-    page.goto(f"https://afltables.com/afl/stats/{year}.html", wait_until="networkidle")
+    page.goto(f"https://afltables.com/afl/stats/{year}.html")
 
-    data = scrape_players_links(page)
+    links = scrape_players_links(page)
 
-    return data
+    players = []
+
+    for link in links:
+        page.goto(f"https://afltables.com/afl/stats/{link}")
+        player = scrape_player(page)
+        if player != None:
+            print(player)
+            players.append(player)
+
+    return players
