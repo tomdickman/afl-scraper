@@ -1,4 +1,3 @@
-BEGIN;
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Adelaide Oval', 'Adelaide Oval', 'Adelaide', 'South Australia', 'Australia', -34.915556, 138.596111);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Bellerive Oval', 'Blundstone Arena', 'Hobart', 'Tasmania', 'Australia', -42.87722, 147.37387);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Blacktown', 'Blacktown International Sports Park', 'Sydney', 'New South Wales', 'Australia', -33.76926, 150.85819);
@@ -24,4 +23,3 @@ INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES (
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Traeger Park', 'TIO Traeger Park', 'Alice Springs', 'Northern Territory', 'Australia', -23.709149, 133.8748802);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Wellington', 'Westpac Stadium', 'Wellington', 'Wellington', 'New Zealand', -41.272941, 174.785780);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('York Park', 'University of Tasmania Stadium', 'Launceston', 'Tasmania', 'Australia', -41.425945, 147.139080);
-COMMIT;

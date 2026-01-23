@@ -1,4 +1,3 @@
-
 INSERT INTO team (id, club, mascot) VALUES ('Adelaide', 'Adelaide', 'Crows');
 INSERT INTO team (id, club, mascot) VALUES ('Brisbane Lions', 'Brisbane', 'Lions');
 INSERT INTO team (id, club, mascot) VALUES ('Carlton', 'Carlton', 'Blues');
