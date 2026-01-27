@@ -1,1 +1,2 @@
-from .match_details import RawMatchDetails, RawMatchData
+from .raw_player import RawPlayer
+from .raw_match import RawMatchDetails, RawMatchData

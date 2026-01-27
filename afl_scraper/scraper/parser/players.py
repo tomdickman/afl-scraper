@@ -2,6 +2,7 @@ import re
 from playwright.sync_api import Page
 
 from ..constants import STATS_CLASSNAMES
+from ..models import RawPlayer
 
 """Functions for parsing data from player(s) pages"""
 
@@ -26,12 +27,14 @@ def extract_player_id(url: str) -> str | None:
     return None
 
 
-def scrape_player(page: Page):
+def scrape_player(page: Page) -> RawPlayer:
     """
     Scrape player data
 
     :param page: An AFL Tables /afl/stats/players page
     :type page: Page
+
+    :returns: Scraped player data
     """
     id = extract_player_id(page.url)
     if id == None:
@@ -48,12 +51,12 @@ def scrape_player(page: Page):
     if date_of_birth == None:
         raise ValueError(f"Error parsing DOB for {page.url}")
 
-    return {
-        "id": id,
-        "first_name": first_name,
-        "last_name": last_name,
-        "date_of_birth": date_of_birth,
-    }
+    return RawPlayer(
+        id=id,
+        first_name=first_name,
+        last_name=last_name,
+        date_of_birth=date_of_birth,
+    )
 
 
 def scrape_players_links(page: Page):
