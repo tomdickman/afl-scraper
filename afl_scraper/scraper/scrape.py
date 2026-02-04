@@ -1,4 +1,7 @@
+from typing import List
 from playwright.sync_api import BrowserContext
+
+from ..scraper import RawPlayer
 
 from .constants import FIXTURE_CLASSNAMES, PATHS
 from .fixture import navigate_to_round, get_fixture_page
@@ -15,7 +18,7 @@ def scrape_match_ids(browser: BrowserContext, round_number: int, year: int = Non
     page = navigate_to_round(page, round_number)
     matches_locator = page.locator(FIXTURE_CLASSNAMES["MATCHES"])
 
-    match_ids: list[str] = []
+    match_ids: List[str] = []
 
     for match_locator in matches_locator.all():
         match_ids.append(match_locator.get_attribute("data-match-id"))
@@ -33,7 +36,7 @@ def scrape_match(browser: BrowserContext, id: int):
     return data
 
 
-def scrape_players(browser: BrowserContext, year: int):
+def scrape_players(browser: BrowserContext, year: int) -> List[RawPlayer]:
     page = browser.new_page()
     page.goto(f"https://afltables.com/afl/stats/{year}.html")
 

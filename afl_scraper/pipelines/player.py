@@ -1,4 +1,4 @@
-from ..scraper import scrape_players, sync_browser_context
+from ..scraper import scrape_players, sync_browser_context, RawPlayer
 
 
 def players_pipeline(year: int, headless: bool = True):
