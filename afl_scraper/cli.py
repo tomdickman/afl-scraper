@@ -3,6 +3,7 @@ from datetime import datetime
 
 from .pipelines import match_pipeline, players_pipeline
 from .scraper import scrape_match_ids, scrape_match, sync_browser_context
+from .storage import connection_check
 from .utils import health_check, smoke_test
 
 
@@ -24,6 +25,16 @@ def health():
     else:
         click.echo("❌   Failed")
 
+@cli.command(name="dbcheck")
+def dbcheck():
+    """
+    Run a database connection check.
+    """
+    try:
+        version = connection_check()
+        click.echo(f"✅   DB version {version}")
+    except Exception as e:
+        click.echo(f"❌   Failed {e}")
 
 @cli.group(name="scrape")
 def scrape():

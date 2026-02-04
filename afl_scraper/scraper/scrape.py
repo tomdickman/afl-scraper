@@ -1,7 +1,7 @@
 from typing import List
 from playwright.sync_api import BrowserContext
 
-from ..scraper import RawPlayer
+from ..scraper.models import RawPlayer
 
 from .constants import FIXTURE_CLASSNAMES, PATHS
 from .fixture import navigate_to_round, get_fixture_page
