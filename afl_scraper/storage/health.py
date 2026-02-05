@@ -15,8 +15,13 @@ def connection_check():
 
     #  Create a connection pool
     try:
-        conninfo = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-        connection_pool = psycopg_pool.ConnectionPool(conninfo=conninfo)
+        connection_pool = psycopg_pool.ConnectionPool(kwargs=dict(
+            dbname=db_name,
+            host=db_host,
+            port=int(db_port),
+            user=db_user,
+            password=db_password,
+        ))
 
         try:
             with connection_pool.connection() as connection:
