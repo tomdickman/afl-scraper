@@ -1,4 +1,7 @@
 import re
+from pathlib import Path
+from io import open
+
 from playwright.sync_api import Page
 
 from ..constants import STATS_CLASSNAMES
@@ -39,6 +42,12 @@ def scrape_player(page: Page) -> RawPlayer:
     id = extract_player_id(page.url)
     if id == None:
         raise ValueError(f"Error extracting player ID from {page.url}")
+
+    path = Path(f"afl_scraper/data/raw/player/{id}.html")
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "w") as f:
+        f.write(page.content())
 
     # Remove trailing digits and split by
     first_name, raw_last_name = re.sub(r"\d+$", "", id).split("_", 1)
