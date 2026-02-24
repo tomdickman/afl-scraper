@@ -101,6 +101,17 @@ def match(id, headless):
 def players(year, headless):
     players_pipeline(year, headless)
 
+@cli.group("transform")
+def transform():
+    """
+    Execute a transform routine.
+    """
+    click.echo("🕷️   Transforming...")
+
+@transform.command("players", help="Transform all unstructured player data into structured format")
+def transform_players():
+    players_pipeline(2026)
+
 
 @cli.command(name="smoke")
 @click.option(
