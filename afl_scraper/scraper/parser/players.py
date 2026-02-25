@@ -77,6 +77,7 @@ def scrape_player(page: Page) -> Path:
 
     return path
 
+
 def scrape_players_links(page: Page) -> list[str]:
     """
     Scrape links to raw player data

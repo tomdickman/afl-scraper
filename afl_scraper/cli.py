@@ -2,7 +2,12 @@ import click
 from datetime import datetime
 
 from .pipelines import match_pipeline, players_pipeline
-from .scraper import scrape_match_ids, scrape_match, scrape_players, sync_browser_context
+from .scraper import (
+    scrape_match_ids,
+    scrape_match,
+    scrape_players,
+    sync_browser_context,
+)
 from .storage import connection_check
 from .utils import health_check, smoke_test
 
@@ -25,6 +30,7 @@ def health():
     else:
         click.echo("❌   Failed")
 
+
 @cli.command(name="dbcheck")
 def dbcheck():
     """
@@ -35,6 +41,7 @@ def dbcheck():
         click.echo(f"✅   DB version {version}")
     except Exception as e:
         click.echo(f"❌   Failed {e}")
+
 
 @cli.group(name="scrape")
 def scrape():
@@ -102,16 +109,39 @@ def players(year, headless):
     with sync_browser_context(headless) as browser:
         scrape_players(browser, year)
 
+
 @cli.group("transform")
 def transform():
     """
     Execute a transform routine.
     """
-    click.echo("🕷️   Transforming...")
+    click.echo("🧩   Transforming...")
 
-@transform.command("players", help="Transform all unstructured player data into structured format")
+
+@transform.command(
+    "players", help="Transform all unstructured player data into structured format"
+)
 def transform_players():
     players_pipeline()
+
+@cli.group("pipeline")
+def pipeline():
+    """
+    Execute a full ETL pipeline.
+    """
+    click.echo("⚙️   Running pipeline...")
+
+
+@pipeline.command(
+    "players", help="Transform all unstructured player data into structured format"
+)
+@click.option(
+    "--scrape/--no-scrape",
+    default=False,
+    help="Run the scraper to refresh extracted data before transform and load.",
+)
+def pipeline_players(scrape: bool):
+    print(players_pipeline(scrape))
 
 
 @cli.command(name="smoke")

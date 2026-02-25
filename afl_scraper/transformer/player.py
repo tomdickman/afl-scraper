@@ -18,12 +18,12 @@ def transform_player_page(page_path: Path | str) -> Player:
 
     player_name = soup.find("h1")
 
-    if (player_name == None):
+    if player_name == None:
         raise RuntimeError(f"Player name could not be parsed {page_path}")
 
     birthdate_content = soup.find(string=re.compile("(\d{1,2}-[A-Za-z]{3}-\d{4})"))
 
-    if (birthdate_content == None):
+    if birthdate_content == None:
         raise RuntimeError(f"Player date of birth could not be parsed {page_path}")
 
     id = re.sub(".html", "", path.name)
@@ -34,12 +34,21 @@ def transform_player_page(page_path: Path | str) -> Player:
         id=id,
         givenname=givenname,
         familyname=familyname,
-        birthdate=datetime.strptime(birthdate, "%d-%b-%Y")
+        birthdate=datetime.strptime(birthdate, "%d-%b-%Y"),
     )
 
-def transform_player_data():
-    player_page_dir = Path("afl_scraper/data/raw/player/")
-    player_page_files = [p for p in player_page_dir.iterdir() if p.is_file()]
 
-    for player_page in player_page_files:
-        print(transform_player_page(player_page))
+def transform_player_data() -> list[Player]:
+    """
+    Transform all stored player plages into structured `Player` data.
+
+    Returns
+    -------
+        list[Player]
+    """
+    player_page_dir = Path("afl_scraper/data/raw/player/")
+    player_page_files = [
+        p for p in player_page_dir.iterdir() if p.is_file() and p.suffix == ".html"
+    ]
+
+    return [transform_player_page(player_page) for player_page in player_page_files]
