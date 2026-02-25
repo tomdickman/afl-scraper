@@ -2,7 +2,7 @@ import click
 from datetime import datetime
 
 from .pipelines import match_pipeline, players_pipeline
-from .scraper import scrape_match_ids, scrape_match, sync_browser_context
+from .scraper import scrape_match_ids, scrape_match, scrape_players, sync_browser_context
 from .storage import connection_check
 from .utils import health_check, smoke_test
 
@@ -99,7 +99,8 @@ def match(id, headless):
     help="Run the scraper in headless mode (default: headless).",
 )
 def players(year, headless):
-    players_pipeline(year, headless)
+    with sync_browser_context(headless) as browser:
+        scrape_players(browser, year)
 
 @cli.group("transform")
 def transform():
@@ -110,7 +111,7 @@ def transform():
 
 @transform.command("players", help="Transform all unstructured player data into structured format")
 def transform_players():
-    players_pipeline(2026)
+    players_pipeline()
 
 
 @cli.command(name="smoke")

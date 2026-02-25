@@ -5,7 +5,6 @@ from io import open
 from playwright.sync_api import Page
 
 from ..constants import STATS_CLASSNAMES
-from ..models import RawPlayer
 
 """Functions for parsing data from player(s) pages"""
 
@@ -14,6 +13,21 @@ def extract_player_id(url: str) -> str | None:
     """
     Extracts the player ID segment from URL.
     Handles both underscores and hyphens in the player ID.
+
+    Parameters
+    ----------
+    url: str
+        The player stats page URL
+
+    Returns
+    -------
+    str
+        The player ID
+
+    Raises
+    ------
+    RuntimeError
+        If the player ID cannot be parsed
     """
 
     # Regex pattern:
@@ -27,17 +41,22 @@ def extract_player_id(url: str) -> str | None:
     match = re.search(pattern, url)
     if match:
         return match.group(1)
-    return None
+    raise RuntimeError(f"Failed to parse player ID from URL: {url}")
 
 
-def scrape_player(page: Page) -> RawPlayer:
+def scrape_player(page: Page) -> Path:
     """
-    Scrape player data
+    Scrape unstructured player data into data lake
 
-    :param page: An AFL Tables /afl/stats/players page
-    :type page: Page
+    Parameters
+    ----------
+    page: Page
+        An AFL Tables /afl/stats/players page
 
-    :returns: Scraped player data
+    Returns
+    -------
+    Path
+        The path to the scraped data
     """
     id = extract_player_id(page.url)
     if id == None:
@@ -49,26 +68,29 @@ def scrape_player(page: Page) -> RawPlayer:
     with open(path, "w") as f:
         f.write(page.content())
 
-    # Remove trailing digits and split by
-    first_name, raw_last_name = re.sub(r"\d+$", "", id).split("_", 1)
-    last_name = raw_last_name.replace("_", " ")
-    html = page.content()
+    # Validate that the file was created.
+    if not path.exists():
+        raise FileNotFoundError(f"Failed to create file at {path}")
 
-    match = re.search(r"(\d{1,2}-[A-Za-z]{3}-\d{4})", html)
+    if path.stat().st_size == 0:
+        raise ValueError(f"File created at {path} is empty")
 
-    date_of_birth = match.group(1) if match else None
-    if date_of_birth == None:
-        raise ValueError(f"Error parsing DOB for {page.url}")
+    return path
 
-    return RawPlayer(
-        id=id,
-        first_name=first_name,
-        last_name=last_name,
-        date_of_birth=date_of_birth,
-    )
+def scrape_players_links(page: Page) -> list[str]:
+    """
+    Scrape links to raw player data
 
+    Parameters
+    ----------
+    page: Page
+        An AFL Tables /afl/stats/{year} page
 
-def scrape_players_links(page: Page):
+    Returns
+    -------
+    list[str]
+        A list of links to player pages
+    """
     links = page.locator(STATS_CLASSNAMES["PLAYER_LINKS"]).all()
 
     hrefs = [link.get_attribute("href") for link in links]

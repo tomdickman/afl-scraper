@@ -1,7 +1,7 @@
+from pathlib import Path
 from typing import List
-from playwright.sync_api import BrowserContext
 
-from ..scraper.models import RawPlayer
+from playwright.sync_api import BrowserContext
 
 from .constants import FIXTURE_CLASSNAMES, PATHS
 from .fixture import navigate_to_round, get_fixture_page
@@ -36,19 +36,19 @@ def scrape_match(browser: BrowserContext, id: int):
     return data
 
 
-def scrape_players(browser: BrowserContext, year: int) -> List[RawPlayer]:
+def scrape_players(browser: BrowserContext, year: int) -> List[Path]:
     page = browser.new_page()
     page.goto(f"https://afltables.com/afl/stats/{year}.html")
 
     links = scrape_players_links(page)
 
-    players = []
+    players_data_paths = []
 
     for link in links:
         page.goto(f"https://afltables.com/afl/stats/{link}")
-        player = scrape_player(page)
-        if player != None:
-            print(player)
-            players.append(player)
+        player_data_path = scrape_player(page)
+        if player_data_path != None:
+            print(f"Player path scraped: {player_data_path}")
+            players_data_paths.append(player_data_path)
 
-    return players
+    return players_data_paths
