@@ -8,7 +8,7 @@ from .scraper import (
     scrape_players,
     sync_browser_context,
 )
-from .storage import connection_check
+from .storage import connection_check, test_all_connections
 from .utils import health_check, smoke_test
 
 
@@ -38,6 +38,7 @@ def dbcheck():
     """
     try:
         version = connection_check()
+        click.echo(test_all_connections())
         click.echo(f"✅   DB version {version}")
     except Exception as e:
         click.echo(f"❌   Failed {e}")
@@ -123,6 +124,7 @@ def transform():
 )
 def transform_players():
     players_pipeline()
+
 
 @cli.group("pipeline")
 def pipeline():
