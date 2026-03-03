@@ -1,7 +1,7 @@
 import psycopg_pool
 
-from afl_scraper.storage.connection import admin_connection_pool, connection_pool
-from afl_scraper.storage.db_config import get_db_config
+from ..storage.connection import admin_connection_pool, connection_pool
+from ..storage.db_config import get_db_config
 
 
 def connection_check():

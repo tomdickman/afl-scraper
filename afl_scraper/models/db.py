@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 class DBModel(BaseModel):
     """
-    Docstring for DBModel
+    The base model for database records
     """
 
     __table_name__: str

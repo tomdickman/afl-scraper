@@ -1,9 +1,9 @@
 import os
 
 
-def get_admin_conninfo() -> str:
+def get_write_conninfo() -> str:
     """
-    Get the connection string for admin/owner access (write access).
+    Get the connection string for owner access (write access).
 
     Returns
     -------
@@ -19,7 +19,7 @@ def get_admin_conninfo() -> str:
     return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
 
-def get_app_conninfo() -> str:
+def get_read_conninfo() -> str:
     """
     Get the connection string for app/consumer access (read-only access).
 
