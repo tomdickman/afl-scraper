@@ -26,10 +26,7 @@ class TestBuildUpsertFromModel:
     def test_build_upsert_query_structure(self):
         """Test that the upsert query is built with correct structure."""
         model = MockPlayer(
-            id=1,
-            name="John Smith",
-            team="Carlton",
-            created_at="2024-01-01"
+            id=1, name="John Smith", team="Carlton", created_at="2024-01-01"
         )
 
         query, values = build_upsert_from_model(model)
@@ -43,10 +40,7 @@ class TestBuildUpsertFromModel:
     def test_build_upsert_values_extraction(self):
         """Test that values are correctly extracted from model."""
         model = MockPlayer(
-            id=42,
-            name="Jane Doe",
-            team="Essendon",
-            created_at="2024-02-15"
+            id=42, name="Jane Doe", team="Essendon", created_at="2024-02-15"
         )
 
         query, values = build_upsert_from_model(model)
@@ -66,17 +60,18 @@ class TestSaveModel:
         # Mock database connection and cursor
         mock_conn = Mock()
         mock_cursor = MagicMock()
-        mock_conn.cursor = MagicMock(return_value=MagicMock(__enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()))
+        mock_conn.cursor = MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()
+            )
+        )
 
         # Mock fetchone to return (record_id, was_inserted)
         # PostgreSQL RETURNING returns: id, (xmax = 0) AS inserted
         mock_cursor.fetchone.return_value = (123, True)
 
         model = MockPlayer(
-            id=123,
-            name="Test Player",
-            team="Adelaide",
-            created_at="2024-03-01"
+            id=123, name="Test Player", team="Adelaide", created_at="2024-03-01"
         )
 
         result = save_model(mock_conn, model)
@@ -94,16 +89,17 @@ class TestSaveModel:
         """Test save_model when a new record is inserted."""
         mock_conn = Mock()
         mock_cursor = MagicMock()
-        mock_conn.cursor = MagicMock(return_value=MagicMock(__enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()))
+        mock_conn.cursor = MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()
+            )
+        )
 
         # Simulate INSERT: xmax = 0 returns True
         mock_cursor.fetchone.return_value = (999, True)
 
         model = MockPlayer(
-            id=999,
-            name="New Player",
-            team="Brisbane Lions",
-            created_at="2024-04-01"
+            id=999, name="New Player", team="Brisbane Lions", created_at="2024-04-01"
         )
 
         was_inserted, record_id = save_model(mock_conn, model)
@@ -118,16 +114,17 @@ class TestSaveModel:
         """Test save_model when an existing record is updated."""
         mock_conn = Mock()
         mock_cursor = MagicMock()
-        mock_conn.cursor = MagicMock(return_value=MagicMock(__enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()))
+        mock_conn.cursor = MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()
+            )
+        )
 
         # Simulate UPDATE: xmax > 0 returns False
         mock_cursor.fetchone.return_value = (555, False)
 
         model = MockPlayer(
-            id=555,
-            name="Updated Player",
-            team="Collingwood",
-            created_at="2024-05-01"
+            id=555, name="Updated Player", team="Collingwood", created_at="2024-05-01"
         )
 
         was_inserted, record_id = save_model(mock_conn, model)
@@ -142,15 +139,14 @@ class TestSaveModel:
         """Test that save_model executes query with correct values."""
         mock_conn = Mock()
         mock_cursor = MagicMock()
-        mock_conn.cursor = MagicMock(return_value=MagicMock(__enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()))
+        mock_conn.cursor = MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()
+            )
+        )
         mock_cursor.fetchone.return_value = (1, True)
 
-        model = MockPlayer(
-            id=1,
-            name="Test",
-            team="Test Team",
-            created_at="2024-01-01"
-        )
+        model = MockPlayer(id=1, name="Test", team="Test Team", created_at="2024-01-01")
 
         save_model(mock_conn, model)
 
@@ -168,15 +164,14 @@ class TestSaveModel:
         """Test that save_model commits the transaction."""
         mock_conn = Mock()
         mock_cursor = MagicMock()
-        mock_conn.cursor = MagicMock(return_value=MagicMock(__enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()))
+        mock_conn.cursor = MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()
+            )
+        )
         mock_cursor.fetchone.return_value = (1, True)
 
-        model = MockPlayer(
-            id=1,
-            name="Test",
-            team="Test Team",
-            created_at="2024-01-01"
-        )
+        model = MockPlayer(id=1, name="Test", team="Test Team", created_at="2024-01-01")
 
         save_model(mock_conn, model)
 
@@ -187,16 +182,13 @@ class TestSaveModel:
         """Test that save_model properly uses context manager for cursor."""
         mock_conn = Mock()
         mock_cursor = MagicMock()
-        mock_context = MagicMock(__enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock())
+        mock_context = MagicMock(
+            __enter__=MagicMock(return_value=mock_cursor), __exit__=MagicMock()
+        )
         mock_conn.cursor = MagicMock(return_value=mock_context)
         mock_cursor.fetchone.return_value = (1, True)
 
-        model = MockPlayer(
-            id=1,
-            name="Test",
-            team="Test Team",
-            created_at="2024-01-01"
-        )
+        model = MockPlayer(id=1, name="Test", team="Test Team", created_at="2024-01-01")
 
         save_model(mock_conn, model)
 

@@ -2,6 +2,7 @@ from psycopg import sql
 
 from ..models import DBModel
 
+
 def build_upsert_from_model(model: DBModel):
     data = model.model_dump()
     table = model.__table_name__
@@ -19,12 +20,14 @@ def build_upsert_from_model(model: DBModel):
         if col not in conflict_cols and col not in exclude_update
     ]
 
-    query = sql.SQL("""
+    query = sql.SQL(
+        """
         INSERT INTO {table} ({insert_cols})
         VALUES ({insert_vals})
         ON CONFLICT ({conflict_cols})
         DO UPDATE SET {updates}
-    """).format(
+    """
+    ).format(
         table=sql.Identifier(table),
         insert_cols=insert_cols,
         insert_vals=insert_vals,
@@ -33,6 +36,7 @@ def build_upsert_from_model(model: DBModel):
     )
 
     return query, list(data.values())
+
 
 def save_model(conn, model: DBModel) -> tuple[bool, int]:
     """
