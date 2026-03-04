@@ -31,6 +31,43 @@ def scrape_match(browser: BrowserContext, id: int):
     page.goto(PATHS["MATCH"] + "/" + id)
 
     page = display_player_stats(page)
+
+    # Open the team selector dropdown
+    page.locator("button#teams-dropdown-button").click()
+    # Select home team
+    page.locator(".select__options-wrapper").locator("li:nth-child(2)").click()
+
+    path = Path(f"afl_scraper/data/raw/match/{id}/home_player_stats.html")
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "w") as f:
+        f.write(page.content())
+
+    # Validate that the file was created.
+    if not path.exists():
+        raise FileNotFoundError(f"Failed to create file at {path}")
+
+    if path.stat().st_size == 0:
+        raise ValueError(f"File created at {path} is empty")
+
+    # Open the team selector dropdown
+    page.locator("button#teams-dropdown-button").click()
+    # Select away team
+    page.locator(".select__options-wrapper").locator("li:nth-child(3)").click()
+
+    path = Path(f"afl_scraper/data/raw/match/{id}/home_player_stats.html")
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(path, "w") as f:
+        f.write(page.content())
+
+    # Validate that the file was created.
+    if not path.exists():
+        raise FileNotFoundError(f"Failed to create file at {path}")
+
+    if path.stat().st_size == 0:
+        raise ValueError(f"File created at {path} is empty")
+
     data = extract_table_data(page)
 
     return data
