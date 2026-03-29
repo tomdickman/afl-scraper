@@ -11,3 +11,6 @@ wheels/
 
 # Local data lake (raw scraped data files)
 data/
+
+# Agents
+.aider*
