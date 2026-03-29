@@ -5,9 +5,9 @@ from ..storage import admin_connection_pool, save_model
 from ..transformer import transform_player_data
 
 
-def players_pipeline(extract: bool = False, year: int = 2025):
+def players_pipeline(extract: bool = False, year: int = 2026):
     """
-    Carry or full transform and load of Player data, with optional fresh
+    Carry out full transform and load of Player data, with optional fresh
     extraction of unstructured data from source.
 
     Parameters
@@ -23,7 +23,7 @@ def players_pipeline(extract: bool = False, year: int = 2025):
 
     with admin_connection_pool() as conn:
         for player in players:
-            was_inserted, record_id = save_model(conn, player)
+            _was_inserted, record_id = save_model(conn, player)
             print(f"Player {player.id} updated in DB, id: {record_id}")
 
     return players

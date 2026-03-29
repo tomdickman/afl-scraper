@@ -142,8 +142,14 @@ def pipeline():
     default=False,
     help="Run the scraper to refresh extracted data before transform and load.",
 )
-def pipeline_players(scrape: bool):
-    print(players_pipeline(scrape))
+@click.option(
+    "--year",
+    default=datetime.now().year,
+    type=int,
+    help="The year, defaults to current if not included.",
+)
+def pipeline_players(scrape: bool, year = 2026):
+    print(players_pipeline(scrape, year))
 
 
 @cli.command(name="smoke")
