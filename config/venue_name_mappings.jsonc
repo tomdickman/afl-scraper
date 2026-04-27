@@ -1,0 +1,67 @@
+{
+  // Venue name mappings: source_name -> venue_id
+  // Add entries in format: "display_name": "venue_id"
+
+  "_notes": {
+    "format": "source_name used on site venue page mapped to venue_id in venue table",
+    "sources": ["AFL official site", "AFL tables"]
+  },
+
+  "afl_official": {
+    "Adelaide Oval": "Adelaide Oval",
+    "Barossa Park": "Barossa Oval",
+    "Ninja Stadium": "Bellerive Oval",
+    "Blacktown ISP": "Blacktown",
+    "People First Stadium": "Carrara",
+    "Cazalys Stadium": "Cazaly's Stadium",
+    "Marvel Stadium": "Docklands",
+    "Mars Stadium": "Eureka Stadium",
+    "Football Park": "Football Park",
+    "Gabba": "Gabba",
+    "Adelaide Arena at Jiangwan Stadium, Shanghai": "Jiangwan Stadium",
+    "GMHBA Stadium": "Kardinia Park",
+    "MCG": "M.C.G.",
+    "Corroboree Group Oval": "Manuka Oval",
+    "TIO Stadium": "Marrara Oval",
+    "Norwood Oval": "Norwood Oval",
+    "Optus Stadium": "Perth Stadium",
+    "Riverway Stadium": "Riverway Stadium",
+    "SCG": "S.C.G.",
+    "Accor Stadium Australia": "Stadium Australia",
+    "Domain Stadium": "Subiaco",
+    "Adelaide Hills": "Summit Sports Park",
+    "ENGIE Stadium": "Sydney Showground",
+    "TIO Traeger Park": "Traeger Park",
+    "Wellington": "Wellington",
+    "University of Tasmania Stadium": "York Park"
+  },
+
+  "afl_tables": {
+    "Adelaide Oval": "Adelaide Oval",
+    "Barossa Oval": "Barossa Oval",
+    "Bellerive Oval": "Bellerive Oval",
+    "Blacktown": "Blacktown",
+    "Carrara": "Carrara",
+    "Cazaly's Stadium": "Cazaly's Stadium",
+    "Docklands": "Docklands",
+    "Mars Stadium": "Eureka Stadium",
+    "AAMI Stadium": "Football Park",
+    "Gabba": "Gabba",
+    "Jiangwan Stadium": "Jiangwan Stadium",
+    "Kardinia Park": "Kardinia Park",
+    "M.C.G.": "M.C.G.",
+    "Manuka Oval": "Manuka Oval",
+    "Marrara Oval": "Marrara Oval",
+    "Norwood Oval": "Norwood Oval",
+    "Perth Stadium": "Perth Stadium",
+    "Riverway Stadium": "Riverway Stadium",
+    "S.C.G.": "S.C.G.",
+    "Stadium Australia": "Stadium Australia",
+    "Subiaco": "Subiaco",
+    "Summit Sports Park": "Summit Sports Park",
+    "Sydney Showground": "Sydney Showground",
+    "Traeger Park": "Traeger Park",
+    "Wellington": "Wellington",
+    "York Park": "York Park"
+  }
+}

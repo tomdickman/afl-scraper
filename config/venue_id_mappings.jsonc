@@ -1,0 +1,67 @@
+{
+  // Venue name mappings: source_id -> venue_id
+  // Add entries in format: "source_id": "venue_id"
+
+  "_notes": {
+    "format": "source_id of venue page for source site mapped to venue_id in venue table",
+    "sources": ["AFL official site", "AFL tables"]
+  },
+
+  "afl_official": {
+    "31": "Adelaide Oval",
+    "178": "Barossa Oval",
+    "7": "Bellerive Oval",
+    "6": "Blacktown",
+    "11": "Carrara",
+    "2": "Cazaly's Stadium",
+    "3": "Docklands",
+    "24": "Eureka Stadium",
+    "12": "Football Park",
+    "22": "Gabba",
+    // "0": "Jiangwan Stadium",
+    "15": "Kardinia Park",
+    "13": "M.C.G.",
+    "5": "Manuka Oval",
+    "1": "Marrara Oval",
+    "46": "Norwood Oval",
+    "65": "Perth Stadium",
+    "28": "Riverway Stadium",
+    "9": "S.C.G.",
+    "10": "Stadium Australia",
+    "14": "Subiaco",
+    "153": "Summit Sports Park",
+    "8": "Sydney Showground",
+    "21": "Traeger Park",
+    // "0": "Wellington",
+    "4": "York Park"
+  },
+
+  "afl_tables": {
+    "adelaide_oval": "Adelaide Oval",
+    "barossa": "Barossa Oval",
+    "bellerive_oval": "Bellerive Oval",
+    "blacktown": "Blacktown",
+    "carrara": "Carrara",
+    "cazalys_stadium": "Cazaly's Stadium",
+    "docklands": "Docklands",
+    "eureka": "Eureka Stadium",
+    "football_park": "Football Park",
+    "gabba": "Gabba",
+    "jiangwan": "Jiangwan Stadium",
+    "kardinia_park": "Kardinia Park",
+    "mcg": "M.C.G.",
+    "manuka_oval": "Manuka Oval",
+    "marrara_oval": "Marrara Oval",
+    "norwood": "Norwood Oval",
+    "perth": "Perth Stadium",
+    "riverway": "Riverway Stadium",
+    "scg": "S.C.G.",
+    "stadium_australia": "Stadium Australia",
+    "subiaco": "Subiaco",
+    "summit": "Summit Sports Park",
+    "showground": "Sydney Showground",
+    "traeger": "Traeger Park",
+    "wrs": "Wellington",
+    "york_park": "York Park"
+  }
+}
