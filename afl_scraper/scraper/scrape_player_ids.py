@@ -87,46 +87,44 @@ def scrape_afl_tables_player_ids(
     page = browser.new_page()
     page.goto(f"https://afltables.com/afl/stats/{year}.html")
 
-    team_sections = page.locator("table").all()
+    tables = page.locator("table").all()
 
     all_players = []
 
-    for team_table in team_sections:
-        header = team_table.locator("thead tr th").first
-        team_name = header.text_content() if header else ""
-        team_name = team_name.strip() if team_name else ""
+    for table in tables:
+        thead = table.locator("thead").all()
+        if not thead:
+            continue
+
+        team_link = table.locator("thead th a").first
+        team_name = team_link.text_content().strip() if team_link else ""
 
         if not team_name:
             continue
 
-        rows = team_table.locator("tbody tr").all()
+        player_links = table.locator("tbody a[href*=\"players/\"]").all()
 
-        for row in rows:
-            player_link = row.locator("td a").first
-            href = player_link.get_attribute("href") if player_link else None
-
-            if not href or "/stats/players/" not in href:
-                continue
-
+        for link in player_links:
+            href = link.get_attribute("href")
             player_id = href.split("/")[-1].replace(".html", "")
 
-            name_cell = row.locator("td").first
-            full_name = name_cell.text_content() if name_cell else ""
+            name_text = link.text_content().strip()
+            parts = name_text.split(", ")
+            if len(parts) == 2:
+                last_name = parts[0].strip()
+                first_name = parts[1].strip()
+            else:
+                name_parts = name_text.split()
+                first_name = name_parts[0] if name_parts else ""
+                last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-            if full_name:
-                parts = full_name.strip().split()
-                first_name = parts[0] if parts else ""
-                last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
-
-                all_players.append(
-                    {
-                        "id": player_id,
-                        "firstName": first_name,
-                        "lastName": last_name,
-                        "team": team_name,
-                        "year": year,
-                    }
-                )
+            all_players.append({
+                "id": player_id,
+                "firstName": first_name,
+                "lastName": last_name,
+                "team": team_name,
+                "year": year,
+            })
 
     return all_players
 
