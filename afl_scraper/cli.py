@@ -196,13 +196,13 @@ def map_scrape(headless, year):
     with sync_browser_context(headless) as browser:
         click.echo(f"Scraping AFL official players for {year}...")
         afl_players = scrape_afl_official_player_ids(browser, year)
-        save_player_ids_to_json(afl_players, "afl_official", year)
-        click.echo(f"Saved {len(afl_players)} AFL official players")
+        afl_players_path = save_player_ids_to_json(afl_players, "afl_official", year)
+        click.echo(f"Saved {len(afl_players)} AFL official players to {afl_players_path.absolute}")
 
         click.echo(f"Scraping AFL Tables players for {year}...")
         tables_players = scrape_afl_tables_player_ids(browser, year)
-        save_player_ids_to_json(tables_players, "afl_tables", year)
-        click.echo(f"Saved {len(tables_players)} AFL Tables players")
+        table_players_path = save_player_ids_to_json(tables_players, "afl_tables", year)
+        click.echo(f"Saved {len(tables_players)} AFL Tables players to {table_players_path.absolute}")
 
 
 @map.command("match")

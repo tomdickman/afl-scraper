@@ -62,7 +62,7 @@ def scrape_player(page: Page) -> Path:
     if id == None:
         raise ValueError(f"Error extracting player ID from {page.url}")
 
-    path = Path(f"afl_scraper/data/raw/player/{id}.html")
+    path = Path(f"data/raw/player/{id}.html")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w") as f:
