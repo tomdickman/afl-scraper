@@ -8,9 +8,8 @@ from .fixture import navigate_to_round, get_fixture_page
 from .parser import (
     display_player_stats,
     extract_table_data,
-    scrape_player,
-    scrape_players_links,
 )
+from .sources import PlayerSourceFactory
 
 
 def scrape_match_ids(browser: BrowserContext, round_number: int, year: int = None):
@@ -37,7 +36,7 @@ def scrape_match(browser: BrowserContext, id: int):
     # Select home team
     page.locator(".select__options-wrapper").locator("li:nth-child(2)").click()
 
-    path = Path(f"data/raw/match/{id}/home_player_stats.html")
+    path = Path(f"afl_scraper/data/raw/match/{id}/home_player_stats.html")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w") as f:
@@ -55,7 +54,7 @@ def scrape_match(browser: BrowserContext, id: int):
     # Select away team
     page.locator(".select__options-wrapper").locator("li:nth-child(3)").click()
 
-    path = Path(f"data/raw/match/{id}/home_player_stats.html")
+    path = Path(f"afl_scraper/data/raw/match/{id}/home_player_stats.html")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w") as f:
@@ -73,17 +72,18 @@ def scrape_match(browser: BrowserContext, id: int):
     return data
 
 
-def scrape_players(browser: BrowserContext, year: int) -> List[Path]:
+def scrape_players(browser: BrowserContext, year: int, source: str = "afl_tables") -> List[Path]:
+    source_obj = PlayerSourceFactory.get(source)
     page = browser.new_page()
-    page.goto(f"https://afltables.com/afl/stats/{year}.html")
+    page.goto(source_obj.get_list_page_url(year))
 
-    links = scrape_players_links(page)
+    links = source_obj.scrape_players_links(page)
 
     players_data_paths = []
 
     for link in links:
         page.goto(f"https://afltables.com/afl/stats/{link}")
-        player_data_path = scrape_player(page)
+        player_data_path = source_obj.scrape_player(page)
         if player_data_path != None:
             print(f"Player path scraped: {player_data_path}")
             players_data_paths.append(player_data_path)

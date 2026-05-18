@@ -1,17 +1,19 @@
 import json
 from pathlib import Path
-from typing import Any
 
+from ..models.player import PlayerInfo, PlayerMapping, MatchResult
 from ..storage import admin_connection_pool
 
 
-def load_player_ids_from_json(source: str, year: int) -> list[dict[str, Any]]:
+def load_player_ids_from_json(source: str, year: int) -> list[PlayerInfo]:
     path = Path(f"data/mapping/{year}_{source}.json")
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
     with open(path) as f:
-        return json.load(f)
+        data = json.load(f)
+
+    return [PlayerInfo.model_validate(p) for p in data]
 
 
 def normalize_name(name: str) -> str:
@@ -22,7 +24,7 @@ def teams_match(afl_team: str, tables_team: str) -> bool:
     afl = afl_team.lower().strip()
     tables = tables_team.lower().strip()
 
-    team_aliases = {
+    team_aliases: dict[str, list[str]] = {
         "brisbane": ["brisbane lions", "brisbane"],
         "gws giants": ["gws giants", "greater western sydney", "gws"],
         "sydney swans": ["sydney swans", "sydney", "swans"],
@@ -40,84 +42,66 @@ def teams_match(afl_team: str, tables_team: str) -> bool:
 
 
 def match_players(
-    afl_players: list[dict[str, Any]], tables_players: list[dict[str, Any]]
-) -> dict[str, list]:
-    afl_index = {
-        normalize_name(f"{p['firstName']} {p['lastName']}"): p for p in afl_players
+    afl_players: list[PlayerInfo], tables_players: list[PlayerInfo]
+) -> MatchResult:
+    afl_by_name = {
+        normalize_name(f"{p.first_name} {p.last_name}"): p for p in afl_players
     }
-    tables_index = {
-        normalize_name(f"{p['firstName']} {p['lastName']}"): p for p in tables_players
+    tables_by_name = {
+        normalize_name(f"{p.first_name} {p.last_name}"): p for p in tables_players
     }
 
-    exact_matches = []
-    fuzzy_matches = []
-    unmatched_afl = []
-    unmatched_tables = []
-
+    exact = []
+    fuzzy = []
     matched_afl = set()
     matched_tables = set()
 
     for afl in afl_players:
-        afl_key = normalize_name(f"{afl['firstName']} {afl['lastName']}")
-        afl_full = f"{afl['firstName']} {afl['lastName']}"
+        key = normalize_name(f"{afl.first_name} {afl.last_name}")
 
-        if afl_key in tables_index:
-            tables = tables_index[afl_key]
-            if teams_match(afl["team"], tables["team"]):
-                exact_matches.append({"afl": afl, "tables": tables})
-                matched_afl.add(afl["id"])
-                matched_tables.add(tables["id"])
+        if key in tables_by_name:
+            tables = tables_by_name[key]
+            if teams_match(afl.team, tables.team):
+                exact.append({"afl": afl, "tables": tables})
+                matched_afl.add(afl.id)
+                matched_tables.add(tables.id)
             else:
-                fuzzy_matches.append(
-                    {
-                        "afl": afl,
-                        "tables": [
-                            t
-                            for t in tables_players
-                            if normalize_name(f"{t['firstName']} {t['lastName']}")
-                            == afl_key
-                        ],
-                    }
-                )
-                matched_afl.add(afl["id"])
-                for t in fuzzy_matches[-1]["tables"]:
-                    matched_tables.add(t["id"])
+                candidates = [
+                    t for t in tables_players
+                    if normalize_name(f"{t.first_name} {t.last_name}") == key
+                ]
+                fuzzy.append({"afl": afl, "tables": candidates})
+                matched_afl.add(afl.id)
+                for t in candidates:
+                    matched_tables.add(t.id)
 
-    for afl in afl_players:
-        if afl["id"] not in matched_afl:
-            unmatched_afl.append(afl)
+    unmatched_afl = [p for p in afl_players if p.id not in matched_afl]
+    unmatched_tables = [p for p in tables_players if p.id not in matched_tables]
 
-    for tables in tables_players:
-        if tables["id"] not in matched_tables:
-            unmatched_tables.append(tables)
-
-    return {
-        "exact": exact_matches,
-        "fuzzy": fuzzy_matches,
-        "unmatched_afl": unmatched_afl,
-        "unmatched_tables": unmatched_tables,
-    }
+    return MatchResult(
+        exact=[{"afl": m["afl"], "tables": m["tables"]} for m in exact],
+        fuzzy=[{"afl": m["afl"], "tables": m["tables"]} for m in fuzzy],
+        unmatched_afl=unmatched_afl,
+        unmatched_tables=unmatched_tables,
+    )
 
 
-def save_matches_to_json(matches: dict[str, list], year: int) -> Path:
+def save_matches_to_json(matches: MatchResult, year: int) -> Path:
     path = Path(f"data/mapping/{year}_to_review.json")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w") as f:
-        json.dump(matches, f, indent=2)
+        json.dump(matches.model_dump(by_alias=True), f, indent=2)
 
     return path
 
 
-def upsert_mappings(mappings: list[dict[str, Any]], year: int) -> int:
+def upsert_mappings(mappings: list[PlayerMapping], year: int) -> int:
     inserted = 0
 
     with admin_connection_pool() as conn:
         for mapping in mappings:
-            afl_id = mapping.get("afl_official_id")
-            player_id = mapping.get("player_id")
-
-            if afl_id and player_id:
+            if mapping.afl_official_id and mapping.player_id:
                 conn.execute(
                     """
                     INSERT INTO player_id_mapping (afl_official_id, player_id, year)
@@ -126,10 +110,14 @@ def upsert_mappings(mappings: list[dict[str, Any]], year: int) -> int:
                     SET afl_official_id = EXCLUDED.afl_official_id,
                         updated_at = NOW()
                     """,
-                    {"afl_id": afl_id, "player_id": player_id, "year": year},
+                    {
+                        "afl_id": mapping.afl_official_id,
+                        "player_id": mapping.player_id,
+                        "year": year,
+                    },
                 )
                 inserted += 1
-            elif player_id and not afl_id:
+            elif mapping.player_id and not mapping.afl_official_id:
                 conn.execute(
                     """
                     INSERT INTO player_id_mapping (player_id, year)
@@ -137,7 +125,7 @@ def upsert_mappings(mappings: list[dict[str, Any]], year: int) -> int:
                     ON CONFLICT (player_id, year) DO UPDATE
                     SET updated_at = NOW()
                     """,
-                    {"player_id": player_id, "year": year},
+                    {"player_id": mapping.player_id, "year": year},
                 )
                 inserted += 1
 

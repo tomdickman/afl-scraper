@@ -188,21 +188,20 @@ def map():
 def map_scrape(headless, year):
     """Scrape player IDs from both AFL official and AFL Tables sources."""
     from .scraper.scrape_player_ids import (
-        scrape_afl_official_player_ids,
-        scrape_afl_tables_player_ids,
+        scrape_player_ids,
         save_player_ids_to_json,
     )
 
     with sync_browser_context(headless) as browser:
         click.echo(f"Scraping AFL official players for {year}...")
-        afl_players = scrape_afl_official_player_ids(browser, year)
+        afl_players = scrape_player_ids(browser, year, "afl_official")
         afl_players_path = save_player_ids_to_json(afl_players, "afl_official", year)
-        click.echo(f"Saved {len(afl_players)} AFL official players to {afl_players_path.absolute}")
+        click.echo(f"Saved {len(afl_players)} AFL official players to {afl_players_path}")
 
         click.echo(f"Scraping AFL Tables players for {year}...")
-        tables_players = scrape_afl_tables_player_ids(browser, year)
+        tables_players = scrape_player_ids(browser, year, "afl_tables")
         table_players_path = save_player_ids_to_json(tables_players, "afl_tables", year)
-        click.echo(f"Saved {len(tables_players)} AFL Tables players to {table_players_path.absolute}")
+        click.echo(f"Saved {len(tables_players)} AFL Tables players to {table_players_path}")
 
 
 @map.command("match")
@@ -231,8 +230,8 @@ def map_match(year):
     matches = match_players(afl_players, tables_players)
 
     click.echo(
-        f"Exact: {len(matches['exact'])}, Fuzzy: {len(matches['fuzzy'])}, "
-        f"Unmatched AFL: {len(matches['unmatched_afl'])}, Unmatched Tables: {len(matches['unmatched_tables'])}"
+        f"Exact: {len(matches.exact)}, Fuzzy: {len(matches.fuzzy)}, "
+        f"Unmatched AFL: {len(matches.unmatched_afl)}, Unmatched Tables: {len(matches.unmatched_tables)}"
     )
 
     save_matches_to_json(matches, year)
@@ -257,67 +256,56 @@ def map_review(year, input):
     """Review and approve player ID mappings."""
     import json
 
+    from .models.player import MatchResult
+
     if input is None:
         input = f"data/mapping/{year}_to_review.json"
 
     with open(input) as f:
-        matches = json.load(f)
+        data = json.load(f)
+    matches = MatchResult.model_validate(data)
 
     approved = []
 
-    click.echo(f"\n=== Exact matches ({len(matches['exact'])}) - auto-approved ===")
-    for m in matches["exact"]:
-        approved.append(
-            {
-                "afl_official_id": m["afl"]["id"],
-                "player_id": m["tables"]["id"],
-            }
-        )
+    click.echo(f"\n=== Exact matches ({len(matches.exact)}) - auto-approved ===")
+    for m in matches.exact:
+        approved.append({
+            "afl_official_id": m.afl.id,
+            "player_id": m.tables.id,
+        })
 
-    click.echo(f"\n=== Fuzzy matches ({len(matches['fuzzy'])}) - need review ===")
-    for i, m in enumerate(matches["fuzzy"]):
-        afl = m["afl"]
-        options = m["tables"]
-        click.echo(f"\n{i + 1}. {afl['firstName']} {afl['lastName']} ({afl['team']})")
-        for j, opt in enumerate(options):
-            click.echo(f"   [{j + 1}] {opt['id']} ({opt['team']})")
+    click.echo(f"\n=== Fuzzy matches ({len(matches.fuzzy)}) - need review ===")
+    for i, m in enumerate(matches.fuzzy):
+        click.echo(f"\n{i + 1}. {m.afl.display_name()} ({m.afl.team})")
+        for j, opt in enumerate(m.tables):
+            click.echo(f"   [{j + 1}] {opt.id} ({opt.team})")
         choice = click.prompt("Select option (number)", default="1", show_default=False)
-        if choice and choice.isdigit() and 1 <= int(choice) <= len(options):
-            selected = options[int(choice) - 1]
-            approved.append(
-                {
-                    "afl_official_id": afl["id"],
-                    "player_id": selected["id"],
-                }
-            )
+        if choice and choice.isdigit() and 1 <= int(choice) <= len(m.tables):
+            selected = m.tables[int(choice) - 1]
+            approved.append({
+                "afl_official_id": m.afl.id,
+                "player_id": selected.id,
+            })
 
-    click.echo(f"\n=== Unmatched AFL ({len(matches['unmatched_afl'])}) ===")
-    for m in matches["unmatched_afl"]:
-        click.echo(f"  {m['firstName']} {m['lastName']} ({m['team']}) - ID: {m['id']}")
-        add = click.prompt(
-            "Add with null AFL ID? (y/N)", default="n", show_default=False
-        )
+    click.echo(f"\n=== Unmatched AFL ({len(matches.unmatched_afl)}) ===")
+    for p in matches.unmatched_afl:
+        click.echo(f"  {p.display_name()} ({p.team}) - ID: {p.id}")
+        add = click.prompt("Add with null AFL ID? (y/N)", default="n", show_default=False)
         if add.lower() == "y":
-            approved.append(
-                {
-                    "afl_official_id": None,
-                    "player_id": m["id"],
-                }
-            )
+            approved.append({
+                "afl_official_id": None,
+                "player_id": p.id,
+            })
 
-    click.echo(f"\n=== Unmatched Tables ({len(matches['unmatched_tables'])}) ===")
-    for m in matches["unmatched_tables"]:
-        click.echo(f"  {m['firstName']} {m['lastName']} ({m['team']}) - ID: {m['id']}")
-        add = click.prompt(
-            "Add with null AFL ID? (y/N)", default="n", show_default=False
-        )
+    click.echo(f"\n=== Unmatched Tables ({len(matches.unmatched_tables)}) ===")
+    for p in matches.unmatched_tables:
+        click.echo(f"  {p.display_name()} ({p.team}) - ID: {p.id}")
+        add = click.prompt("Add with null AFL ID? (y/N)", default="n", show_default=False)
         if add.lower() == "y":
-            approved.append(
-                {
-                    "afl_official_id": None,
-                    "player_id": m["id"],
-                }
-            )
+            approved.append({
+                "afl_official_id": None,
+                "player_id": p.id,
+            })
 
     output = f"data/mapping/{year}_approved.json"
     with open(output, "w") as f:
@@ -343,11 +331,14 @@ def map_upsert(year, input):
     """Upsert approved player ID mappings to database."""
     import json
 
+    from .models.player import PlayerMapping
+
     if input is None:
         input = f"data/mapping/{year}_approved.json"
 
     with open(input) as f:
-        mappings = json.load(f)
+        data = json.load(f)
+    mappings = [PlayerMapping(**m) for m in data]
 
     from .transform.map_players import upsert_mappings
 

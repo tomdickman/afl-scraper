@@ -1,14 +1,57 @@
 from datetime import datetime
 
-from .db import DBModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class Player(DBModel):
-    __table_name__ = "player"
-    __conflict_cols__ = ["id"]
-    __exclude_updates_cols__ = ["id"]
+class Player(BaseModel):
+    """A database player record transformed from AFL Tables."""
 
     id: str
     givenname: str
     familyname: str
     birthdate: datetime
+
+
+class PlayerInfo(BaseModel):
+    """A player record scraped from a data source."""
+
+    id: str
+    first_name: str = Field(alias="firstName")
+    last_name: str = Field(alias="lastName")
+    team: str
+    year: int
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    def display_name(self) -> str:
+        return f"{self.first_name} {self.last_name}".strip()
+
+
+class PlayerMatch(BaseModel):
+    """An exact name+team match between two sources."""
+
+    afl: PlayerInfo
+    tables: PlayerInfo
+
+
+class FuzzyMatch(BaseModel):
+    """A name match with team mismatch, presenting multiple candidates."""
+
+    afl: PlayerInfo
+    tables: list[PlayerInfo]
+
+
+class MatchResult(BaseModel):
+    """Full match categorisation between two player lists."""
+
+    exact: list[PlayerMatch]
+    fuzzy: list[FuzzyMatch]
+    unmatched_afl: list[PlayerInfo]
+    unmatched_tables: list[PlayerInfo]
+
+
+class PlayerMapping(BaseModel):
+    """A mapping between an AFL official ID and an AFL Tables ID."""
+
+    afl_official_id: str | None = None
+    player_id: str
