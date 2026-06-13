@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from playwright.sync_api import Page
 
@@ -12,6 +13,10 @@ class PlayerSource(ABC):
     @abstractmethod
     def name(self) -> str:
         """Unique identifier for this source (e.g. 'afl_tables', 'afl_official')."""
+
+    def get_raw_data_dir(self) -> Path:
+        """Directory for storing raw scraped data from this source."""
+        return Path(f"data/raw/{self.name}")
 
     @abstractmethod
     def get_list_page_url(self, year: int) -> str:

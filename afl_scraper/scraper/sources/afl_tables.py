@@ -77,7 +77,7 @@ class AFLTablesSource(PlayerSource):
         if player_id is None:
             player_id = self.player_id_from_url(page.url)
 
-        path = Path(f"data/raw/player/{player_id}.html")
+        path = self.get_raw_data_dir() / "player" / f"{player_id}.html"
         path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(path, "w") as f:
