@@ -54,7 +54,7 @@ def scrape_match(browser: BrowserContext, id: int):
     # Select away team
     page.locator(".select__options-wrapper").locator("li:nth-child(3)").click()
 
-    path = Path(f"afl_scraper/data/raw/match/{id}/home_player_stats.html")
+    path = Path(f"afl_scraper/data/raw/match/{id}/away_player_stats.html")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w") as f:
