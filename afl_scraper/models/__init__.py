@@ -1,4 +1,5 @@
 from .db import DBModel
+from .game import Game
 from .player import (
     Player,
     PlayerInfo,
@@ -10,6 +11,7 @@ from .player import (
 
 __all__ = [
     "DBModel",
+    "Game",
     "Player",
     "PlayerInfo",
     "PlayerMapping",
