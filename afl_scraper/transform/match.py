@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -100,7 +101,7 @@ def _stats_row_to_pgs(
     team_id: str,
     game_id: int,
     player_game_number: int,
-    resolve_player_id: callable,
+    resolve_player_id: Callable[[str, str], str | None],
 ) -> PlayerGameStats | None:
     player_name = str(row.iloc[0]).strip()
     if not player_name:
@@ -119,7 +120,7 @@ def _stats_row_to_pgs(
         if s == "" or s == "-":
             s = "0"
         if field == "time_on_ground_percent":
-            vals[field] = Decimal(s)
+            vals[field] = Decimal(s.rstrip("%"))
         else:
             vals[field] = int(s)
 
@@ -158,7 +159,7 @@ def transform_match(
     raw_data: dict,
     match_id: int,
     source: str = "afl_official",
-    resolve_player_id: callable | None = None,
+    resolve_player_id: Callable[[str, str], str | None] | None = None,
 ) -> tuple[Game, list[PlayerGameStats]]:
     details = raw_data["details"]
 
