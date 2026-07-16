@@ -30,23 +30,28 @@ def _resolve_player_id_from_db(name: str, team: str) -> str | None:
     return None
 
 
-def match_pipeline(id: int, headless: bool = True) -> dict:
-    with sync_browser_context(headless) as browser:
-        raw_data = scrape_match(browser, id)
-
+def load_match_data(raw_data: dict, match_id: int) -> dict:
+    """Transform and load scraped match data into the database."""
     game, player_stats = transform_match(
         raw_data,
-        match_id=id,
+        match_id=match_id,
         source="afl_official",
         resolve_player_id=_resolve_player_id_from_db,
     )
 
     with admin_connection_pool() as conn:
         was_inserted, game_record_id = save_model(conn, game)
-        print(f"Game {id} {'inserted' if was_inserted else 'updated'} in DB, id: {game_record_id}")
+        print(f"Game {match_id} {'inserted' if was_inserted else 'updated'} in DB, id: {game_record_id}")
 
         for pgs in player_stats:
             was_ins, pgs_id = save_model(conn, pgs)
             print(f"  PGS {pgs.player_id} game#{pgs.player_game_number} {'inserted' if was_ins else 'updated'} in DB, id: {pgs_id}")
 
     return {"game": game, "player_stats": player_stats}
+
+
+def match_pipeline(match_id: int, headless: bool = True) -> dict:
+    with sync_browser_context(headless) as browser:
+        raw_data = scrape_match(browser, match_id)
+
+    return load_match_data(raw_data, match_id)

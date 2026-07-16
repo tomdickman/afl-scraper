@@ -3,8 +3,6 @@ from datetime import datetime
 
 from .pipelines import match_pipeline, players_pipeline
 from .scraper import (
-    scrape_match_ids,
-    scrape_match,
     scrape_players,
     sync_browser_context,
 )
@@ -57,7 +55,7 @@ def scrape():
     help="Scrape details of all the matches in a specific round for current season",
 )
 @click.argument(
-    "id",
+    "round_number",
     nargs=1,
     type=str,
     default="1",
@@ -73,13 +71,16 @@ def scrape():
     type=int,
     help="The year, defaults to current if not included.",
 )
-def round(id, headless, year):
-    print(f"Scraping round '{id}' of {year}...")
-    with sync_browser_context(headless) as browser:
-        ids = scrape_match_ids(browser, id, year)
-        click.echo(ids)
-        for id in ids:
-            click.echo(scrape_match(browser, id))
+@click.option(
+    "--load/--no-load",
+    default=True,
+    help="Load data into database after scraping.",
+)
+def round(round_number, headless, year, load):
+    from .pipelines import round_pipeline
+
+    results = round_pipeline(round_number, year, headless, load)
+    click.echo(f"\nProcessed {len(results)} matches in round {round_number}")
 
 
 @scrape.command("match", help="Scrape details a specific match by ID")
