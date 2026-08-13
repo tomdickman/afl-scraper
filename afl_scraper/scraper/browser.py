@@ -40,5 +40,9 @@ def get_team_page(browser: BrowserContext, team_slug: str) -> Page:
         Page: the playwright page instance of the team page
     """
     page = browser.new_page()
-    page.goto(f"https://www.afl.com.au/teams/{team_slug}")
-    return page
+    try:
+        page.goto(f"https://www.afl.com.au/teams/{team_slug}")
+        return page
+    except Exception:
+        page.close()
+        raise
