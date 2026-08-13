@@ -143,12 +143,10 @@ class TestTransformMatch:
         assert home_pgs.time_on_ground_percent == Decimal("85")
         assert home_pgs.fantasy_points == 95
         assert home_pgs.jumper_number == 5
-        assert home_pgs.player_game_number == 1
 
         away_pgs = stats[1]
         assert away_pgs.player_id == "player_b_02"
         assert away_pgs.team == "Collingwood"
-        assert away_pgs.player_game_number == 1
         assert away_pgs.kicks == 8
         assert away_pgs.handballs == 12
 

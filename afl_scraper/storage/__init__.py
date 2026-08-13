@@ -1,6 +1,6 @@
 from .connection import admin_connection_pool, connection_pool
 from .health import connection_check, test_all_connections
-from .save_model import save_model
+from .save_model import SaveResult, save_model
 
 __all__ = [
     # Connect to database
@@ -11,4 +11,5 @@ __all__ = [
     "test_all_connections",
     # Upserting models
     "save_model",
+    "SaveResult",
 ]

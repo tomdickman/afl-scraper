@@ -27,7 +27,7 @@ def players_pipeline(
 
     with admin_connection_pool() as conn:
         for player in players:
-            _was_inserted, record_id = save_model(conn, player)
-            print(f"Player {player.id} updated in DB, id: {record_id}")
+            result = save_model(conn, player)
+            print(f"Player {player.id} updated in DB, identity: {result.identity}")
 
     return players

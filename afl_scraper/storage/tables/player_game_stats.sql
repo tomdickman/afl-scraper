@@ -1,6 +1,5 @@
 CREATE TABLE player_game_stats (
   player_id                 VARCHAR(100) NOT NULL REFERENCES player(id),
-  player_game_number        INT NOT NULL,
   team                      VARCHAR(50) NOT NULL REFERENCES team(id),
   jumper_number             INT NOT NULL,
   kicks                     INT NOT NULL,
@@ -26,8 +25,7 @@ CREATE TABLE player_game_stats (
   time_on_ground_percent    NUMERIC(5,2) NOT NULL,
   fantasy_points            INT NOT NULL,
   game_id                   INT NOT NULL REFERENCES game(id),
-  PRIMARY KEY (player_id, player_game_number),
-  UNIQUE (player_id, game_id),
+  PRIMARY KEY (player_id, game_id),
   CHECK (time_on_ground_percent BETWEEN 0 AND 100),
   CHECK (
     kicks >= 0 AND

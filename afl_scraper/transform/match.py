@@ -100,7 +100,6 @@ def _stats_row_to_pgs(
     row: pd.Series,
     team_id: str,
     game_id: int,
-    player_game_number: int,
     resolve_player_id: Callable[[str, str], str | None],
 ) -> PlayerGameStats | None:
     player_name = str(row.iloc[0]).strip()
@@ -126,7 +125,6 @@ def _stats_row_to_pgs(
 
     return PlayerGameStats(
         player_id=player_id,
-        player_game_number=player_game_number,
         team=team_id,
         jumper_number=vals.get("jumper_number", 0),
         kicks=vals.get("kicks", 0),
@@ -183,13 +181,13 @@ def transform_match(
 
     player_stats: list[PlayerGameStats] = []
 
-    for i, (_, row) in enumerate(raw_data["home_team_stats"].iterrows()):
-        pgs = _stats_row_to_pgs(row, home_team_id, match_id, i + 1, resolve_player_id)
+    for _, row in raw_data["home_team_stats"].iterrows():
+        pgs = _stats_row_to_pgs(row, home_team_id, match_id, resolve_player_id)
         if pgs:
             player_stats.append(pgs)
 
-    for i, (_, row) in enumerate(raw_data["away_team_stats"].iterrows()):
-        pgs = _stats_row_to_pgs(row, away_team_id, match_id, i + 1, resolve_player_id)
+    for _, row in raw_data["away_team_stats"].iterrows():
+        pgs = _stats_row_to_pgs(row, away_team_id, match_id, resolve_player_id)
         if pgs:
             player_stats.append(pgs)
 
