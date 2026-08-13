@@ -1,6 +1,21 @@
+from dataclasses import dataclass
+from typing import Any
+
 from psycopg import sql
 
 from ..models import DBModel
+
+
+@dataclass(frozen=True)
+class SaveResult:
+    """The outcome of saving one model.
+
+    ``identity`` contains every conflict column, so this result works for both
+    conventional single-column IDs and composite natural keys.
+    """
+
+    was_inserted: bool
+    identity: dict[str, Any]
 
 
 def build_upsert_from_model(model: DBModel):
@@ -38,7 +53,7 @@ def build_upsert_from_model(model: DBModel):
     return query, list(data.values())
 
 
-def save_model(conn, model: DBModel) -> tuple[bool, int]:
+def save_model(conn, model: DBModel) -> SaveResult:
     """
     Save a model to the database using UPSERT logic.
 
@@ -47,21 +62,32 @@ def save_model(conn, model: DBModel) -> tuple[bool, int]:
         model: The DBModel instance to save
 
     Returns:
-        A tuple of (was_inserted, record_id) where:
-        - was_inserted: True if a new record was inserted, False if updated
-        - record_id: The ID of the inserted/updated record
+        A :class:`SaveResult` containing whether the row was inserted and its
+        identity (the model's conflict columns).
+
+    Transaction management belongs to the caller. This allows several related
+    saves to be committed or rolled back as one unit.
     """
     query, values = build_upsert_from_model(model)
 
-    # Add RETURNING clause to get back the ID and detect INSERT vs UPDATE
+    identity_columns = model.__conflict_cols__
+
+    # Return the model's natural identity and detect INSERT vs UPDATE.
     # xmax = 0 indicates an INSERT, xmax > 0 indicates an UPDATE
-    query = sql.SQL("{query} RETURNING id, (xmax = 0) AS inserted").format(query=query)
+    query = sql.SQL("{query} RETURNING {identity}, (xmax = 0) AS inserted").format(
+        query=query,
+        identity=sql.SQL(", ").join(map(sql.Identifier, identity_columns)),
+    )
 
     with conn.cursor() as cur:
         cur.execute(query, values)
         result = cur.fetchone()
 
-    conn.commit()
+    if result is None:
+        raise RuntimeError(f"UPSERT into {model.__table_name__} returned no row")
 
-    # Return (was_inserted, record_id)
-    return (result[1], result[0])
+    identity_values = result[:-1]
+    return SaveResult(
+        was_inserted=result[-1],
+        identity=dict(zip(identity_columns, identity_values, strict=True)),
+    )

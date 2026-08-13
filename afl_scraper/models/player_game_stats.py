@@ -5,11 +5,10 @@ from .db import DBModel
 
 class PlayerGameStats(DBModel):
     __table_name__ = "player_game_stats"
-    __conflict_cols__ = ["player_id", "player_game_number"]
+    __conflict_cols__ = ["player_id", "game_id"]
     __exclude_updates_cols__ = []
 
     player_id: str
-    player_game_number: int
     team: str
     jumper_number: int
     kicks: int
