@@ -47,3 +47,22 @@ aflscraper_db=# SELECT * FROM alembic_version;
  c6230ed6782e
 (1 row)
 ```
+
+## Player career game numbers
+
+The `player_game_stats_with_career_number` view numbers each player's stored
+games chronologically using the match start time and match ID as a deterministic
+tie-breaker. For example, a player's first 50 stored games can be queried with:
+
+```sql
+SELECT *
+FROM player_game_stats_with_career_number
+WHERE player_id = 'PLAYER_ID'
+  AND career_game_number <= 50
+ORDER BY career_game_number;
+```
+
+Use `career_game_number = 100` to find a player's 100th stored game. This is the
+player's true 100th career game only when the database contains their complete
+AFL career. Consumers should describe it as a stored or recorded game number
+when historical coverage is incomplete.
