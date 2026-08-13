@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Player(BaseModel):
@@ -54,4 +54,17 @@ class PlayerMapping(BaseModel):
     """A mapping between an AFL official ID and an AFL Tables ID."""
 
     afl_official_id: str | None = None
-    player_id: str
+    player_id: str = Field(min_length=1)
+
+    @field_validator("afl_official_id", "player_id", mode="before")
+    @classmethod
+    def strip_ids(cls, value: str | None) -> str | None:
+        """Reject blank IDs and keep persisted mapping identifiers canonical."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("mapping IDs must be strings")
+        value = value.strip()
+        if not value:
+            raise ValueError("mapping IDs must not be blank")
+        return value

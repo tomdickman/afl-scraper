@@ -1,5 +1,6 @@
 import click
 from datetime import datetime
+from pathlib import Path
 
 from .pipelines import match_pipeline, players_pipeline
 from .scraper import (
@@ -197,12 +198,16 @@ def map_scrape(headless, year):
         click.echo(f"Scraping AFL official players for {year}...")
         afl_players = scrape_player_ids(browser, year, "afl_official")
         afl_players_path = save_player_ids_to_json(afl_players, "afl_official", year)
-        click.echo(f"Saved {len(afl_players)} AFL official players to {afl_players_path}")
+        click.echo(
+            f"Saved {len(afl_players)} AFL official players to {afl_players_path}"
+        )
 
         click.echo(f"Scraping AFL Tables players for {year}...")
         tables_players = scrape_player_ids(browser, year, "afl_tables")
         table_players_path = save_player_ids_to_json(tables_players, "afl_tables", year)
-        click.echo(f"Saved {len(tables_players)} AFL Tables players to {table_players_path}")
+        click.echo(
+            f"Saved {len(tables_players)} AFL Tables players to {table_players_path}"
+        )
 
 
 @map.command("match")
@@ -257,7 +262,8 @@ def map_review(year, input):
     """Review and approve player ID mappings."""
     import json
 
-    from .models.player import MatchResult
+    from .models.player import MatchResult, PlayerMapping
+    from .transform.map_players import validate_mappings
 
     if input is None:
         input = f"data/mapping/{year}_to_review.json"
@@ -266,51 +272,56 @@ def map_review(year, input):
         data = json.load(f)
     matches = MatchResult.model_validate(data)
 
-    approved = []
+    approved: list[PlayerMapping] = []
 
     click.echo(f"\n=== Exact matches ({len(matches.exact)}) - auto-approved ===")
     for m in matches.exact:
-        approved.append({
-            "afl_official_id": m.afl.id,
-            "player_id": m.tables.id,
-        })
+        approved.append(PlayerMapping(afl_official_id=m.afl.id, player_id=m.tables.id))
 
     click.echo(f"\n=== Fuzzy matches ({len(matches.fuzzy)}) - need review ===")
     for i, m in enumerate(matches.fuzzy):
         click.echo(f"\n{i + 1}. {m.afl.display_name()} ({m.afl.team})")
         for j, opt in enumerate(m.tables):
             click.echo(f"   [{j + 1}] {opt.id} ({opt.team})")
-        choice = click.prompt("Select option (number)", default="1", show_default=False)
+        choice = click.prompt(
+            "Select option (number, or s to skip)", default="s", show_default=False
+        )
         if choice and choice.isdigit() and 1 <= int(choice) <= len(m.tables):
             selected = m.tables[int(choice) - 1]
-            approved.append({
-                "afl_official_id": m.afl.id,
-                "player_id": selected.id,
-            })
+            if any(mapping.player_id == selected.id for mapping in approved):
+                click.echo(
+                    f"  Skipped: AFL Tables ID {selected.id} is already approved."
+                )
+            else:
+                approved.append(
+                    PlayerMapping(
+                        afl_official_id=m.afl.id,
+                        player_id=selected.id,
+                    )
+                )
 
     click.echo(f"\n=== Unmatched AFL ({len(matches.unmatched_afl)}) ===")
     for p in matches.unmatched_afl:
         click.echo(f"  {p.display_name()} ({p.team}) - ID: {p.id}")
-        add = click.prompt("Add with null AFL ID? (y/N)", default="n", show_default=False)
-        if add.lower() == "y":
-            approved.append({
-                "afl_official_id": None,
-                "player_id": p.id,
-            })
+        click.echo("  Not added: an AFL Tables player is required before mapping.")
 
     click.echo(f"\n=== Unmatched Tables ({len(matches.unmatched_tables)}) ===")
     for p in matches.unmatched_tables:
         click.echo(f"  {p.display_name()} ({p.team}) - ID: {p.id}")
-        add = click.prompt("Add with null AFL ID? (y/N)", default="n", show_default=False)
+        add = click.prompt(
+            "Add AFL Tables-only player without an AFL Official ID? (y/N)",
+            default="n",
+            show_default=False,
+        )
         if add.lower() == "y":
-            approved.append({
-                "afl_official_id": None,
-                "player_id": p.id,
-            })
+            approved.append(PlayerMapping(player_id=p.id))
+
+    validate_mappings(approved)
 
     output = f"data/mapping/{year}_approved.json"
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
     with open(output, "w") as f:
-        json.dump(approved, f, indent=2)
+        json.dump([mapping.model_dump() for mapping in approved], f, indent=2)
     click.echo(f"\n✅ Saved approved mappings to {output}")
 
 
