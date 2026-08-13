@@ -1,0 +1,42 @@
+"""Regression tests for deterministic player-game-stat schema migrations."""
+
+from pathlib import Path
+
+
+TABLES = Path("afl_scraper/storage/tables")
+MIGRATIONS = Path("afl_scraper/storage/migrations/versions")
+
+
+def _normalized(path: Path) -> str:
+    return " ".join(path.read_text().split()).lower()
+
+
+def test_initial_migration_uses_immutable_legacy_schema_snapshot():
+    migration = (
+        MIGRATIONS / "9fe22a591a68_create_player_game_stats_table.py"
+    ).read_text()
+    legacy_schema = _normalized(TABLES / "player_game_stats_v1.sql")
+
+    assert "player_game_stats_v1.sql" in migration
+    assert "player_game_number int not null" in legacy_schema
+    assert "primary key (player_id, player_game_number)" in legacy_schema
+    assert "unique (player_id, game_id)" in legacy_schema
+
+
+def test_current_schema_represents_post_migration_identity():
+    current_schema = _normalized(TABLES / "player_game_stats.sql")
+
+    assert "player_game_number" not in current_schema
+    assert "primary key (player_id, game_id)" in current_schema
+
+
+def test_identity_migration_follows_and_transforms_legacy_schema():
+    migration = (
+        MIGRATIONS / "4f2a6c89d2ef_use_game_for_player_stats_identity.py"
+    ).read_text()
+
+    assert (
+        'down_revision: Union[str, Sequence[str], None] = "098560416458"' in migration
+    )
+    assert 'op.drop_column("player_game_stats", "player_game_number")' in migration
+    assert '["player_id", "game_id"]' in migration
