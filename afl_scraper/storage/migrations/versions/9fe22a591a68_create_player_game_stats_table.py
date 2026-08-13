@@ -19,7 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    sql = Path("afl_scraper/storage/tables/player_game_stats.sql").read_text()
+    # Historical migrations must use an immutable schema snapshot. Reading the
+    # current table definition here would make a fresh migration chain skip the
+    # legacy shape expected by later migrations.
+    sql = Path("afl_scraper/storage/tables/player_game_stats_v1.sql").read_text()
 
     op.execute(sql)
 
