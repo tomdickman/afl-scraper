@@ -8,11 +8,24 @@ from .base import PlayerSource
 
 
 TEAM_SLUGS = [
-    "adelaide-crows", "brisbane", "carlton", "collingwood",
-    "essendon", "fremantle", "geelong", "gold-coast",
-    "gws-giants", "hawthorn", "melbourne", "north-melbourne",
-    "port-adelaide", "richmond", "st-kilda", "sydney-swans",
-    "west-coast-eagles", "western-bulldogs",
+    "adelaide-crows",
+    "brisbane",
+    "carlton",
+    "collingwood",
+    "essendon",
+    "fremantle",
+    "geelong",
+    "gold-coast",
+    "gws-giants",
+    "hawthorn",
+    "melbourne",
+    "north-melbourne",
+    "port-adelaide",
+    "richmond",
+    "st-kilda",
+    "sydney-swans",
+    "west-coast-eagles",
+    "western-bulldogs",
 ]
 
 
@@ -49,12 +62,16 @@ class AFLOfficialSource(PlayerSource):
                 return part
         raise RuntimeError(f"Failed to parse player ID from URL: {url}")
 
-    def scrape_player_ids(self, page: Page, year: int | None = None) -> list[PlayerInfo]:
+    def scrape_player_ids(
+        self, page: Page, year: int | None = None
+    ) -> list[PlayerInfo]:
         raise NotImplementedError(
             "AFL official requires navigating per-team pages. Use scrape_player_ids_from_browser instead."
         )
 
-    def scrape_player_ids_from_browser(self, browser, year: int | None = None) -> list[PlayerInfo]:
+    def scrape_player_ids_from_browser(
+        self, browser, year: int | None = None
+    ) -> list[PlayerInfo]:
         if year is None:
             year = datetime.now().year
 
@@ -64,34 +81,41 @@ class AFLOfficialSource(PlayerSource):
 
         for team_slug in TEAM_SLUGS:
             page = get_team_page(browser, team_slug)
-            player_links = page.locator('[aria-label="Player Card"]').all()
+            try:
+                player_links = page.locator('[aria-label="Player Card"]').all()
 
-            for link in player_links:
-                href = link.get_attribute("href")
-                if not href:
-                    continue
+                for link in player_links:
+                    href = link.get_attribute("href")
+                    if not href:
+                        continue
 
-                parts = href.strip("/").split("/")
-                if len(parts) < 2:
-                    continue
+                    parts = href.strip("/").split("/")
+                    if len(parts) < 2:
+                        continue
 
-                player_id = parts[1]
-                name = parts[2] if len(parts) > 2 else ""
+                    player_id = parts[1]
+                    name = parts[2] if len(parts) > 2 else ""
 
-                first_name = ""
-                last_name = ""
-                if name:
-                    name_parts = name.split("-")
-                    first_name = name_parts[0] if name_parts else ""
-                    last_name = "-".join(name_parts[1:]) if len(name_parts) > 1 else ""
+                    first_name = ""
+                    last_name = ""
+                    if name:
+                        name_parts = name.split("-")
+                        first_name = name_parts[0] if name_parts else ""
+                        last_name = (
+                            "-".join(name_parts[1:]) if len(name_parts) > 1 else ""
+                        )
 
-                all_players.append(PlayerInfo(
-                    id=player_id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    team=_team_slug_to_name(team_slug),
-                    year=year,
-                ))
+                    all_players.append(
+                        PlayerInfo(
+                            id=player_id,
+                            first_name=first_name,
+                            last_name=last_name,
+                            team=_team_slug_to_name(team_slug),
+                            year=year,
+                        )
+                    )
+            finally:
+                page.close()
 
         return all_players
 

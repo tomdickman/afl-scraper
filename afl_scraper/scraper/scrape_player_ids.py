@@ -17,8 +17,11 @@ def scrape_player_ids(
         return source_obj.scrape_player_ids_from_browser(browser, year)
 
     page = browser.new_page()
-    page.goto(source_obj.get_list_page_url(year))
-    return source_obj.scrape_player_ids(page, year)
+    try:
+        page.goto(source_obj.get_list_page_url(year))
+        return source_obj.scrape_player_ids(page, year)
+    finally:
+        page.close()
 
 
 def save_player_ids_to_json(

@@ -29,7 +29,9 @@ class AFLTablesSource(PlayerSource):
             return match.group(1)
         raise RuntimeError(f"Failed to parse player ID from URL: {url}")
 
-    def scrape_player_ids(self, page: Page, year: int | None = None) -> list[PlayerInfo]:
+    def scrape_player_ids(
+        self, page: Page, year: int | None = None
+    ) -> list[PlayerInfo]:
         if year is None:
             year = datetime.now().year
 
@@ -47,7 +49,7 @@ class AFLTablesSource(PlayerSource):
             if not team_name:
                 continue
 
-            player_links = table.locator("tbody a[href*=\"players/\"]").all()
+            player_links = table.locator('tbody a[href*="players/"]').all()
 
             for link in player_links:
                 href = link.get_attribute("href")
@@ -63,13 +65,15 @@ class AFLTablesSource(PlayerSource):
                     first_name = name_parts[0] if name_parts else ""
                     last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
 
-                all_players.append(PlayerInfo(
-                    id=player_id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    team=team_name,
-                    year=year,
-                ))
+                all_players.append(
+                    PlayerInfo(
+                        id=player_id,
+                        first_name=first_name,
+                        last_name=last_name,
+                        team=team_name,
+                        year=year,
+                    )
+                )
 
         return all_players
 
@@ -95,4 +99,4 @@ class AFLTablesSource(PlayerSource):
         """Scrape links to raw player data from the year stats page."""
         table_links = page.locator("table tbody tr td a").all()
         hrefs = [link.get_attribute("href") for link in table_links]
-        return [h for h in hrefs if "players/" in h] if hrefs else []
+        return list(dict.fromkeys(h for h in hrefs if h and "players/" in h))

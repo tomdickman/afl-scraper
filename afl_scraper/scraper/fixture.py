@@ -25,9 +25,12 @@ def get_fixture_page(browser: BrowserContext, year: int | None = None) -> Page:
         "Season": SEASON_ID[year if (year != None) else datetime.now().year],
     }
 
-    page.goto(f"{PATHS['FIXTURE']}?{urlencode(params)}")
-
-    return page
+    try:
+        page.goto(f"{PATHS['FIXTURE']}?{urlencode(params)}")
+        return page
+    except Exception:
+        page.close()
+        raise
 
 
 def get_round_buttons(page: Page) -> Dict[str, Locator]:
@@ -69,12 +72,22 @@ def navigate_to_round(page: Page, round_number: str) -> Page:
     Returns:
         Page: _description_
     """
+    round_key = str(round_number)
     round_buttons = get_round_buttons(page)
 
-    round_buttons[round_number].click()
+    if round_key not in round_buttons:
+        available_rounds = ", ".join(round_buttons) or "none"
+        raise ValueError(
+            f"Round {round_key!r} is not available; available rounds: "
+            f"{available_rounds}"
+        )
 
-    # TODO: Replace with a reliable site state we can look for instead
-    # of using a timeout.
-    page.wait_for_timeout(200)
+    round_buttons[round_key].click()
+
+    # Round changes are rendered asynchronously. Waiting for a real fixture with
+    # a match ID gives callers a deterministic readiness condition without making
+    # assumptions about how quickly the site responds.
+    first_match = page.locator(f'{FIXTURE_CLASSNAMES["MATCHES"]}[data-match-id]').first
+    first_match.wait_for(state="visible")
 
     return page
