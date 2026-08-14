@@ -3,8 +3,9 @@
 from pathlib import Path
 
 
-TABLES = Path("afl_scraper/storage/tables")
-MIGRATIONS = Path("afl_scraper/storage/migrations/versions")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+TABLES = REPO_ROOT / "afl_scraper/storage/tables"
+MIGRATIONS = REPO_ROOT / "afl_scraper/storage/migrations/versions"
 
 
 def _normalized(path: Path) -> str:
