@@ -3,8 +3,11 @@
 from pathlib import Path
 
 
-VIEW_SQL = Path("afl_scraper/storage/tables/player_game_stats_with_career_number.sql")
-MIGRATION = Path(
+REPO_ROOT = Path(__file__).resolve().parents[1]
+VIEW_SQL = (
+    REPO_ROOT / "afl_scraper/storage/tables/player_game_stats_with_career_number.sql"
+)
+MIGRATION = REPO_ROOT / (
     "afl_scraper/storage/migrations/versions/"
     "81ca20df131b_create_player_career_game_view.py"
 )
