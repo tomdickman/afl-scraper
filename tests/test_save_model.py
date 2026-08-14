@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from psycopg import sql
 
-from afl_scraper.models import DBModel
+from afl_scraper.models import DBModel, PlayerGameStats
 from afl_scraper.storage.save_model import (
     SaveResult,
     build_upsert_from_model,
@@ -60,6 +60,49 @@ class TestBuildUpsertFromModel:
 
         assert 'ON CONFLICT ("player_id", "game_id")' in rendered
         assert '"kicks" = EXCLUDED."kicks"' in rendered
+
+    def test_player_stats_replay_does_not_erase_unavailable_historical_fields(self):
+        model = PlayerGameStats(
+            player_id="player-1",
+            team="Carlton",
+            jumper_number=1,
+            kicks=10,
+            marks=2,
+            handballs=8,
+            goals=0,
+            behinds=0,
+            hitouts=0,
+            tackles=3,
+            rebound_50s=None,
+            inside_50s=None,
+            clearances=1,
+            clangers=None,
+            free_kicks_for=None,
+            free_kicks_against=None,
+            contested_possessions=None,
+            uncontested_possessions=None,
+            contested_marks=None,
+            marks_inside_50=None,
+            one_percenters=None,
+            bounces=None,
+            goal_assists=0,
+            time_on_ground_percent=80,
+            fantasy_points=60,
+            game_id=42,
+        )
+
+        query, _ = build_upsert_from_model(model)
+        rendered = query.as_string()
+
+        assert '"kicks" = EXCLUDED."kicks"' in rendered
+        assert (
+            '"rebound_50s" = COALESCE(EXCLUDED."rebound_50s", '
+            '"player_game_stats"."rebound_50s")' in rendered
+        )
+        assert (
+            '"contested_possessions" = COALESCE(EXCLUDED."contested_possessions", '
+            '"player_game_stats"."contested_possessions")' in rendered
+        )
 
 
 class TestSaveModel:

@@ -9,6 +9,7 @@ from .fixture import navigate_to_round, get_fixture_page
 from .parser import (
     display_player_stats,
     extract_table_data,
+    select_team_stats,
 )
 from .sources import PlayerSourceFactory
 
@@ -62,16 +63,12 @@ def scrape_match(browser: BrowserContext, match_id: int | str):
         page.goto(url)
         display_player_stats(page)
 
-        team_selector = page.locator("button#teams-dropdown-button")
-        team_options = page.locator(".select__options-wrapper")
         raw_dir = Path("data/raw/afl_official/match") / str(match_id)
 
-        team_selector.click()
-        team_options.locator("li:nth-child(2)").click()
+        select_team_stats(page, 1)
         _save_raw_html(raw_dir / "home_player_stats.html", page.content())
 
-        team_selector.click()
-        team_options.locator("li:nth-child(3)").click()
+        select_team_stats(page, 2)
         _save_raw_html(raw_dir / "away_player_stats.html", page.content())
 
         return extract_table_data(page)

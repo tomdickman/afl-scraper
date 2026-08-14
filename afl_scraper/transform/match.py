@@ -1,15 +1,16 @@
 import json
 import re
 from collections.abc import Callable
-from datetime import datetime
-from decimal import Decimal
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-import pandas as pd
 
 from ..models.game import Game
 from ..models.player_game_stats import PlayerGameStats
+from ..scraper.models import RawMatchData, RawPlayerStat
 from ..transformer.teams import transform_team_name
+
+
+PlayerIdResolver = Callable[[RawPlayerStat, str, int], str | None]
 
 
 def _load_jsonc(path: Path) -> dict:
@@ -24,21 +25,26 @@ def _load_venue_mappings(source: str) -> dict[str, str]:
     return data.get(source, {})
 
 
+def _normalize_venue(value: str, *, collapse_spaces: bool = False) -> str:
+    normalized = " ".join(value.replace("\xa0", " ").split()).casefold()
+    return normalized.replace(" ", "") if collapse_spaces else normalized
+
+
 def resolve_venue(venue_name: str, source: str = "afl_official") -> str:
     mappings = _load_venue_mappings(source)
+    cleaned = " ".join(venue_name.replace("\xa0", " ").split()).strip(" ,")
+    candidates = [cleaned]
+    if "," in cleaned:
+        candidates.append(cleaned.rsplit(",", 1)[0].strip())
 
-    if venue_name in mappings:
-        return mappings[venue_name]
-
-    venue_lower = venue_name.lower().strip()
-    for key, val in mappings.items():
-        if key.lower().strip() == venue_lower:
-            return val
-
-    collapsed = re.sub(r"\s+", "", venue_name).lower()
-    for key, val in mappings.items():
-        if re.sub(r"\s+", "", key).lower() == collapsed:
-            return val
+    for candidate in candidates:
+        for key, value in mappings.items():
+            if _normalize_venue(key) == _normalize_venue(candidate):
+                return value
+            if _normalize_venue(key, collapse_spaces=True) == _normalize_venue(
+                candidate, collapse_spaces=True
+            ):
+                return value
 
     raise KeyError(f"No venue mapping found for '{venue_name}' (source: {source})")
 
@@ -47,148 +53,138 @@ def resolve_team(team_name: str) -> str:
     return transform_team_name(team_name)
 
 
-_DATETIME_FORMATS = [
-    "%a %d %b %Y %I:%M%p",
-    "%a %d %b %Y %H:%M",
-    "%d %b %Y %I:%M%p",
-    "%d %b %Y %H:%M",
-]
+_DATE_FORMATS = ["%A %d %B %Y", "%a %d %b %Y", "%d %b %Y"]
+_CLOCK_FORMATS = ["%I:%M %p", "%I:%M%p", "%H:%M"]
+_TIMEZONE_PATTERN = re.compile(
+    r"^(?P<clock>.+?)\s*\(GMT(?P<sign>[+-])(?P<hours>\d{1,2})"
+    r"(?::?(?P<minutes>\d{2}))?\)$",
+    re.IGNORECASE,
+)
 
 
 def parse_match_datetime(date_str: str, time_str: str) -> datetime:
-    combined = f"{date_str} {time_str}".strip()
-    for fmt in _DATETIME_FORMATS:
-        try:
-            return datetime.strptime(combined, fmt)
-        except ValueError:
-            continue
-    raise ValueError(f"Could not parse match datetime: date='{date_str}' time='{time_str}'")
+    normalized_date = " ".join(date_str.split())
+    normalized_time = " ".join(time_str.split())
+    timezone_match = _TIMEZONE_PATTERN.fullmatch(normalized_time)
+    if timezone_match is None:
+        raise ValueError(f"Match time must include a numeric GMT offset: {time_str!r}")
+
+    hours = int(timezone_match.group("hours"))
+    minutes = int(timezone_match.group("minutes") or "0")
+    if hours > 14 or minutes >= 60:
+        raise ValueError(f"Invalid GMT offset in match time: {time_str!r}")
+    direction = 1 if timezone_match.group("sign") == "+" else -1
+    offset = timezone(direction * timedelta(hours=hours, minutes=minutes))
+    clock = timezone_match.group("clock").strip()
+
+    for date_format in _DATE_FORMATS:
+        for clock_format in _CLOCK_FORMATS:
+            try:
+                parsed = datetime.strptime(
+                    f"{normalized_date} {clock}", f"{date_format} {clock_format}"
+                )
+                return parsed.replace(tzinfo=offset)
+            except ValueError:
+                continue
+    raise ValueError(
+        f"Could not parse match datetime: date={date_str!r} time={time_str!r}"
+    )
 
 
-_COLUMN_MAPPING = {
-    "#": "jumper_number",
-    "K": "kicks",
-    "HB": "handballs",
-    "M": "marks",
-    "G": "goals",
-    "B": "behinds",
-    "HO": "hitouts",
-    "T": "tackles",
-    "R50": "rebound_50s",
-    "I50": "inside_50s",
-    "CL": "clearances",
-    "CG": "clangers",
-    "FF": "free_kicks_for",
-    "FA": "free_kicks_against",
-    "CP": "contested_possessions",
-    "UP": "uncontested_possessions",
-    "CM": "contested_marks",
-    "MI5": "marks_inside_50",
-    "1%": "one_percenters",
-    "BO": "bounces",
-    "GA": "goal_assists",
-    "TOG%": "time_on_ground_percent",
-    "AF": "fantasy_points",
-}
-
-
-def _norm_col(name: str) -> str:
-    return name.strip().upper()
-
-
-def _stats_row_to_pgs(
-    row: pd.Series,
+def _stats_to_player_game_stats(
+    stat: RawPlayerStat,
     team_id: str,
     game_id: int,
-    resolve_player_id: Callable[[str, str], str | None],
-) -> PlayerGameStats | None:
-    player_name = str(row.iloc[0]).strip()
-    if not player_name:
-        return None
-
-    player_id = resolve_player_id(player_name, team_id) if resolve_player_id else player_name
-
-    cols = {_norm_col(k): v for k, v in _COLUMN_MAPPING.items()}
-    vals: dict[str, int | Decimal] = {}
-
-    for raw_name, raw_val in row.items():
-        field = cols.get(_norm_col(raw_name))
-        if field is None:
-            continue
-        s = str(raw_val).strip()
-        if s == "" or s == "-":
-            s = "0"
-        if field == "time_on_ground_percent":
-            vals[field] = Decimal(s.rstrip("%"))
-        else:
-            vals[field] = int(s)
+    match_year: int,
+    resolve_player_id: PlayerIdResolver | None,
+) -> PlayerGameStats:
+    player_id = (
+        resolve_player_id(stat, team_id, match_year)
+        if resolve_player_id
+        else stat.afl_official_id
+    )
+    if player_id is None:
+        raise ValueError(
+            "No canonical player mapping for "
+            f"{stat.player_name} (AFL official ID {stat.afl_official_id}, "
+            f"team {team_id}, year {match_year})"
+        )
 
     return PlayerGameStats(
         player_id=player_id,
         team=team_id,
-        jumper_number=vals.get("jumper_number", 0),
-        kicks=vals.get("kicks", 0),
-        marks=vals.get("marks", 0),
-        handballs=vals.get("handballs", 0),
-        goals=vals.get("goals", 0),
-        behinds=vals.get("behinds", 0),
-        hitouts=vals.get("hitouts", 0),
-        tackles=vals.get("tackles", 0),
-        rebound_50s=vals.get("rebound_50s", 0),
-        inside_50s=vals.get("inside_50s", 0),
-        clearances=vals.get("clearances", 0),
-        clangers=vals.get("clangers", 0),
-        free_kicks_for=vals.get("free_kicks_for", 0),
-        free_kicks_against=vals.get("free_kicks_against", 0),
-        contested_possessions=vals.get("contested_possessions", 0),
-        uncontested_possessions=vals.get("uncontested_possessions", 0),
-        contested_marks=vals.get("contested_marks", 0),
-        marks_inside_50=vals.get("marks_inside_50", 0),
-        one_percenters=vals.get("one_percenters", 0),
-        bounces=vals.get("bounces", 0),
-        goal_assists=vals.get("goal_assists", 0),
-        time_on_ground_percent=vals.get("time_on_ground_percent", Decimal("0")),
-        fantasy_points=vals.get("fantasy_points", 0),
+        jumper_number=stat.jumper_number,
+        kicks=stat.kicks,
+        marks=stat.marks,
+        handballs=stat.handballs,
+        goals=stat.goals,
+        behinds=stat.behinds,
+        hitouts=stat.hitouts,
+        tackles=stat.tackles,
+        rebound_50s=stat.rebound_50s,
+        inside_50s=stat.inside_50s,
+        clearances=stat.clearances,
+        clangers=stat.clangers,
+        free_kicks_for=stat.free_kicks_for,
+        free_kicks_against=stat.free_kicks_against,
+        contested_possessions=stat.contested_possessions,
+        uncontested_possessions=stat.uncontested_possessions,
+        contested_marks=stat.contested_marks,
+        marks_inside_50=stat.marks_inside_50,
+        one_percenters=stat.one_percenters,
+        bounces=stat.bounces,
+        goal_assists=stat.goal_assists,
+        time_on_ground_percent=stat.time_on_ground_percent,
+        fantasy_points=stat.fantasy_points,
         game_id=game_id,
     )
 
 
 def transform_match(
-    raw_data: dict,
+    raw_data: RawMatchData | dict,
     match_id: int,
     source: str = "afl_official",
-    resolve_player_id: Callable[[str, str], str | None] | None = None,
+    resolve_player_id: PlayerIdResolver | None = None,
 ) -> tuple[Game, list[PlayerGameStats]]:
-    details = raw_data["details"]
+    raw_match = RawMatchData.model_validate(raw_data)
+    details = raw_match.details
 
-    home_team_id = resolve_team(details["home_team"])
-    away_team_id = resolve_team(details["away_team"])
-    venue_id = resolve_venue(details["venue"], source)
-    start_date = parse_match_datetime(details["date"], details["time"])
+    home_team_id = resolve_team(details.home_team)
+    away_team_id = resolve_team(details.away_team)
+    venue_id = resolve_venue(details.venue, source)
+    start_date = parse_match_datetime(details.date, details.time)
 
     game = Game(
         id=match_id,
         venue=venue_id,
         start_date=start_date,
-        round=details["round"],
+        round=details.round,
         home_team=home_team_id,
         away_team=away_team_id,
-        home_goals=details["home_team_goals"],
-        home_behinds=details["home_team_behinds"],
-        away_goals=details["away_team_goals"],
-        away_behinds=details["away_team_behinds"],
+        home_goals=details.home_team_goals,
+        home_behinds=details.home_team_behinds,
+        away_goals=details.away_team_goals,
+        away_behinds=details.away_team_behinds,
     )
 
-    player_stats: list[PlayerGameStats] = []
-
-    for _, row in raw_data["home_team_stats"].iterrows():
-        pgs = _stats_row_to_pgs(row, home_team_id, match_id, resolve_player_id)
-        if pgs:
-            player_stats.append(pgs)
-
-    for _, row in raw_data["away_team_stats"].iterrows():
-        pgs = _stats_row_to_pgs(row, away_team_id, match_id, resolve_player_id)
-        if pgs:
-            player_stats.append(pgs)
-
-    return (game, player_stats)
+    player_stats = [
+        _stats_to_player_game_stats(
+            stat,
+            home_team_id,
+            match_id,
+            start_date.year,
+            resolve_player_id,
+        )
+        for stat in raw_match.home_team_stats
+    ]
+    player_stats.extend(
+        _stats_to_player_game_stats(
+            stat,
+            away_team_id,
+            match_id,
+            start_date.year,
+            resolve_player_id,
+        )
+        for stat in raw_match.away_team_stats
+    )
+    return game, player_stats

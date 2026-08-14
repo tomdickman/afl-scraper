@@ -152,15 +152,22 @@ def test_scrape_match_rejects_invalid_id_without_opening_page():
 def test_scrape_match_uses_consistent_raw_path_and_closes_page(monkeypatch, tmp_path):
     page = FakePage()
     browser = FakeBrowser(page)
+    selected_options = []
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         scrape, "display_player_stats", lambda current_page: current_page
+    )
+    monkeypatch.setattr(
+        scrape,
+        "select_team_stats",
+        lambda _page, option_index: selected_options.append(option_index),
     )
     monkeypatch.setattr(scrape, "extract_table_data", lambda _page: {"ok": True})
 
     assert scrape.scrape_match(browser, "123") == {"ok": True}
 
     assert page.gotos == ["https://www.afl.com.au/afl/matches/123"]
+    assert selected_options == [1, 2]
     assert page.closed is True
     raw_dir = tmp_path / "data/raw/afl_official/match/123"
     assert (raw_dir / "home_player_stats.html").read_text() == page.html
