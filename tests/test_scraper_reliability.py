@@ -123,11 +123,16 @@ def test_navigate_to_round_reports_available_rounds(monkeypatch):
 
 def test_scrape_match_ids_normalises_ids_and_closes_page(monkeypatch):
     page = FakePage()
+    non_match_item = FakeLocator(attributes={})
     matches = [
         FakeLocator(attributes={"data-match-id": "123"}),
         FakeLocator(attributes={"data-match-id": "456"}),
     ]
-    page.locators[scrape.FIXTURE_CLASSNAMES["MATCHES"]] = FakeLocator(items=matches)
+    page.locators[scrape.FIXTURE_CLASSNAMES["MATCHES"]] = FakeLocator(
+        items=[non_match_item, *matches]
+    )
+    match_selector = f'{scrape.FIXTURE_CLASSNAMES["MATCHES"]}[data-match-id]'
+    page.locators[match_selector] = FakeLocator(items=matches)
     monkeypatch.setattr(scrape, "get_fixture_page", lambda _browser, _year: page)
     monkeypatch.setattr(scrape, "navigate_to_round", lambda _page, _round: _page)
 

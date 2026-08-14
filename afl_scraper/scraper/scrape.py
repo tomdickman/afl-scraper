@@ -40,7 +40,9 @@ def scrape_match_ids(
     page = get_fixture_page(browser, year)
     try:
         navigate_to_round(page, str(round_number))
-        matches_locator = page.locator(FIXTURE_CLASSNAMES["MATCHES"])
+        matches_locator = page.locator(
+            f'{FIXTURE_CLASSNAMES["MATCHES"]}[data-match-id]'
+        )
         raw_ids = [
             match_locator.get_attribute("data-match-id")
             for match_locator in matches_locator.all()
