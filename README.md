@@ -1,18 +1,18 @@
 # AFL Scraper
 
-A Python CLI for collecting Australian Football League data, normalising it, and loading it into PostgreSQL. It combines browser-based scraping of the official AFL website and [AFL Tables](https://afltables.com) with repeatable ETL pipelines for players, matches, player game statistics, and cross-source player IDs.
+A Python CLI for collecting Australian Football League data, normalising it, and loading it into PostgreSQL. It combines browser-based scraping with repeatable ETL pipelines for players, matches, player game statistics, and cross-source player IDs.
 
 ## Capabilities
 
-- Scrape a single AFL match or every match in a round from the official AFL fixture and match pages.
+- Scrape a single AFL match or every match in a round.
 - Capture match metadata, scores, teams, venues, and detailed player game statistics.
-- Scrape AFL Tables player pages into a local raw-data lake for later processing.
+- Scrape player records into a local raw-data lake for later processing.
 - Transform player and match data into validated models and upsert it into PostgreSQL.
-- Match AFL.com player IDs to AFL Tables player IDs, including an interactive review workflow for ambiguous and unmatched players.
-- Run browser, fixture-selector, and database connection checks to detect local setup or upstream website problems.
+- Match player IDs across configured sources, including an interactive review workflow for ambiguous and unmatched players.
+- Run browser, fixture-selector, and database connection checks to detect local setup or upstream source changes.
 - Manage the SQL-first PostgreSQL schema with Alembic migrations. The schema includes teams, venues, players, games, player game statistics, and player ID mappings.
 
-The fixture scraper currently includes official AFL season IDs for 2025 and 2026. Add new seasons to `afl_scraper/scraper/constants/season_ids.py` before using `scrape round` with another year.
+The fixture scraper currently includes season IDs for 2025 and 2026. Add new seasons to `afl_scraper/scraper/constants/season_ids.py` before using `scrape round` with another year.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ The fixture scraper currently includes official AFL season IDs for 2025 and 2026
 - Chromium, installed through Playwright
 - PostgreSQL for commands that transform or load data
 
-Network access to `afl.com.au` and `afltables.com` is required for scraping and web health checks.
+Network access is required for scraping and web health checks.
 
 ## Install
 
@@ -92,15 +92,15 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 
 | Command | What it does | PostgreSQL required |
 | --- | --- | --- |
-| `health` | Launches headless Chromium and verifies that AFL Tables is reachable. | No |
-| `smoke` | Checks that expected controls still exist on the official AFL fixture page. | No |
+| `health` | Launches headless Chromium and verifies that the player-data source is reachable. | No |
+| `smoke` | Checks that expected fixture controls still exist at the match-data source. | No |
 | `dbcheck` | Tests both the owner/write and app connections and reports the PostgreSQL version. | Yes |
-| `scrape players YEAR` | Saves AFL Tables player pages under `data/raw/afl_tables/player/`. | No |
-| `scrape match ID` | Scrapes, transforms, and loads one official AFL match and its player statistics. | Yes |
-| `scrape round ROUND` | Processes every official AFL match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
-| `transform players` | Transforms stored AFL Tables player pages and loads the resulting player records. | Yes |
+| `scrape players YEAR` | Saves raw player records under `data/raw/`. | No |
+| `scrape match ID` | Scrapes, transforms, and loads one match and its player statistics. | Yes |
+| `scrape round ROUND` | Processes every match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
+| `transform players` | Transforms stored player records and loads the resulting player models. | Yes |
 | `pipeline players` | Runs the player transform/load pipeline, optionally refreshing raw pages first. | Yes |
-| `map scrape` | Saves player identity data from AFL.com and AFL Tables to `data/mapping/`. | No |
+| `map scrape` | Saves player identity data from each configured source to `data/mapping/`. | No |
 | `map match` | Produces exact, reviewable, and unmatched cross-source player ID groups. | No |
 | `map review` | Interactively reviews mappings and writes an approved mapping file. | No |
 | `map upsert` | Upserts an approved mapping file into PostgreSQL. | Yes |
@@ -111,7 +111,7 @@ Run `uv run afl-scraper COMMAND --help` for the options accepted by any command 
 
 ### Check the installation
 
-These commands exercise the browser, upstream websites, and database independently:
+These commands exercise the browser, upstream sources, and database independently:
 
 ```sh
 uv run afl-scraper health
@@ -127,7 +127,7 @@ uv run afl-scraper smoke --no-headless
 
 ### Scrape and load player data
 
-Scrape the AFL Tables player pages for a season without touching the database:
+Scrape player records for a season without touching the database:
 
 ```sh
 uv run afl-scraper scrape players 2026
@@ -148,7 +148,7 @@ uv run afl-scraper pipeline players --scrape --year 2026
 
 ### Scrape matches
 
-Load one match by its official AFL match ID:
+Load one match by its source match ID:
 
 ```sh
 uv run afl-scraper scrape match 6994
@@ -160,7 +160,7 @@ Process a complete home-and-away round:
 uv run afl-scraper scrape round 1 --year 2026
 ```
 
-Round identifiers are strings, so special rounds and finals can use the labels shown on the official fixture, such as `OR`, `QF`, `SF`, `PF`, or `GF`:
+Round identifiers are strings, so special rounds and finals can use fixture labels such as `OR`, `QF`, `SF`, `PF`, or `GF`:
 
 ```sh
 uv run afl-scraper scrape round OR --year 2026
@@ -176,7 +176,7 @@ The round pipeline isolates match failures: it reports an error for the affected
 
 ### Map player IDs across sources
 
-The mapping workflow connects AFL.com numeric IDs with the AFL Tables IDs used by player records:
+The mapping workflow connects player identifiers across the configured sources:
 
 ```sh
 uv run afl-scraper map scrape --year 2026
@@ -185,13 +185,13 @@ uv run afl-scraper map review --year 2026
 uv run afl-scraper map upsert --year 2026
 ```
 
-The steps create these ignored local files:
+The steps create ignored local source, review, and approval files under `data/mapping/`:
 
-1. `data/mapping/2026_afl_official.json` and `data/mapping/2026_afl_tables.json`
+1. One source file for each configured provider
 2. `data/mapping/2026_to_review.json`
 3. `data/mapping/2026_approved.json`
 
-`map review` auto-approves exact name-and-team matches, prompts for ambiguous matches, and lets you decide whether unmatched players should be retained without an AFL.com ID. Use `--input PATH` with `map review` or `map upsert` to supply a non-default JSON file.
+`map review` auto-approves exact name-and-team matches, prompts for ambiguous matches, and lets you decide whether unmatched players should be retained without a corresponding cross-source ID. Use `--input PATH` with `map review` or `map upsert` to supply a non-default JSON file.
 
 ## Data and architecture
 
