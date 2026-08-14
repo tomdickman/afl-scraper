@@ -191,6 +191,12 @@ The steps create ignored local source, review, and approval files under `data/ma
 2. `data/mapping/2026_to_review.json`
 3. `data/mapping/2026_approved.json`
 
+AFL Official team pages expose current rosters only, so `map scrape` rejects a
+historical `--year` rather than labeling current players as historical data. The
+Official scrape requires plausible, unique rosters from all 18 clubs. Snapshot
+writes reject empty, duplicate, or wrong-year records and atomically replace the
+last-known-good file.
+
 `map review` auto-approves exact name-and-team matches, prompts for ambiguous matches, and lets you decide whether unmatched players should be retained without a corresponding cross-source ID. Use `--input PATH` with `map review` or `map upsert` to supply a non-default JSON file.
 
 ## Data and architecture
