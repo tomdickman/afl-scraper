@@ -245,14 +245,22 @@ def _extract_team_stats(table: Locator) -> list[RawPlayerStat]:
     return stats
 
 
-def _first_player_href(table: Locator) -> str | None:
-    first_link = table.locator('tbody tr a[href*="/players/"]').first
-    return first_link.get_attribute("href") if first_link.count() else None
+def _player_hrefs(table: Locator) -> list[str]:
+    return [
+        href
+        for href in table.locator("tbody tr").evaluate_all(
+            """
+            rows => rows.map(row =>
+              row.querySelector('a[href*="/players/"]')?.getAttribute('href')
+            )
+            """
+        )
+        if href
+    ]
 
 
-def _select_team(
-    page: Page, table: Locator, option_index: int, previous_first_href: str | None
-) -> str:
+def _select_team(page: Page, table: Locator, option_index: int) -> None:
+    previous_hrefs = _player_hrefs(table)
     selector = page.locator("button#teams-dropdown-button")
     selector.click()
     options = page.locator('.select__options-wrapper [role="option"]')
@@ -266,20 +274,35 @@ def _select_team(
     expect(selector).to_contain_text(label)
     page.wait_for_function(
         """
-        ({ previousHref }) => {
-          const link = document.querySelector(
-            '.stats-table__table tbody tr a[href*="/players/"]'
-          );
-          const href = link?.getAttribute('href');
-          return Boolean(href) && (!previousHref || href !== previousHref);
+        ({ previousHrefs, expectedPlayers }) => {
+          const hrefs = Array.from(document.querySelectorAll(
+            '.stats-table__table tbody tr'
+          )).map(row =>
+            row.querySelector('a[href*="/players/"]')?.getAttribute('href')
+          ).filter(Boolean);
+          return hrefs.length === expectedPlayers &&
+            JSON.stringify(hrefs) !== JSON.stringify(previousHrefs);
         }
         """,
-        arg={"previousHref": previous_first_href},
+        arg={
+            "previousHrefs": previous_hrefs,
+            "expectedPlayers": _EXPECTED_PLAYERS_PER_TEAM,
+        },
     )
-    current_href = _first_player_href(table)
-    if current_href is None:
-        raise ValueError(f"No player link appeared after selecting {label!r}")
-    return current_href
+    current_hrefs = _player_hrefs(table)
+    if len(current_hrefs) != _EXPECTED_PLAYERS_PER_TEAM:
+        raise ValueError(
+            f"Expected {_EXPECTED_PLAYERS_PER_TEAM} players after selecting "
+            f"{label!r}, got {len(current_hrefs)}"
+        )
+
+
+def select_team_stats(page: Page, option_index: int) -> None:
+    """Select one team and wait until its complete roster replaces the table."""
+    table = page.locator(".stats-table__table")
+    if table.count() != 1:
+        raise ValueError(f"Expected one player stats table, found {table.count()}")
+    _select_team(page, table, option_index)
 
 
 def _validate_team_stats(
@@ -312,9 +335,9 @@ def extract_table_data(page: Page) -> RawMatchData:
         raise ValueError(f"Expected one player stats table, found {table.count()}")
 
     details = _extract_match_details(page)
-    home_first_href = _select_team(page, table, 1, None)
+    _select_team(page, table, 1)
     home_stats = _extract_team_stats(table)
-    _select_team(page, table, 2, home_first_href)
+    _select_team(page, table, 2)
     away_stats = _extract_team_stats(table)
     _validate_team_stats(home_stats, away_stats)
 
