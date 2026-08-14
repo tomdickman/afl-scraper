@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import List
+from urllib.parse import urljoin
 
 from playwright.sync_api import BrowserContext
 
@@ -91,7 +92,10 @@ def scrape_players(
             page.goto(list_url)
             links = source_obj.scrape_players_links(page)
             player_ids = list(
-                dict.fromkeys(source_obj.player_id_from_url(link) for link in links)
+                dict.fromkeys(
+                    source_obj.player_id_from_url(urljoin(list_url, link))
+                    for link in links
+                )
             )
         except Exception as exc:
             raise RuntimeError(
@@ -112,7 +116,6 @@ def scrape_players(
                     f"({player_url}): {exc}"
                 ) from exc
             if player_data_path is not None:
-                print(f"Player path scraped: {player_data_path}")
                 players_data_paths.append(player_data_path)
 
         return players_data_paths
