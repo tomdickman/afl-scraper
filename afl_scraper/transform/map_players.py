@@ -141,7 +141,10 @@ def match_players(
                 for tables in remaining_tables
                 if teams_match(afl.team, tables.team)
             ]
-            review_candidates = team_candidates or remaining_tables
+            # Each fuzzy result owns its candidate collection. In particular,
+            # do not expose the shared working list when falling back after a
+            # team mismatch.
+            review_candidates = team_candidates or list(remaining_tables)
             if not review_candidates:
                 continue
             fuzzy.append({"afl": afl, "tables": review_candidates})
