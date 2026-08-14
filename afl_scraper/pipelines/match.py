@@ -52,7 +52,7 @@ def load_match_data(raw_data: dict, match_id: int) -> dict:
             for pgs in player_stats:
                 stats_result = save_model(conn, pgs)
                 print(
-                    f"  PGS {pgs.player_id} game#{pgs.game_id} "
+                    f"  PGS {pgs.player_id} game_id={pgs.game_id} "
                     f"{'inserted' if stats_result.was_inserted else 'updated'} in DB"
                 )
 
