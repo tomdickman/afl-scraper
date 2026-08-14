@@ -1,1 +1,3 @@
-from .raw_match import RawMatchDetails, RawMatchData
+from .raw_match import RawMatchData, RawMatchDetails, RawPlayerStat
+
+__all__ = ["RawMatchData", "RawMatchDetails", "RawPlayerStat"]

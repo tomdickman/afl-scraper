@@ -20,3 +20,5 @@ class DBModel(BaseModel):
     Columns which are immutable, i.e. these column values are only entered on initial `INSERT`.
     If a conflict is found and an `UPDATE` is conducted instead of an `INSERT`, these columns are skipped.
     """
+    __preserve_existing_on_null_cols__: list[str] = []
+    """Columns whose existing value wins when an UPSERT supplies ``None``."""

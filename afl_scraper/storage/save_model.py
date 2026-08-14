@@ -23,17 +23,24 @@ def build_upsert_from_model(model: DBModel):
     table = model.__table_name__
     conflict_cols = model.__conflict_cols__
     exclude_update = set(model.__exclude_updates_cols__)
+    preserve_existing_on_null = set(model.__preserve_existing_on_null_cols__)
 
     columns = list(data.keys())
 
     insert_cols = sql.SQL(", ").join(map(sql.Identifier, columns))
     insert_vals = sql.SQL(", ").join(sql.Placeholder() * len(columns))
 
-    update_cols = [
-        sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(col))
-        for col in columns
-        if col not in conflict_cols and col not in exclude_update
-    ]
+    update_cols = []
+    for col in columns:
+        if col in conflict_cols or col in exclude_update:
+            continue
+        if col in preserve_existing_on_null:
+            assignment = sql.SQL("{c} = COALESCE(EXCLUDED.{c}, {table}.{c})").format(
+                c=sql.Identifier(col), table=sql.Identifier(table)
+            )
+        else:
+            assignment = sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(col))
+        update_cols.append(assignment)
 
     query = sql.SQL(
         """

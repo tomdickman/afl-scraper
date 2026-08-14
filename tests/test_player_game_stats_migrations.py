@@ -29,6 +29,8 @@ def test_current_schema_represents_post_migration_identity():
 
     assert "player_game_number" not in current_schema
     assert "primary key (player_id, game_id)" in current_schema
+    assert "rebound_50s int," in current_schema
+    assert "rebound_50s int not null" not in current_schema
 
 
 def test_identity_migration_follows_and_transforms_legacy_schema():
@@ -41,3 +43,15 @@ def test_identity_migration_follows_and_transforms_legacy_schema():
     )
     assert 'op.drop_column("player_game_stats", "player_game_number")' in migration
     assert '["player_id", "game_id"]' in migration
+
+
+def test_unavailable_stats_migration_is_latest_and_reversible():
+    migration = (
+        MIGRATIONS / "7d1d45f2a3c8_allow_unavailable_player_stats.py"
+    ).read_text()
+
+    assert (
+        'down_revision: Union[str, Sequence[str], None] = "81ca20df131b"' in migration
+    )
+    assert "nullable=True" in migration
+    assert "nullable=False" in migration
