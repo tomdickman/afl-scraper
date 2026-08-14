@@ -1,7 +1,10 @@
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from click.testing import CliRunner
 
+import afl_scraper.cli as cli_module
 from afl_scraper.scraper import browser as browser_helpers
 from afl_scraper.scraper import fixture, scrape
 from afl_scraper.scraper.sources.afl_tables import AFLTablesSource
@@ -67,6 +70,29 @@ class FakeBrowser:
     def new_page(self):
         self.new_page_calls += 1
         return self.page
+
+
+def test_cli_reports_scraped_player_page_count(monkeypatch):
+    browser = object()
+
+    @contextmanager
+    def browser_context(_headless):
+        yield browser
+
+    monkeypatch.setattr(cli_module, "sync_browser_context", browser_context)
+    monkeypatch.setattr(
+        cli_module,
+        "scrape_players",
+        lambda current_browser, year: [
+            Path("Ada_One.html"),
+            Path("Bob_Two.html"),
+        ],
+    )
+
+    result = CliRunner().invoke(cli_module.cli, ["scrape", "players", "2026"])
+
+    assert result.exit_code == 0, result.output
+    assert "Saved 2 player pages" in result.output
 
 
 def test_navigate_to_round_waits_for_visible_match(monkeypatch):
@@ -137,10 +163,11 @@ def test_scrape_match_uses_consistent_raw_path_and_closes_page(monkeypatch, tmp_
     assert not (tmp_path / "afl_scraper/data").exists()
 
 
-def test_scrape_players_deduplicates_and_uses_source_urls(monkeypatch):
+def test_scrape_players_deduplicates_and_uses_source_urls(monkeypatch, capsys):
     page = FakePage()
     browser = FakeBrowser(page)
     saved_ids = []
+    parsed_urls = []
 
     class FakeSource:
         def get_list_page_url(self, year):
@@ -148,12 +175,13 @@ def test_scrape_players_deduplicates_and_uses_source_urls(monkeypatch):
 
         def scrape_players_links(self, _page):
             return [
-                "/players/A/Ada_One.html",
-                "/players/A/Ada_One.html",
-                "/players/B/Bob_Two.html",
+                "players/A/Ada_One.html",
+                "players/A/Ada_One.html",
+                "players/B/Bob_Two.html",
             ]
 
         def player_id_from_url(self, url):
+            parsed_urls.append(url)
             return Path(url).stem
 
         def get_player_page_url(self, player_id):
@@ -170,6 +198,11 @@ def test_scrape_players_deduplicates_and_uses_source_urls(monkeypatch):
     paths = scrape.scrape_players(browser, 2026, "fake_source")
 
     assert saved_ids == ["Ada_One", "Bob_Two"]
+    assert parsed_urls == [
+        "https://example.test/list/players/A/Ada_One.html",
+        "https://example.test/list/players/A/Ada_One.html",
+        "https://example.test/list/players/B/Bob_Two.html",
+    ]
     assert paths == [Path("Ada_One.html"), Path("Bob_Two.html")]
     assert page.gotos == [
         "https://example.test/list/2026",
@@ -177,6 +210,37 @@ def test_scrape_players_deduplicates_and_uses_source_urls(monkeypatch):
         "https://example.test/player/Bob_Two",
     ]
     assert page.closed is True
+    assert capsys.readouterr().out == ""
+
+
+def test_scrape_players_keeps_absolute_source_links(monkeypatch):
+    page = FakePage()
+    parsed_urls = []
+
+    class FakeSource:
+        def get_list_page_url(self, _year):
+            return "https://example.test/list/2026"
+
+        def scrape_players_links(self, _page):
+            return ["https://cdn.example.test/players/A/Ada_One.html"]
+
+        def player_id_from_url(self, url):
+            parsed_urls.append(url)
+            return "Ada_One"
+
+        def get_player_page_url(self, player_id):
+            return f"https://example.test/player/{player_id}"
+
+        def scrape_player(self, _page, player_id):
+            return Path(f"{player_id}.html")
+
+    monkeypatch.setattr(
+        scrape.PlayerSourceFactory, "get", lambda _source_name: FakeSource()
+    )
+
+    scrape.scrape_players(FakeBrowser(page), 2026, "fake_source")
+
+    assert parsed_urls == ["https://cdn.example.test/players/A/Ada_One.html"]
 
 
 def test_scrape_players_closes_page_and_adds_player_context(monkeypatch):

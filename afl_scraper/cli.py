@@ -109,7 +109,8 @@ def match(id, headless):
 )
 def players(year, headless):
     with sync_browser_context(headless) as browser:
-        scrape_players(browser, year)
+        paths = scrape_players(browser, year)
+    click.echo(f"Saved {len(paths)} player pages")
 
 
 @cli.group("transform")
