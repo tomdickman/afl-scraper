@@ -26,8 +26,13 @@ def players_pipeline(
     players = transform_player_data(source)
 
     with admin_connection_pool() as conn:
-        for player in players:
-            result = save_model(conn, player)
-            print(f"Player {player.id} updated in DB, identity: {result.identity}")
+        # Treat a player sync as one explicit unit of work. Although the pool's
+        # connection context also commits on successful exit, keeping the
+        # transaction here makes the pipeline's atomicity independent of that
+        # connection-management detail.
+        with conn.transaction():
+            for player in players:
+                result = save_model(conn, player)
+                print(f"Player {player.id} updated in DB, identity: {result.identity}")
 
     return players
