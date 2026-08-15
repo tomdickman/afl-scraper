@@ -101,6 +101,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `dbcheck` | Tests both the owner/write and app connections and reports the PostgreSQL version. | Yes |
 | `scrape players YEAR` | Saves raw player records under `data/raw/`. | No |
 | `scrape season YEAR` | Discovers every source round and match ID and writes a validated season manifest. | No |
+| `scrape historical-season YEAR` | Discovers AustralianFootball matches from 2006-2011 and optionally caches every validated match page. | No |
 | `scrape match ID` | Scrapes, transforms, and loads one match and its player statistics. | Yes |
 | `scrape round ROUND` | Processes every match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
 | `transform players` | Transforms stored player records and loads the resulting player models. | Yes |
@@ -199,6 +200,37 @@ uv run afl-scraper scrape round 1 --year 2026 --no-load
 
 The round pipeline isolates match failures: it reports an error for the affected match and continues processing the remaining fixture.
 
+### Cache the 2006-2011 historical source
+
+AustralianFootball is the independent historical match source for 2006-2011.
+Discover and validate a season without requesting every match page:
+
+```sh
+uv run afl-scraper scrape historical-season 2006
+```
+
+This command defaults to a visible browser because the source currently returns
+HTTP 403 to a fresh headless session. The scraper does not disguise its browser
+identity or bypass that restriction.
+
+After inspecting the manifest, cache the complete season. Existing valid caches
+are reused, so rerunning the command safely resumes after a network or source
+failure:
+
+```sh
+uv run afl-scraper scrape historical-season 2006 --matches
+```
+
+The default 500 ms delay applies only between live match requests. Use
+`--refresh` only when intentionally replacing every validated cache.
+
+This extraction boundary deliberately retains AustralianFootball player IDs as
+source-specific IDs. Match pages publish jumper number, kicks, marks, handballs,
+disposals, goals, behinds, hitouts, tackles, and frees for/against. Statistics
+the source does not publish are absent rather than recorded as zero. These caches
+are not loaded into PostgreSQL until source identity mapping and nullable-field
+integration have been completed.
+
 ### Map player IDs across sources
 
 The mapping workflow connects player identifiers across the configured sources:
@@ -250,9 +282,11 @@ every participating official ID has an approved canonical mapping before opening
 a database connection. Individual match loading retains its existing mapping
 coverage check as a second guard.
 
-The AFL Tables mapping source likewise requires all 18 team sections, plausible
-player counts, valid unique identifiers, and complete names. Both mapping sources
-must pass before either year-scoped snapshot is promoted.
+When reachable, the AFL Tables mapping source likewise requires all expected team
+sections, plausible player counts, valid unique identifiers, and complete names.
+It is not used to discover or scrape the AustralianFootball historical match
+cache. Both identity snapshots must pass before either year-scoped mapping
+snapshot is promoted.
 
 `map review` auto-approves exact name-and-team matches, prompts for ambiguous matches, and lets you decide whether unmatched players should be retained without a corresponding cross-source ID. Use `--input PATH` with `map review` or `map upsert` to supply a non-default JSON file.
 

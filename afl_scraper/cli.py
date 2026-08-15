@@ -104,6 +104,66 @@ def season(year, headless):
     )
 
 
+@scrape.command(
+    "historical-season",
+    help="Discover and optionally cache AustralianFootball matches from 2006-2011",
+)
+@click.argument("year", nargs=1, type=int)
+@click.option(
+    "--matches/--manifest-only",
+    default=False,
+    help="Cache every validated match page after discovering the manifest.",
+)
+@click.option(
+    "--refresh/--reuse-cache",
+    default=False,
+    help="Re-scrape existing validated match caches.",
+)
+@click.option(
+    "--delay-ms",
+    default=500,
+    type=click.IntRange(min=0),
+    show_default=True,
+    help="Delay between live match requests.",
+)
+@click.option(
+    "--headless/--no-headless",
+    default=False,
+    help="Use headless mode; the historical source currently rejects it.",
+)
+def historical_season(year, matches, refresh, delay_ms, headless):
+    """Write a validated AustralianFootball manifest and resumable match cache."""
+    from .scraper import (
+        cache_australian_football_season_matches,
+        discover_australian_football_season,
+        save_australian_football_manifest,
+    )
+
+    with sync_browser_context(headless) as browser:
+        manifest = discover_australian_football_season(browser, year)
+        path = save_australian_football_manifest(manifest)
+        click.echo(
+            f"Saved {manifest.match_count} historical matches across "
+            f"{len(manifest.rounds)} groups to {path}"
+        )
+        if not matches:
+            return
+
+        def report_progress(index, total, match_id, cached):
+            if index == 1 or index == total or index % 10 == 0:
+                source = "cache" if cached else "live"
+                click.echo(f"[{index}/{total}] match {match_id} ({source})")
+
+        paths = cache_australian_football_season_matches(
+            browser,
+            manifest,
+            refresh=refresh,
+            delay_ms=delay_ms,
+            progress=report_progress,
+        )
+    click.echo(f"Validated {len(paths)} historical match caches for {year}")
+
+
 @scrape.command("match", help="Scrape details a specific match by ID")
 @click.argument(
     "id",
