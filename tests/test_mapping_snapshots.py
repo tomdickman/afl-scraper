@@ -59,7 +59,9 @@ def test_valid_sources_are_promoted_as_one_validated_batch(monkeypatch, tmp_path
     assert set(paths) == {"afl_official", "afl_tables"}
     assert json.loads(paths["afl_official"].read_text())[0]["id"] == "101"
     assert json.loads(paths["afl_tables"].read_text())[0]["id"] == "Alex_Smith"
-    assert not list(paths["afl_official"].parent.glob("*.tmp"))
+    assert not [
+        path for path in paths["afl_official"].parent.iterdir() if path.suffix == ".tmp"
+    ]
 
 
 def test_backup_cleanup_failure_does_not_fail_or_block_future_promotions(
@@ -84,7 +86,8 @@ def test_backup_cleanup_failure_does_not_fail_or_block_future_promotions(
 
     assert first_paths == second_paths
     assert json.loads(official_path.read_text())[0]["id"] == "102"
-    assert len(list(mapping_dir.glob("*.backup"))) == 2
+    backup_paths = [path for path in mapping_dir.iterdir() if path.suffix == ".backup"]
+    assert len(backup_paths) == 2
     assert "Could not remove obsolete snapshot file" in caplog.text
 
 
