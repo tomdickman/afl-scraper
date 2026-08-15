@@ -143,8 +143,8 @@ def historical_season(year, matches, refresh, delay_ms, headless):
         manifest = discover_australian_football_season(browser, year)
         path = save_australian_football_manifest(manifest)
         click.echo(
-            f"Saved {manifest.match_count} historical matches across "
-            f"{len(manifest.rounds)} groups to {path}"
+            f"Saved historical season manifest covering {manifest.match_count} "
+            f"matches across {len(manifest.rounds)} groups to {path}"
         )
         if not matches:
             return

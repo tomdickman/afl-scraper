@@ -132,7 +132,15 @@ def match_html(year=2006):
     """
 
 
-def test_2006_season_contract_discovers_all_matches_and_deduplicates_links():
+def test_2006_season_contract_discovers_all_matches_and_deduplicates_links(monkeypatch):
+    original = source._round_match_ids
+    parsed_headings = []
+
+    def record_parse(heading):
+        parsed_headings.append(source._round_label(heading))
+        return original(heading)
+
+    monkeypatch.setattr(source, "_round_match_ids", record_parse)
     manifest = source.parse_australian_football_season(
         season_html(),
         2006,
@@ -144,6 +152,7 @@ def test_2006_season_contract_discovers_all_matches_and_deduplicates_links():
     assert manifest.rounds[0].label == "Round 1"
     assert manifest.rounds[-1].label == "Grand Final"
     assert manifest.match_ids == list(range(1, 186))
+    assert parsed_headings == [round_.label for round_ in manifest.rounds]
 
 
 def test_season_contract_rejects_partial_and_cross_round_duplicate_results():
@@ -353,7 +362,9 @@ def test_historical_season_cli_keeps_full_match_scrape_explicit(monkeypatch, tmp
         cli_module.cli, ["scrape", "historical-season", "2006"]
     )
     assert manifest_only.exit_code == 0, manifest_only.output
-    assert "Saved 185 historical matches" in manifest_only.output
+    assert (
+        "Saved historical season manifest covering 185 matches" in manifest_only.output
+    )
     assert cache_calls == []
 
     with_matches = CliRunner().invoke(

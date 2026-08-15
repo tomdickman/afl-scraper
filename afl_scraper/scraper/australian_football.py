@@ -138,13 +138,13 @@ def parse_australian_football_season(
     expected_title = f"Season {year}"
     if "AFL Premiership Season" not in title or expected_title not in title:
         raise ValueError(f"Unexpected AustralianFootball season page title {title!r}")
-    headings = [heading for heading in soup.find_all("h4") if _round_match_ids(heading)]
-    rounds = [
-        DiscoveredRound(
-            label=_round_label(heading), match_ids=_round_match_ids(heading)
-        )
-        for heading in headings
-    ]
+    rounds = []
+    for heading in soup.find_all("h4"):
+        match_ids = _round_match_ids(heading)
+        if match_ids:
+            rounds.append(
+                DiscoveredRound(label=_round_label(heading), match_ids=match_ids)
+            )
     return AustralianFootballSeasonManifest(
         year=year,
         season_url=source_url or australian_football_season_url(year),
