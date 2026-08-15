@@ -184,7 +184,7 @@ def test_scrape_players_deduplicates_and_uses_source_urls(monkeypatch, capsys):
         def get_list_page_url(self, year):
             return f"https://example.test/list/{year}"
 
-        def scrape_players_links(self, _page):
+        def scrape_players_links(self, _page, _year=None):
             return [
                 "players/A/Ada_One.html",
                 "players/A/Ada_One.html",
@@ -232,7 +232,7 @@ def test_scrape_players_keeps_absolute_source_links(monkeypatch):
         def get_list_page_url(self, _year):
             return "https://example.test/list/2026"
 
-        def scrape_players_links(self, _page):
+        def scrape_players_links(self, _page, _year=None):
             return ["https://cdn.example.test/players/A/Ada_One.html"]
 
         def player_id_from_url(self, url):
@@ -261,7 +261,7 @@ def test_scrape_players_closes_page_and_adds_player_context(monkeypatch):
         def get_list_page_url(self, year):
             return f"https://example.test/list/{year}"
 
-        def scrape_players_links(self, _page):
+        def scrape_players_links(self, _page, _year=None):
             return ["/players/A/Ada_One.html"]
 
         def player_id_from_url(self, _url):
@@ -298,7 +298,7 @@ def test_failed_afl_tables_refresh_preserves_complete_cached_directory(
         def validate_list_navigation(self, _page, _response, _year):
             return None
 
-        def scrape_players_links(self, _page):
+        def scrape_players_links(self, _page, _year=None):
             return ["players/A/Ada_One.html", "players/B/Bob_Two.html"]
 
         def player_id_from_url(self, url):
@@ -346,7 +346,7 @@ def test_successful_afl_tables_refresh_replaces_stale_directory(monkeypatch, tmp
         def validate_list_navigation(self, _page, _response, _year):
             return None
 
-        def scrape_players_links(self, _page):
+        def scrape_players_links(self, _page, _year=None):
             return ["players/A/Ada_One.html", "players/B/Bob_Two.html"]
 
         def player_id_from_url(self, url):
@@ -396,7 +396,7 @@ def test_backup_cleanup_failure_does_not_fail_completed_player_refresh(
         def validate_list_navigation(self, _page, _response, _year):
             return None
 
-        def scrape_players_links(self, _page):
+        def scrape_players_links(self, _page, _year=None):
             return ["players/A/Ada_One.html"]
 
         def player_id_from_url(self, url):
@@ -450,7 +450,7 @@ def test_staging_cleanup_failure_preserves_original_scrape_error_and_closes_page
         def validate_list_navigation(self, _page, _response, _year):
             return None
 
-        def scrape_players_links(self, _page):
+        def scrape_players_links(self, _page, _year=None):
             return ["players/A/Ada_One.html"]
 
         def player_id_from_url(self, url):

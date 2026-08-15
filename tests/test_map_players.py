@@ -41,6 +41,17 @@ def test_exact_match_normalizes_names_and_team_aliases():
     assert not result.unmatched_tables
 
 
+def test_historical_kangaroos_name_matches_north_melbourne():
+    result = map_players.match_players(
+        [player("afl-1", "Brent Harvey", "North Melbourne")],
+        [player("tables-1", "Brent Harvey", "Kangaroos")],
+    )
+
+    assert [(match.afl.id, match.tables.id) for match in result.exact] == [
+        ("afl-1", "tables-1")
+    ]
+
+
 def test_duplicate_names_are_matched_deterministically_by_team():
     result = map_players.match_players(
         [player("afl-syd", team="Sydney Swans"), player("afl-gws", team="GWS Giants")],

@@ -3,7 +3,16 @@ from playwright.sync_api import BrowserContext, Page, Locator
 from typing import Dict
 from urllib.parse import urlencode
 
-from .constants import FIXTURE_CLASSNAMES, PATHS, SEASON_ID
+from .constants import FIXTURE_CLASSNAMES, PATHS, official_season_id
+
+
+def get_fixture_url(year: int) -> str:
+    """Return the reviewed official fixture URL for ``year``."""
+    params = {
+        "Competition": 1,
+        "Season": official_season_id(year),
+    }
+    return f"{PATHS['FIXTURE']}?{urlencode(params)}"
 
 
 def get_fixture_page(browser: BrowserContext, year: int | None = None) -> Page:
@@ -20,13 +29,10 @@ def get_fixture_page(browser: BrowserContext, year: int | None = None) -> Page:
     """
     page = browser.new_page()
 
-    params = {
-        "Competition": 1,
-        "Season": SEASON_ID[year if (year != None) else datetime.now().year],
-    }
+    selected_year = datetime.now().year if year is None else year
 
     try:
-        page.goto(f"{PATHS['FIXTURE']}?{urlencode(params)}")
+        page.goto(get_fixture_url(selected_year))
         return page
     except Exception:
         page.close()
@@ -55,7 +61,11 @@ def get_round_buttons(page: Page) -> Dict[str, Locator]:
     keyed_buttons = {}
 
     for btn in round_buttons:
-        key = btn.inner_text()
+        key = " ".join(btn.inner_text().split())
+        if not key:
+            raise ValueError("Fixture contains a blank round label")
+        if key in keyed_buttons:
+            raise ValueError(f"Fixture contains duplicate round label {key!r}")
         keyed_buttons[key] = btn
 
     return keyed_buttons

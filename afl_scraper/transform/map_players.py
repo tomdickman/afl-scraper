@@ -43,6 +43,7 @@ _TEAM_ALIASES = {
     "gws giants": "gws",
     "hawthorn": "hawthorn",
     "melbourne": "melbourne",
+    "kangaroos": "north melbourne",
     "north melbourne": "north melbourne",
     "port adelaide": "port adelaide",
     "richmond": "richmond",

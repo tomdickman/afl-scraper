@@ -43,6 +43,6 @@ class PlayerSource(ABC):
     ) -> object:
         """Save raw unstructured player data to the data lake."""
 
-    def scrape_players_links(self, page: Page) -> list[str]:
+    def scrape_players_links(self, page: Page, year: int | None = None) -> list[str]:
         """Scrape links to raw player data from the year listing page."""
         raise NotImplementedError(f"{self.name} does not support scrape_players_links")

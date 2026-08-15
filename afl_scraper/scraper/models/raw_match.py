@@ -55,7 +55,8 @@ class RawPlayerStat(BaseModel):
     time_on_ground_percent: Decimal = Field(ge=0, le=100)
     fantasy_points: int = Field(ge=0)
     disposals: int | None = Field(default=None, ge=0)
-    metres_gained: int | None = Field(default=None, ge=0)
+    # Metres gained is a net field-position measure and can be negative.
+    metres_gained: int | None = None
     rebound_50s: int | None = Field(default=None, ge=0)
     inside_50s: int | None = Field(default=None, ge=0)
     clangers: int | None = Field(default=None, ge=0)
