@@ -3,13 +3,16 @@ from decimal import Decimal, InvalidOperation
 
 from playwright.sync_api import Locator, Page, expect
 
-from ..constants import FIXTURE_CLASSNAMES
+from ..constants import (
+    FIXTURE_CLASSNAMES,
+    CompetitionRules,
+    competition_rules_for_year,
+)
 from ..models import RawMatchData, RawMatchDetails, RawPlayerStat
 
 
 _PLAYER_ID_PATTERN = re.compile(r"/players/(?P<player_id>\d+)(?:/|$)")
 _COMPLETED_STATUS = "FULL TIME"
-_EXPECTED_PLAYERS_PER_TEAM = 23
 
 _HEADER_ALIASES = {
     "#": "jumper_number",
@@ -60,6 +63,7 @@ _REQUIRED_FIELDS = {
 
 _DECIMAL_FIELDS = {"time_on_ground_percent"}
 _TEXT_FIELDS = {"player_name"}
+_SIGNED_INTEGER_FIELDS = {"metres_gained"}
 
 
 def _normalize_text(value: str) -> str:
@@ -68,6 +72,15 @@ def _normalize_text(value: str) -> str:
 
 def _normalize_header(value: str) -> str:
     return re.sub(r"\s+", "", value).upper()
+
+
+def _extract_match_year(page: Page) -> int:
+    """Read the season year from the match-centre date header."""
+    value = page.locator(FIXTURE_CLASSNAMES["MATCH_DATE_TIME"]).inner_text()
+    years = re.findall(r"\b(?:19|20)\d{2}\b", value)
+    if len(years) != 1:
+        raise ValueError(f"Could not parse one match year from {value!r}")
+    return int(years[0])
 
 
 def _extract_match_details(page: Page) -> RawMatchDetails:
@@ -167,7 +180,7 @@ def _canonical_fields(columns: list[str]) -> list[str | None]:
     return fields
 
 
-def _parse_integer(value: str, field: str) -> int:
+def _parse_integer(value: str, field: str, *, allow_negative: bool = False) -> int:
     normalized = _normalize_text(value)
     if normalized == "-":
         return 0
@@ -177,7 +190,7 @@ def _parse_integer(value: str, field: str) -> int:
         parsed = int(normalized)
     except ValueError as exc:
         raise ValueError(f"Invalid integer value for {field}: {value!r}") from exc
-    if parsed < 0:
+    if parsed < 0 and not allow_negative:
         raise ValueError(f"Negative integer value for {field}: {parsed}")
     return parsed
 
@@ -220,14 +233,16 @@ def _parse_player_stat(
         elif field in _DECIMAL_FIELDS:
             parsed[field] = _parse_decimal(value, field)
         else:
-            parsed[field] = _parse_integer(value, field)
+            parsed[field] = _parse_integer(
+                value, field, allow_negative=field in _SIGNED_INTEGER_FIELDS
+            )
 
     parsed["afl_official_id"] = _player_id_from_href(player_href)
     parsed["extra_stats"] = extra_stats
     return RawPlayerStat.model_validate(parsed)
 
 
-def _extract_team_stats(table: Locator) -> list[RawPlayerStat]:
+def _extract_team_stats(table: Locator, rules: CompetitionRules) -> list[RawPlayerStat]:
     columns = _extract_header_columns(table)
     if not columns:
         raise ValueError("No column headers found in player stats table")
@@ -242,7 +257,32 @@ def _extract_team_stats(table: Locator) -> list[RawPlayerStat]:
         player_link = row.locator('a[href*="/players/"]').first
         href = player_link.get_attribute("href") if player_link.count() else None
         stats.append(_parse_player_stat(columns, values, href))
-    return stats
+    return _remove_non_participating_extra(stats, rules)
+
+
+def _remove_non_participating_extra(
+    stats: list[RawPlayerStat], rules: CompetitionRules
+) -> list[RawPlayerStat]:
+    """Remove one allowed published extra only when all match stats are zero."""
+    if (
+        rules.maximum_published_players_per_team == rules.participating_players_per_team
+        or len(stats) != rules.maximum_published_players_per_team
+    ):
+        return stats
+
+    identity_fields = {"afl_official_id", "player_name", "jumper_number", "extra_stats"}
+    non_participants = [
+        stat
+        for stat in stats
+        if all(
+            value is None or value == 0
+            for field, value in stat.model_dump().items()
+            if field not in identity_fields
+        )
+    ]
+    if len(non_participants) != 1:
+        return stats
+    return [stat for stat in stats if stat is not non_participants[0]]
 
 
 def _player_hrefs(table: Locator) -> list[str]:
@@ -259,7 +299,12 @@ def _player_hrefs(table: Locator) -> list[str]:
     ]
 
 
-def _select_team(page: Page, table: Locator, option_index: int) -> None:
+def _select_team(
+    page: Page,
+    table: Locator,
+    option_index: int,
+    rules: CompetitionRules,
+) -> None:
     previous_hrefs = _player_hrefs(table)
     selector = page.locator("button#teams-dropdown-button")
     selector.click()
@@ -274,26 +319,33 @@ def _select_team(page: Page, table: Locator, option_index: int) -> None:
     expect(selector).to_contain_text(label)
     page.wait_for_function(
         """
-        ({ previousHrefs, expectedPlayers }) => {
+        ({ previousHrefs, minimumPlayers, maximumPlayers }) => {
           const hrefs = Array.from(document.querySelectorAll(
             '.stats-table__table tbody tr'
           )).map(row =>
             row.querySelector('a[href*="/players/"]')?.getAttribute('href')
           ).filter(Boolean);
-          return hrefs.length === expectedPlayers &&
+          return hrefs.length >= minimumPlayers &&
+            hrefs.length <= maximumPlayers &&
             JSON.stringify(hrefs) !== JSON.stringify(previousHrefs);
         }
         """,
         arg={
             "previousHrefs": previous_hrefs,
-            "expectedPlayers": _EXPECTED_PLAYERS_PER_TEAM,
+            "minimumPlayers": rules.participating_players_per_team,
+            "maximumPlayers": rules.maximum_published_players_per_team,
         },
     )
     current_hrefs = _player_hrefs(table)
-    if len(current_hrefs) != _EXPECTED_PLAYERS_PER_TEAM:
+    if not (
+        rules.participating_players_per_team
+        <= len(current_hrefs)
+        <= rules.maximum_published_players_per_team
+    ):
         raise ValueError(
-            f"Expected {_EXPECTED_PLAYERS_PER_TEAM} players after selecting "
-            f"{label!r}, got {len(current_hrefs)}"
+            f"Expected {rules.participating_players_per_team}-"
+            f"{rules.maximum_published_players_per_team} published players after "
+            f"selecting {label!r} for {rules.year}, got {len(current_hrefs)}"
         )
 
 
@@ -302,19 +354,25 @@ def select_team_stats(page: Page, option_index: int) -> None:
     table = page.locator(".stats-table__table")
     if table.count() != 1:
         raise ValueError(f"Expected one player stats table, found {table.count()}")
-    _select_team(page, table, option_index)
+    rules = competition_rules_for_year(_extract_match_year(page))
+    _select_team(page, table, option_index, rules)
 
 
 def _validate_team_stats(
-    home_stats: list[RawPlayerStat], away_stats: list[RawPlayerStat]
+    home_stats: list[RawPlayerStat],
+    away_stats: list[RawPlayerStat],
+    rules: CompetitionRules,
 ) -> None:
-    if len(home_stats) != _EXPECTED_PLAYERS_PER_TEAM:
+    expected = rules.participating_players_per_team
+    if len(home_stats) != expected:
         raise ValueError(
-            f"Expected {_EXPECTED_PLAYERS_PER_TEAM} home players, got {len(home_stats)}"
+            f"Expected {expected} home players for {rules.year}, "
+            f"got {len(home_stats)}"
         )
-    if len(away_stats) != _EXPECTED_PLAYERS_PER_TEAM:
+    if len(away_stats) != expected:
         raise ValueError(
-            f"Expected {_EXPECTED_PLAYERS_PER_TEAM} away players, got {len(away_stats)}"
+            f"Expected {expected} away players for {rules.year}, "
+            f"got {len(away_stats)}"
         )
 
     home_ids = [stat.afl_official_id for stat in home_stats]
@@ -335,11 +393,12 @@ def extract_table_data(page: Page) -> RawMatchData:
         raise ValueError(f"Expected one player stats table, found {table.count()}")
 
     details = _extract_match_details(page)
-    _select_team(page, table, 1)
-    home_stats = _extract_team_stats(table)
-    _select_team(page, table, 2)
-    away_stats = _extract_team_stats(table)
-    _validate_team_stats(home_stats, away_stats)
+    rules = competition_rules_for_year(_extract_match_year(page))
+    _select_team(page, table, 1, rules)
+    home_stats = _extract_team_stats(table, rules)
+    _select_team(page, table, 2, rules)
+    away_stats = _extract_team_stats(table, rules)
+    _validate_team_stats(home_stats, away_stats, rules)
 
     return RawMatchData(
         details=details,

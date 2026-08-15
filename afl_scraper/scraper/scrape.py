@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 import shutil
 import tempfile
@@ -8,8 +9,14 @@ from uuid import uuid4
 
 from playwright.sync_api import BrowserContext
 
-from .constants import FIXTURE_CLASSNAMES, PATHS
-from .fixture import navigate_to_round, get_fixture_page
+from .constants import FIXTURE_CLASSNAMES, PATHS, official_season_id
+from .fixture import (
+    get_fixture_page,
+    get_fixture_url,
+    get_round_buttons,
+    navigate_to_round,
+)
+from .models import DiscoveredRound, SeasonManifest
 from .parser import (
     display_player_stats,
     extract_table_data,
@@ -70,6 +77,59 @@ def scrape_match_ids(
         page.close()
 
 
+def discover_official_season(browser: BrowserContext, year: int) -> SeasonManifest:
+    """Discover and validate every round and match ID in an AFL season."""
+    page = get_fixture_page(browser, year)
+    try:
+        round_labels = list(get_round_buttons(page))
+        if not round_labels:
+            raise RuntimeError(f"No rounds found for AFL season {year}")
+
+        rounds = []
+        for label in round_labels:
+            navigate_to_round(page, label)
+            matches = page.locator(f'{FIXTURE_CLASSNAMES["MATCHES"]}[data-match-id]')
+            match_ids = [
+                _normalise_match_id(match.get_attribute("data-match-id"))
+                for match in matches.all()
+            ]
+            if not match_ids:
+                raise RuntimeError(
+                    f"No matches found for round {label!r} in AFL season {year}"
+                )
+            rounds.append(DiscoveredRound(label=label, match_ids=match_ids))
+
+        return SeasonManifest(
+            year=year,
+            season_id=official_season_id(year),
+            fixture_url=get_fixture_url(year),
+            discovered_at=datetime.now(timezone.utc),
+            rounds=rounds,
+        )
+    finally:
+        page.close()
+
+
+def save_season_manifest(
+    manifest: SeasonManifest,
+    output_root: Path = Path("data/raw/afl_official/season"),
+) -> Path:
+    """Atomically save a year-scoped, validated season manifest."""
+    output_dir = output_root / str(manifest.year)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "manifest.json"
+    temporary_path = output_dir / f".manifest-{uuid4().hex}.tmp"
+    try:
+        temporary_path.write_text(
+            manifest.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
+        temporary_path.replace(path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+    return path
+
+
 def scrape_match(browser: BrowserContext, match_id: int | str):
     match_id = _normalise_match_id(match_id)
     page = browser.new_page()
@@ -107,7 +167,7 @@ def scrape_players(
             response = page.goto(list_url)
             if source == "afl_tables":
                 source_obj.validate_list_navigation(page, response, year)
-            links = source_obj.scrape_players_links(page)
+            links = source_obj.scrape_players_links(page, year)
             player_ids = list(
                 dict.fromkeys(
                     source_obj.player_id_from_url(urljoin(list_url, link))

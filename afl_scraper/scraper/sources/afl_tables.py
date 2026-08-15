@@ -5,32 +5,12 @@ from pathlib import Path
 from playwright.sync_api import Locator, Page, Response
 
 from ...models.player import PlayerInfo
+from ..constants import MIN_HISTORY_YEAR, competition_rules_for_year
 from .base import PlayerSource
 
-
-EXPECTED_TEAMS = (
-    "Adelaide",
-    "Brisbane Lions",
-    "Carlton",
-    "Collingwood",
-    "Essendon",
-    "Fremantle",
-    "Geelong",
-    "Gold Coast",
-    "Greater Western Sydney",
-    "Hawthorn",
-    "Melbourne",
-    "North Melbourne",
-    "Port Adelaide",
-    "Richmond",
-    "St Kilda",
-    "Sydney",
-    "West Coast",
-    "Western Bulldogs",
-)
 MIN_PLAYERS_PER_TEAM = 20
 MAX_PLAYERS_PER_TEAM = 60
-MIN_SUPPORTED_YEAR = 2012
+MIN_SUPPORTED_YEAR = MIN_HISTORY_YEAR
 OUTAGE_SIGNATURES = ("site is down", "awaiting solutions")
 _BIRTHDATE_PATTERN = re.compile(r"\d{1,2}-[A-Za-z]{3}-\d{4}")
 
@@ -65,9 +45,10 @@ class AFLTablesSource(PlayerSource):
     ) -> None:
         if year < MIN_SUPPORTED_YEAR:
             raise ValueError(
-                f"AFL Tables validation supports the 18-team era from "
+                f"AFL Tables validation supports configured competition eras from "
                 f"{MIN_SUPPORTED_YEAR}; got {year}"
             )
+        competition_rules_for_year(year)
         expected_url = self.get_list_page_url(year)
         if response is None or not response.ok:
             status = response.status if response is not None else "no response"
@@ -94,28 +75,29 @@ class AFLTablesSource(PlayerSource):
                 f"AFL Tables player page navigated to unexpected URL {page.url!r}"
             )
 
-    def _team_tables(self, page: Page) -> dict[str, Locator]:
+    def _team_tables(self, page: Page, year: int) -> dict[str, Locator]:
+        expected_teams = competition_rules_for_year(year).teams
         team_tables = {}
         for table in page.locator("table").all():
             team_links = table.locator("thead th a")
             if team_links.count() == 0:
                 continue
             team_name = _text(team_links.first)
-            if team_name not in EXPECTED_TEAMS:
+            if team_name not in expected_teams:
                 raise ValueError(f"Unexpected AFL Tables team section: {team_name!r}")
             if team_name in team_tables:
                 raise ValueError(f"Duplicate AFL Tables team section: {team_name}")
             team_tables[team_name] = table
 
-        missing = sorted(set(EXPECTED_TEAMS) - set(team_tables))
+        missing = sorted(set(expected_teams) - set(team_tables))
         if missing:
             raise ValueError(f"AFL Tables season page is missing teams: {missing}")
         return team_tables
 
-    def _validated_team_links(self, page: Page) -> dict[str, list[Locator]]:
+    def _validated_team_links(self, page: Page, year: int) -> dict[str, list[Locator]]:
         links_by_team = {}
         observed_ids: dict[str, str] = {}
-        for team_name, table in self._team_tables(page).items():
+        for team_name, table in self._team_tables(page, year).items():
             links = table.locator('tbody a[href*="players/"]').all()
             if not MIN_PLAYERS_PER_TEAM <= len(links) <= MAX_PLAYERS_PER_TEAM:
                 raise ValueError(
@@ -145,7 +127,7 @@ class AFLTablesSource(PlayerSource):
     ) -> list[PlayerInfo]:
         year = datetime.now().year if year is None else year
         players = []
-        for team_name, links in self._validated_team_links(page).items():
+        for team_name, links in self._validated_team_links(page, year).items():
             for link in links:
                 href = link.get_attribute("href")
                 player_id = self.player_id_from_url(href)
@@ -197,9 +179,10 @@ class AFLTablesSource(PlayerSource):
         path.write_text(content, encoding="utf-8")
         return path
 
-    def scrape_players_links(self, page: Page) -> list[str]:
-        """Return unique links only after validating all 18 team sections."""
+    def scrape_players_links(self, page: Page, year: int | None = None) -> list[str]:
+        """Return unique links after validating the season's club sections."""
+        year = datetime.now().year if year is None else year
         hrefs = []
-        for links in self._validated_team_links(page).values():
+        for links in self._validated_team_links(page, year).values():
             hrefs.extend(link.get_attribute("href") for link in links)
         return list(dict.fromkeys(hrefs))

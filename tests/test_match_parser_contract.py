@@ -5,11 +5,13 @@ from pathlib import Path
 
 import pytest
 
+from afl_scraper.scraper.constants import competition_rules_for_year
 from afl_scraper.scraper.parser.match import (
     _canonical_fields,
     _parse_integer,
     _parse_player_stat,
     _player_id_from_href,
+    _remove_non_participating_extra,
     _validate_team_stats,
 )
 
@@ -99,21 +101,65 @@ def test_dash_is_source_normalized_to_zero():
     assert _parse_integer("-", "kicks") == 0
 
 
-def test_team_validation_requires_23_unique_disjoint_official_ids():
+def test_metres_gained_accepts_historical_negative_net_values():
+    row = _observed_row()
+    values = list(row["values"])
+    values[row["headers"].index("MG")] = "-14"
+
+    stat = _parse_player_stat(row["headers"], values, row["href"])
+
+    assert stat.metres_gained == -14
+    with pytest.raises(ValueError, match="Negative integer value for kicks"):
+        _parse_integer("-1", "kicks")
+
+
+@pytest.mark.parametrize(("year", "count"), [(2012, 22), (2021, 23), (2026, 23)])
+def test_team_validation_uses_season_roster_rules(year, count):
     row = _observed_row()
     base = _parse_player_stat(row["headers"], row["values"], row["href"])
     home = [
         base.model_copy(update={"afl_official_id": str(1000 + index)})
-        for index in range(23)
+        for index in range(count)
     ]
     away = [
         base.model_copy(update={"afl_official_id": str(2000 + index)})
-        for index in range(23)
+        for index in range(count)
     ]
+    rules = competition_rules_for_year(year)
 
-    _validate_team_stats(home, away)
+    _validate_team_stats(home, away, rules)
 
     with pytest.raises(ValueError, match="duplicate official IDs"):
-        _validate_team_stats(home[:-1] + [home[0]], away)
+        _validate_team_stats(home[:-1] + [home[0]], away, rules)
     with pytest.raises(ValueError, match="both teams"):
-        _validate_team_stats(home, away[:-1] + [home[0]])
+        _validate_team_stats(home, away[:-1] + [home[0]], rules)
+
+
+def test_current_zero_stat_published_extra_is_removed_fail_closed():
+    row = _observed_row()
+    base = _parse_player_stat(row["headers"], row["values"], row["href"])
+    playing = [
+        base.model_copy(update={"afl_official_id": str(1000 + index)})
+        for index in range(23)
+    ]
+    zero_values = {
+        field: 0
+        for field in type(base).model_fields
+        if field
+        not in {"afl_official_id", "player_name", "jumper_number", "extra_stats"}
+    }
+    non_participant = type(base).model_validate(
+        {**base.model_dump(), "afl_official_id": "9999", **zero_values}
+    )
+    rules = competition_rules_for_year(2026)
+
+    normalized = _remove_non_participating_extra(
+        playing[:8] + [non_participant] + playing[8:], rules
+    )
+
+    assert normalized == playing
+
+    all_participating = playing + [base.model_copy(update={"afl_official_id": "9998"})]
+    assert len(_remove_non_participating_extra(all_participating, rules)) == 24
+    with pytest.raises(ValueError, match="Expected 23 home players"):
+        _validate_team_stats(all_participating, playing, rules)

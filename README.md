@@ -12,7 +12,11 @@ A Python CLI for collecting Australian Football League data, normalising it, and
 - Run browser, fixture-selector, and database connection checks to detect local setup or upstream source changes.
 - Manage the SQL-first PostgreSQL schema with Alembic migrations. The schema includes teams, venues, players, games, player game statistics, and player ID mappings.
 
-The fixture scraper currently includes season IDs for 2025 and 2026. Add new seasons to `afl_scraper/scraper/constants/season_ids.py` before using `scrape round` with another year.
+The reviewed AFL Official fixture catalogue covers 2012 through 2026. AFL Tables
+player-season validation covers the required career-history range from 2006,
+including the 16-club, 17-club, and 18-club competition eras. The AFL Official
+catalogue does not expose 2006-2011, so those matches require a historical source
+adapter before they can be backfilled.
 
 ## Requirements
 
@@ -96,6 +100,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `smoke` | Checks that expected fixture controls still exist at the match-data source. | No |
 | `dbcheck` | Tests both the owner/write and app connections and reports the PostgreSQL version. | Yes |
 | `scrape players YEAR` | Saves raw player records under `data/raw/`. | No |
+| `scrape season YEAR` | Discovers every source round and match ID and writes a validated season manifest. | No |
 | `scrape match ID` | Scrapes, transforms, and loads one match and its player statistics. | Yes |
 | `scrape round ROUND` | Processes every match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
 | `transform players` | Transforms stored player records and loads the resulting player models. | Yes |
@@ -149,10 +154,23 @@ uv run afl-scraper pipeline players --scrape --year 2026
 A fresh AFL Tables extraction is staged separately and replaces the cached player
 directory only after every expected page passes validation. An unavailable,
 redirected, incomplete, or malformed source stops the pipeline before cached data
-is transformed or loaded. Because these structural checks require the current
-18-club competition, AFL Tables player scraping supports seasons from 2012 onward.
+is transformed or loaded. Season-specific structural checks support AFL Tables
+player lists from 2006 onward: 16 clubs in 2006-2010, 17 in 2011, and 18 from
+2012. The 2006-2007 source name `Kangaroos` is also validated explicitly.
 
 ### Scrape matches
+
+Discover the source-defined round labels and match IDs before processing a
+season:
+
+```sh
+uv run afl-scraper scrape season 2012
+```
+
+This writes `data/raw/afl_official/season/2012/manifest.json` atomically. It
+rejects blank or duplicate rounds, invalid IDs, empty rounds, and any match ID
+that appears in more than one round. Seasons before 2012 fail with an explicit
+source-coverage error instead of being sent to the current fixture site.
 
 Load one match by its source match ID:
 
@@ -218,7 +236,7 @@ The application is split into four main layers:
 - `afl_scraper/pipelines/` orchestrates extract, transform, and load workflows.
 - `afl_scraper/storage/` manages PostgreSQL connections, SQL table definitions, migrations, and idempotent model saves.
 
-Generated data under the root `data/` directory is intentionally excluded from Git. Match scraping also retains captured player-stat HTML under `afl_scraper/data/raw/match/<match-id>/` for inspection.
+Generated data under the root `data/` directory is intentionally excluded from Git. Match scraping also retains captured player-stat HTML under `data/raw/afl_official/match/<match-id>/` for inspection.
 
 Team and venue names from source sites are normalised before database loading. Venue aliases are maintained in `config/venue_name_mappings.jsonc`; update that file when a source introduces a venue name the transformer does not recognise.
 

@@ -4,6 +4,8 @@ from pathlib import Path
 
 from .pipelines import match_pipeline, players_pipeline
 from .scraper import (
+    discover_official_season,
+    save_season_manifest,
     scrape_players,
     sync_browser_context,
 )
@@ -82,6 +84,24 @@ def round(round_number, headless, year, load):
 
     results = round_pipeline(round_number, year, headless, load)
     click.echo(f"\nProcessed {len(results)} matches in round {round_number}")
+
+
+@scrape.command("season", help="Discover and save every round and match in a season")
+@click.argument("year", nargs=1, type=int)
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    help="Run the scraper in headless mode (default: headless).",
+)
+def season(year, headless):
+    """Write a validated, year-scoped official fixture manifest."""
+    with sync_browser_context(headless) as browser:
+        manifest = discover_official_season(browser, year)
+    path = save_season_manifest(manifest)
+    click.echo(
+        f"Saved {manifest.match_count} matches across {len(manifest.rounds)} "
+        f"rounds to {path}"
+    )
 
 
 @scrape.command("match", help="Scrape details a specific match by ID")

@@ -4,9 +4,9 @@ import pytest
 
 from afl_scraper.scraper.sources.afl_tables import (
     AFLTablesSource,
-    EXPECTED_TEAMS,
     MIN_PLAYERS_PER_TEAM,
 )
+from afl_scraper.scraper.constants import competition_rules_for_year
 
 
 class LocatorList:
@@ -83,10 +83,10 @@ class Response:
         self.status = status
 
 
-def healthy_page():
+def healthy_page(year=2026):
     tables = []
     next_id = 1
-    for team in EXPECTED_TEAMS:
+    for team in competition_rules_for_year(year).teams:
         links = [
             PlayerLink(f"P{next_id + index}") for index in range(MIN_PLAYERS_PER_TEAM)
         ]
@@ -97,9 +97,10 @@ def healthy_page():
 
 def test_current_contract_requires_all_18_complete_unique_teams():
     players = AFLTablesSource().scrape_player_ids(healthy_page(), 2026)
+    expected_teams = competition_rules_for_year(2026).teams
 
-    assert len(players) == len(EXPECTED_TEAMS) * MIN_PLAYERS_PER_TEAM
-    assert {player.team for player in players} == set(EXPECTED_TEAMS)
+    assert len(players) == len(expected_teams) * MIN_PLAYERS_PER_TEAM
+    assert {player.team for player in players} == set(expected_teams)
     assert len({player.id for player in players}) == len(players)
 
 
@@ -116,7 +117,7 @@ def test_implausibly_small_team_fails_closed():
     page.tables[0].links.pop()
 
     with pytest.raises(ValueError, match="has 19 players"):
-        AFLTablesSource().scrape_players_links(page)
+        AFLTablesSource().scrape_players_links(page, 2026)
 
 
 def test_duplicate_player_id_across_teams_fails_closed():
@@ -151,9 +152,24 @@ def test_http_failure_and_redirect_are_rejected():
         )
 
 
-def test_pre_18_team_seasons_are_rejected_explicitly():
-    with pytest.raises(ValueError, match="18-team era"):
-        AFLTablesSource().validate_list_navigation(Page(), Response(), 2011)
+@pytest.mark.parametrize(
+    ("year", "team_count", "historical_name"),
+    [(2006, 16, "Kangaroos"), (2008, 16, "North Melbourne"), (2011, 17, "Gold Coast")],
+)
+def test_historical_competition_eras_are_validated(year, team_count, historical_name):
+    page = healthy_page(year)
+    page.url = f"https://afltables.com/afl/stats/{year}.html"
+
+    AFLTablesSource().validate_list_navigation(page, Response(), year)
+    players = AFLTablesSource().scrape_player_ids(page, year)
+
+    assert len({player.team for player in players}) == team_count
+    assert historical_name in {player.team for player in players}
+
+
+def test_seasons_before_career_history_floor_are_rejected_explicitly():
+    with pytest.raises(ValueError, match="configured competition eras from 2006"):
+        AFLTablesSource().validate_list_navigation(Page(), Response(), 2005)
 
 
 def test_player_page_is_validated_before_staging(tmp_path):
