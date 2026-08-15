@@ -41,7 +41,15 @@ def get_team_page(browser: BrowserContext, team_slug: str) -> Page:
     """
     page = browser.new_page()
     try:
-        page.goto(f"https://www.afl.com.au/teams/{team_slug}")
+        expected_url = f"https://www.afl.com.au/teams/{team_slug}"
+        response = page.goto(expected_url)
+        if response is None or not response.ok:
+            status = response.status if response is not None else "no response"
+            raise RuntimeError(f"AFL team page {team_slug!r} returned HTTP {status}")
+        if page.url.rstrip("/") != expected_url:
+            raise RuntimeError(
+                f"AFL team page {team_slug!r} navigated to unexpected URL {page.url!r}"
+            )
         return page
     except Exception:
         page.close()
