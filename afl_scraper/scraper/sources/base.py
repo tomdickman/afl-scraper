@@ -35,7 +35,12 @@ class PlayerSource(ABC):
         """Scrape all player IDs, names, and teams for the given year."""
 
     @abstractmethod
-    def scrape_player(self, page: Page, player_id: str | None = None) -> object:
+    def scrape_player(
+        self,
+        page: Page,
+        player_id: str | None = None,
+        output_dir: Path | None = None,
+    ) -> object:
         """Save raw unstructured player data to the data lake."""
 
     def scrape_players_links(self, page: Page) -> list[str]:

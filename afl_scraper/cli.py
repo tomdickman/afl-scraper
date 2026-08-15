@@ -192,22 +192,25 @@ def map_scrape(headless, year):
     """Scrape player IDs from both AFL official and AFL Tables sources."""
     from .scraper.scrape_player_ids import (
         scrape_player_ids,
-        save_player_ids_to_json,
+        save_player_id_snapshots,
     )
 
     with sync_browser_context(headless) as browser:
         click.echo(f"Scraping AFL official players for {year}...")
         afl_players = scrape_player_ids(browser, year, "afl_official")
-        afl_players_path = save_player_ids_to_json(afl_players, "afl_official", year)
-        click.echo(
-            f"Saved {len(afl_players)} AFL official players to {afl_players_path}"
-        )
 
         click.echo(f"Scraping AFL Tables players for {year}...")
         tables_players = scrape_player_ids(browser, year, "afl_tables")
-        table_players_path = save_player_ids_to_json(tables_players, "afl_tables", year)
+        paths = save_player_id_snapshots(
+            {"afl_official": afl_players, "afl_tables": tables_players}, year
+        )
         click.echo(
-            f"Saved {len(tables_players)} AFL Tables players to {table_players_path}"
+            f"Saved {len(afl_players)} AFL official players to "
+            f"{paths['afl_official']}"
+        )
+        click.echo(
+            f"Saved {len(tables_players)} AFL Tables players to "
+            f"{paths['afl_tables']}"
         )
 
 

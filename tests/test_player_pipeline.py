@@ -67,3 +67,23 @@ def test_player_failure_rolls_back_the_complete_batch(save, transform):
     assert exit_args[0] is RuntimeError
     assert exit_args[1] is failure
     connection.commit.assert_not_called()
+
+
+@patch("afl_scraper.pipelines.player.admin_connection_pool")
+@patch("afl_scraper.pipelines.player.transform_player_data")
+@patch("afl_scraper.pipelines.player.scrape_players")
+def test_failed_fresh_scrape_never_loads_stale_cached_players(
+    scrape, transform, open_pool
+):
+    scrape.side_effect = RuntimeError("source unavailable")
+
+    @contextmanager
+    def browser_context(_headless):
+        yield object()
+
+    with patch("afl_scraper.pipelines.player.sync_browser_context", browser_context):
+        with pytest.raises(RuntimeError, match="source unavailable"):
+            players_pipeline(extract=True, year=2026)
+
+    transform.assert_not_called()
+    open_pool.assert_not_called()
