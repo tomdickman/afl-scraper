@@ -272,6 +272,45 @@ internal game ID is allocated. Each game and all of its player rows are one
 transaction. Replaying a season updates the same records, and null historical
 fields do not erase richer values already stored for those records.
 
+### Run the resumable 2006-2011 backfill
+
+After every year has complete caches and approved mappings, preflight the full
+range before allowing any database writes:
+
+```sh
+uv run afl-scraper pipeline historical-backfill
+```
+
+The dry run validates all six years and writes two ignored, atomic artifacts:
+
+- `data/checkpoints/australian_football/2006-2011.json` records per-year state.
+- `data/reports/australian_football/2006-2011.json` compares expected caches
+  with source-qualified database games and player statistics.
+
+The reconciliation checks identities, every canonical game field, participant
+sets, and every statistic published by the historical source. Unpublished null
+fields are ignored so independently enriched values remain valid.
+
+Load the range only after reviewing the dry-run output:
+
+```sh
+uv run afl-scraper pipeline historical-backfill --load
+```
+
+All requested years must pass preflight before the first game is written. After
+each completed year, the checkpoint and reconciliation report are atomically
+replaced. A rerun resumes by skipping only years that reconcile completely with
+the database; the checkpoint file alone is never trusted. If a previously
+completed year has drifted, resume fails closed. Inspect the report, then use
+`--reprocess` only when deliberately repairing it with idempotent upserts:
+
+```sh
+uv run afl-scraper pipeline historical-backfill --load --reprocess
+```
+
+Use `--from-year` and `--to-year` for a smaller inclusive range. Custom artifact
+locations are available through `--checkpoint` and `--report`.
+
 ### Map player IDs across sources
 
 The mapping workflow connects player identifiers across the configured sources:
