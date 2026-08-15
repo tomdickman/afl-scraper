@@ -223,6 +223,16 @@ def test_match_contract_accepts_source_spacing_inside_score_totals():
     assert match.details.away_team_total == 83
 
 
+@pytest.mark.parametrize("year", [2006, 2007, 2008])
+def test_retrospective_north_melbourne_name_validates_against_each_era(year):
+    historical_club = match_html(year).replace("Collingwood", "North Melbourne")
+
+    match = source.parse_australian_football_match(historical_club, year)
+
+    # Preserve the exact source value; the year-aware alias is validation-only.
+    assert match.details.home_team == "North Melbourne"
+
+
 def test_match_contract_rejects_wrong_year_score_drift_and_missing_player():
     with pytest.raises(ValueError, match="belongs to 2006, expected 2007"):
         source.parse_australian_football_match(match_html(), 2007)

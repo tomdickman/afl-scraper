@@ -310,13 +310,16 @@ def _parse_player_table(
     return players
 
 
-def _canonical_source_team(team: str) -> str:
+def _canonical_source_team(team: str, year: int) -> str:
     aliases = {
         "brisbane": "Brisbane Lions",
         "st. kilda": "St Kilda",
-        "north melbourne": "North Melbourne",
     }
     normalized = _normalize_text(team).casefold()
+    # AustralianFootball applies the modern club name retrospectively, while
+    # the reviewed competition contract uses the name published in that era.
+    if normalized == "north melbourne" and year <= 2007:
+        return "Kangaroos"
     return aliases.get(normalized, _normalize_text(team))
 
 
@@ -358,8 +361,8 @@ def parse_australian_football_match(
     rules = competition_rules_for_year(year)
     expected_teams = set(rules.teams)
     observed_teams = {
-        _canonical_source_team(details.home_team),
-        _canonical_source_team(details.away_team),
+        _canonical_source_team(details.home_team, year),
+        _canonical_source_team(details.away_team, year),
     }
     if not observed_teams <= expected_teams:
         raise ValueError(
