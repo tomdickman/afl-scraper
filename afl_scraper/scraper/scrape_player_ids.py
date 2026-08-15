@@ -1,12 +1,25 @@
 from collections import Counter
 from datetime import datetime
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
+from uuid import uuid4
 
 from ..models.player import PlayerInfo
 from .sources import PlayerSourceFactory
+
+
+logger = logging.getLogger(__name__)
+
+
+def _unlink_best_effort(path: Path) -> None:
+    """Remove obsolete snapshot data without changing a completed operation."""
+    try:
+        path.unlink()
+    except OSError as exc:
+        logger.warning("Could not remove obsolete snapshot file %s: %s", path, exc)
 
 
 def scrape_player_ids(
@@ -101,11 +114,7 @@ def save_player_id_snapshots(
             )
         for source_name, path in paths.items():
             if path.exists():
-                backup = path.with_name(f".{path.name}.backup")
-                if backup.exists():
-                    raise RuntimeError(
-                        f"Refusing to overwrite unresolved snapshot backup {backup}"
-                    )
+                backup = path.with_name(f".{path.name}.{uuid4().hex}.backup")
                 path.replace(backup)
                 backup_paths[source_name] = backup
             temporary_paths[source_name].replace(path)
@@ -122,9 +131,9 @@ def save_player_id_snapshots(
     finally:
         for temporary_path in temporary_paths.values():
             if temporary_path.exists():
-                temporary_path.unlink()
+                _unlink_best_effort(temporary_path)
 
     for backup in backup_paths.values():
         if backup.exists():
-            backup.unlink()
+            _unlink_best_effort(backup)
     return paths

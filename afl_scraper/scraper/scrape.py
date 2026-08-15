@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import shutil
 import tempfile
@@ -15,6 +16,17 @@ from .parser import (
     select_team_stats,
 )
 from .sources import PlayerSourceFactory
+
+
+logger = logging.getLogger(__name__)
+
+
+def _remove_directory_best_effort(path: Path) -> None:
+    """Remove obsolete scrape data without changing the scrape outcome."""
+    try:
+        shutil.rmtree(path)
+    except OSError as exc:
+        logger.warning("Could not remove obsolete scrape directory %s: %s", path, exc)
 
 
 def _normalise_match_id(match_id: int | str) -> int:
@@ -153,11 +165,11 @@ def scrape_players(
                 raise
             else:
                 if backup_dir.exists():
-                    shutil.rmtree(backup_dir)
+                    _remove_directory_best_effort(backup_dir)
             players_data_paths = [final_dir / path.name for path in players_data_paths]
 
         return players_data_paths
     finally:
         if staging_dir is not None and staging_dir.exists():
-            shutil.rmtree(staging_dir)
+            _remove_directory_best_effort(staging_dir)
         page.close()

@@ -381,6 +381,111 @@ def test_successful_afl_tables_refresh_replaces_stale_directory(monkeypatch, tmp
     }
 
 
+def test_backup_cleanup_failure_does_not_fail_completed_player_refresh(
+    monkeypatch, tmp_path, caplog
+):
+    page = FakePage()
+    final_dir = tmp_path / "raw/afl_tables/player"
+    final_dir.mkdir(parents=True)
+    (final_dir / "stale.html").write_text("stale")
+
+    class HealthyAFLTablesSource:
+        def get_list_page_url(self, _year):
+            return "https://example.test/list"
+
+        def validate_list_navigation(self, _page, _response, _year):
+            return None
+
+        def scrape_players_links(self, _page):
+            return ["players/A/Ada_One.html"]
+
+        def player_id_from_url(self, url):
+            return Path(url).stem
+
+        def get_player_page_url(self, player_id):
+            return f"https://example.test/player/{player_id}"
+
+        def get_raw_data_dir(self):
+            return tmp_path / "raw/afl_tables"
+
+        def validate_player_navigation(self, _page, _response, _url):
+            return None
+
+        def scrape_player(self, _page, player_id, output_dir=None):
+            path = output_dir / f"{player_id}.html"
+            path.write_text("new")
+            return path
+
+    monkeypatch.setattr(
+        scrape.PlayerSourceFactory,
+        "get",
+        lambda _source_name: HealthyAFLTablesSource(),
+    )
+    real_rmtree = scrape.shutil.rmtree
+
+    def fail_backup_cleanup(path):
+        if Path(path).name.startswith(".player-backup-"):
+            raise OSError("simulated cleanup failure")
+        return real_rmtree(path)
+
+    monkeypatch.setattr(scrape.shutil, "rmtree", fail_backup_cleanup)
+
+    paths = scrape.scrape_players(FakeBrowser(page), 2026, "afl_tables")
+
+    assert [path.name for path in paths] == ["Ada_One.html"]
+    assert (final_dir / "Ada_One.html").read_text() == "new"
+    assert page.closed is True
+    assert "Could not remove obsolete scrape directory" in caplog.text
+
+
+def test_staging_cleanup_failure_preserves_original_scrape_error_and_closes_page(
+    monkeypatch, tmp_path, caplog
+):
+    page = FakePage()
+
+    class FailingAFLTablesSource:
+        def get_list_page_url(self, _year):
+            return "https://example.test/list"
+
+        def validate_list_navigation(self, _page, _response, _year):
+            return None
+
+        def scrape_players_links(self, _page):
+            return ["players/A/Ada_One.html"]
+
+        def player_id_from_url(self, url):
+            return Path(url).stem
+
+        def get_player_page_url(self, player_id):
+            return f"https://example.test/player/{player_id}"
+
+        def get_raw_data_dir(self):
+            return tmp_path / "raw/afl_tables"
+
+        def validate_player_navigation(self, _page, _response, _url):
+            return None
+
+        def scrape_player(self, _page, _player_id, output_dir=None):
+            raise ValueError("malformed player page")
+
+    monkeypatch.setattr(
+        scrape.PlayerSourceFactory,
+        "get",
+        lambda _source_name: FailingAFLTablesSource(),
+    )
+    monkeypatch.setattr(
+        scrape.shutil,
+        "rmtree",
+        lambda _path: (_ for _ in ()).throw(OSError("simulated cleanup failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="malformed player page"):
+        scrape.scrape_players(FakeBrowser(page), 2026, "afl_tables")
+
+    assert page.closed is True
+    assert "Could not remove obsolete scrape directory" in caplog.text
+
+
 def test_get_team_page_closes_page_when_navigation_fails():
     class FailingPage(FakePage):
         def goto(self, url):

@@ -62,6 +62,32 @@ def test_valid_sources_are_promoted_as_one_validated_batch(monkeypatch, tmp_path
     assert not list(paths["afl_official"].parent.glob("*.tmp"))
 
 
+def test_backup_cleanup_failure_does_not_fail_or_block_future_promotions(
+    monkeypatch, tmp_path, caplog
+):
+    monkeypatch.chdir(tmp_path)
+    mapping_dir = tmp_path / "data/mapping"
+    mapping_dir.mkdir(parents=True)
+    official_path = mapping_dir / "2026_afl_official.json"
+    official_path.write_text("old official")
+    real_unlink = type(official_path).unlink
+
+    def fail_backup_cleanup(path, *args, **kwargs):
+        if path.name.endswith(".backup"):
+            raise OSError("simulated cleanup failure")
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(type(official_path), "unlink", fail_backup_cleanup)
+
+    first_paths = save_player_id_snapshots({"afl_official": [player("101")]}, 2026)
+    second_paths = save_player_id_snapshots({"afl_official": [player("102")]}, 2026)
+
+    assert first_paths == second_paths
+    assert json.loads(official_path.read_text())[0]["id"] == "102"
+    assert len(list(mapping_dir.glob("*.backup"))) == 2
+    assert "Could not remove obsolete snapshot file" in caplog.text
+
+
 def test_promotion_failure_restores_every_previous_snapshot(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     mapping_dir = tmp_path / "data/mapping"
