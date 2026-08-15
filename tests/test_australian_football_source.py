@@ -188,7 +188,7 @@ def test_source_year_boundary_is_explicit():
         source.australian_football_season_url(2012)
 
 
-def test_access_refusal_reports_visible_browser_requirement():
+def test_access_refusal_suggests_visible_browser_retry():
     class Page:
         url = source.australian_football_season_url(2006)
 
@@ -196,10 +196,15 @@ def test_access_refusal_reports_visible_browser_requirement():
         ok = False
         status = 403
 
-    with pytest.raises(RuntimeError, match="403.*--no-headless"):
+    with pytest.raises(RuntimeError) as error:
         source._validate_navigation(
             Page(), Response(), source.australian_football_season_url(2006), "season"
         )
+
+    assert str(error.value) == (
+        "AustralianFootball season page returned HTTP 403; if using headless mode, "
+        "retry with a visible browser (`--no-headless`)"
+    )
 
 
 def test_match_contract_parses_stable_ids_and_only_published_statistics():

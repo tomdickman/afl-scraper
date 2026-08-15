@@ -129,7 +129,7 @@ def season(year, headless):
 @click.option(
     "--headless/--no-headless",
     default=False,
-    help="Use headless mode; the historical source currently rejects it.",
+    help="Use headless mode; the historical source may reject fresh sessions.",
 )
 def historical_season(year, matches, refresh, delay_ms, headless):
     """Write a validated AustralianFootball manifest and resumable match cache."""

@@ -400,7 +400,8 @@ def _validate_navigation(
     if response is None or not response.ok:
         status = response.status if response is not None else "no response"
         mode_hint = (
-            "; the source currently requires a visible browser (`--no-headless`)"
+            "; if using headless mode, retry with a visible browser "
+            "(`--no-headless`)"
             if status == 403
             else ""
         )
