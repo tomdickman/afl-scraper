@@ -50,6 +50,7 @@ team_mappings = {
     "tigers": "Richmond",
     "st kilda saints": "St Kilda",
     "st kilda": "St Kilda",
+    "st. kilda": "St Kilda",
     "saints": "St Kilda",
     "sydney swans": "Sydney",
     "sydney": "Sydney",

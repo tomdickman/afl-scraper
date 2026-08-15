@@ -55,3 +55,24 @@ def test_unavailable_stats_migration_is_latest_and_reversible():
     )
     assert "nullable=True" in migration
     assert "nullable=False" in migration
+
+
+def test_historical_loader_migration_qualifies_identities_and_sparse_stats():
+    migration = (
+        MIGRATIONS / "b6df0c4a1e92_add_source_qualified_identities.py"
+    ).read_text()
+    current_schema = _normalized(TABLES / "player_game_stats.sql")
+
+    assert (
+        'down_revision: Union[str, Sequence[str], None] = "7d1d45f2a3c8"' in migration
+    )
+    assert "player_source_identity.sql" in migration
+    assert "game_source_identity.sql" in migration
+    assert "game_internal_id_seq" in migration
+    for column in (
+        "clearances",
+        "goal_assists",
+        "time_on_ground_percent",
+        "fantasy_points",
+    ):
+        assert f"{column} int not null" not in current_schema

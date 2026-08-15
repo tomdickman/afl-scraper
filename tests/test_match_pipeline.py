@@ -89,8 +89,16 @@ def test_match_and_all_stats_are_saved_in_one_transaction(save, transform):
     ]
     connection, cursor = _connection_with_mappings()
 
-    with patch(
-        "afl_scraper.pipelines.match.admin_connection_pool", _pool_for(connection)
+    with (
+        patch(
+            "afl_scraper.pipelines.match.admin_connection_pool",
+            _pool_for(connection),
+        ),
+        patch(
+            "afl_scraper.pipelines.match.allocate_game_id",
+            return_value=(42, True),
+        ) as allocate,
+        patch("afl_scraper.pipelines.match.save_game_source_identity") as save_identity,
     ):
         result = load_match_data(_raw_match(), 42)
 
@@ -102,9 +110,12 @@ def test_match_and_all_stats_are_saved_in_one_transaction(save, transform):
     ]
     cursor.execute.assert_called_once()
     assert cursor.execute.call_args.args[1] == {
+        "source": "afl_official",
         "year": 2024,
-        "official_ids": ["101", "102"],
+        "source_player_ids": ["101", "102"],
     }
+    allocate.assert_called_once_with(connection, "afl_official", "42")
+    save_identity.assert_called_once_with(connection, "afl_official", "42", 42)
     resolver = transform.call_args.kwargs["resolve_player_id"]
     assert resolver(_raw_match().home_team_stats[0], "Carlton", 2024) == "player-1"
     connection.transaction.assert_called_once_with()
@@ -123,8 +134,16 @@ def test_stat_failure_escapes_transaction_and_cannot_partially_commit(save, tran
     save.side_effect = [SaveResult(True, {"id": 42}), failure]
     connection, _ = _connection_with_mappings()
 
-    with patch(
-        "afl_scraper.pipelines.match.admin_connection_pool", _pool_for(connection)
+    with (
+        patch(
+            "afl_scraper.pipelines.match.admin_connection_pool",
+            _pool_for(connection),
+        ),
+        patch(
+            "afl_scraper.pipelines.match.allocate_game_id",
+            return_value=(42, True),
+        ),
+        patch("afl_scraper.pipelines.match.save_game_source_identity"),
     ):
         with pytest.raises(RuntimeError, match="stat write failed"):
             load_match_data(_raw_match(), 42)

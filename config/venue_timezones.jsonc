@@ -1,0 +1,17 @@
+{
+  // Canonical venue IDs mapped to IANA timezones. Match dates, rather than
+  // current offsets, determine daylight-saving behavior.
+  "Cazaly's Stadium": "Australia/Brisbane",
+  "Carrara": "Australia/Brisbane",
+  "Docklands": "Australia/Melbourne",
+  "Football Park": "Australia/Adelaide",
+  "Gabba": "Australia/Brisbane",
+  "Kardinia Park": "Australia/Melbourne",
+  "M.C.G.": "Australia/Melbourne",
+  "Manuka Oval": "Australia/Sydney",
+  "Marrara Oval": "Australia/Darwin",
+  "S.C.G.": "Australia/Sydney",
+  "Stadium Australia": "Australia/Sydney",
+  "Subiaco": "Australia/Perth",
+  "York Park": "Australia/Hobart"
+}

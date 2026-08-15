@@ -12,6 +12,7 @@ class PlayerGameStats(DBModel):
     __preserve_existing_on_null_cols__ = [
         "rebound_50s",
         "inside_50s",
+        "clearances",
         "clangers",
         "free_kicks_for",
         "free_kicks_against",
@@ -21,6 +22,9 @@ class PlayerGameStats(DBModel):
         "marks_inside_50",
         "one_percenters",
         "bounces",
+        "goal_assists",
+        "time_on_ground_percent",
+        "fantasy_points",
     ]
 
     player_id: str
@@ -35,7 +39,7 @@ class PlayerGameStats(DBModel):
     tackles: int
     rebound_50s: int | None
     inside_50s: int | None
-    clearances: int
+    clearances: int | None
     clangers: int | None
     free_kicks_for: int | None
     free_kicks_against: int | None
@@ -45,7 +49,7 @@ class PlayerGameStats(DBModel):
     marks_inside_50: int | None
     one_percenters: int | None
     bounces: int | None
-    goal_assists: int
-    time_on_ground_percent: Decimal
-    fantasy_points: int
+    goal_assists: int | None
+    time_on_ground_percent: Decimal | None
+    fantasy_points: int | None
     game_id: int

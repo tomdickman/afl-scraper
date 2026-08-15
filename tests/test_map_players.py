@@ -219,7 +219,7 @@ def test_upsert_validates_before_opening_database(monkeypatch):
     open_pool.assert_not_called()
 
 
-def test_upsert_supports_paired_and_tables_only_mappings(monkeypatch):
+def test_upsert_persists_only_real_source_identities(monkeypatch):
     connection = Mock()
 
     @contextmanager
@@ -232,20 +232,16 @@ def test_upsert_supports_paired_and_tables_only_mappings(monkeypatch):
         PlayerMapping(player_id="tables-2"),
     ]
 
-    assert map_players.upsert_mappings(mappings, 2026) == 2
-    assert connection.execute.call_count == 2
+    assert map_players.upsert_mappings(mappings, 2026) == 1
+    assert connection.execute.call_count == 1
     assert connection.execute.call_args_list[0].args[1] == {
-        "afl_id": "afl-1",
+        "source_player_id": "afl-1",
         "player_id": "tables-1",
         "year": 2026,
     }
-    assert connection.execute.call_args_list[1].args[1] == {
-        "player_id": "tables-2",
-        "year": 2026,
-    }
 
 
-def test_review_never_writes_official_only_id_as_tables_player_id(tmp_path):
+def test_review_does_not_create_identity_rows_for_unmatched_players(tmp_path):
     matches = MatchResult(
         exact=[],
         fuzzy=[],
@@ -260,14 +256,13 @@ def test_review_never_writes_official_only_id_as_tables_player_id(tmp_path):
         result = runner.invoke(
             cli,
             ["map", "review", "--year", "2026", "--input", str(review_file)],
-            input="y\n",
         )
         assert result.exit_code == 0, result.output
         approved = json.loads(
             (tmp_path.cwd() / "data/mapping/2026_approved.json").read_text()
         )
 
-    assert approved == [{"afl_official_id": None, "player_id": "tables-only"}]
+    assert approved == []
     assert "an AFL Tables player is required before mapping" in result.output
 
 

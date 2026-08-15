@@ -239,32 +239,23 @@ def upsert_mappings(mappings: list[PlayerMapping], year: int) -> int:
 
     with admin_connection_pool() as conn:
         for mapping in mappings:
-            if mapping.afl_official_id and mapping.player_id:
-                conn.execute(
-                    """
-                    INSERT INTO player_id_mapping (afl_official_id, player_id, year)
-                    VALUES (%(afl_id)s, %(player_id)s, %(year)s)
-                    ON CONFLICT (player_id, year) DO UPDATE
-                    SET afl_official_id = EXCLUDED.afl_official_id,
-                        updated_at = NOW()
-                    """,
-                    {
-                        "afl_id": mapping.afl_official_id,
-                        "player_id": mapping.player_id,
-                        "year": year,
-                    },
-                )
-                inserted += 1
-            elif mapping.player_id and not mapping.afl_official_id:
-                conn.execute(
-                    """
-                    INSERT INTO player_id_mapping (player_id, year)
-                    VALUES (%(player_id)s, %(year)s)
-                    ON CONFLICT (player_id, year) DO UPDATE
-                    SET updated_at = NOW()
-                    """,
-                    {"player_id": mapping.player_id, "year": year},
-                )
-                inserted += 1
+            if mapping.afl_official_id is None:
+                continue
+            conn.execute(
+                """
+                INSERT INTO player_source_identity
+                  (source, source_player_id, player_id, year)
+                VALUES ('afl_official', %(source_player_id)s, %(player_id)s, %(year)s)
+                ON CONFLICT (source, source_player_id, year) DO UPDATE
+                SET player_id = EXCLUDED.player_id,
+                    updated_at = NOW()
+                """,
+                {
+                    "source_player_id": mapping.afl_official_id,
+                    "player_id": mapping.player_id,
+                    "year": year,
+                },
+            )
+            inserted += 1
 
     return inserted

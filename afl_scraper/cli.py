@@ -235,6 +235,33 @@ def pipeline_players(scrape: bool, year=2026):
     print(players_pipeline(scrape, year))
 
 
+@pipeline.command(
+    "historical-season",
+    help="Preflight and optionally load one cached 2006-2011 season",
+)
+@click.argument("year", nargs=1, type=int)
+@click.option(
+    "--load/--dry-run",
+    default=False,
+    help="Write only after complete cache, identity and reference preflight.",
+)
+def pipeline_historical_season(year, load):
+    """Load AustralianFootball caches; safe default is validation only."""
+    from .pipelines import historical_season_pipeline
+
+    report = historical_season_pipeline(year, load=load)
+    action = "Loaded" if load else "Validated"
+    click.echo(
+        f"{action} {report.matches} historical matches and "
+        f"{report.player_stats} player-stat rows for {year}"
+    )
+    if load:
+        click.echo(
+            f"Games inserted: {report.inserted_games}; "
+            f"updated: {report.updated_games}"
+        )
+
+
 @cli.command(name="smoke")
 @click.option(
     "--headless/--no-headless",
@@ -459,14 +486,10 @@ def map_review(year, input):
 
     click.echo(f"\n=== Unmatched Tables ({len(matches.unmatched_tables)}) ===")
     for p in matches.unmatched_tables:
-        click.echo(f"  {p.display_name()} ({p.team}) - ID: {p.id}")
-        add = click.prompt(
-            "Add AFL Tables-only player without an AFL Official ID? (y/N)",
-            default="n",
-            show_default=False,
+        click.echo(
+            f"  {p.display_name()} ({p.team}) - ID: {p.id}; "
+            "no source identity row required"
         )
-        if add.lower() == "y":
-            approved.append(PlayerMapping(player_id=p.id))
 
     validate_mappings(approved)
 
@@ -522,3 +545,97 @@ def map_upsert(year, input, require_complete):
     click.echo(f"Upserting {len(mappings)} mappings to database...")
     count = upsert_mappings(mappings, year)
     click.echo(f"✅ Upserted {count} mappings")
+
+
+@map.command(
+    "match-historical",
+    help="Generate reviewed mapping candidates from historical match caches",
+)
+@click.option("--year", required=True, type=int)
+def map_match_historical(year):
+    """Match AustralianFootball participants to an AFL Tables snapshot."""
+    from .pipelines.historical import historical_source_players
+    from .transform import load_player_ids_from_json, match_players
+
+    source_players = historical_source_players(year)
+    canonical_players = load_player_ids_from_json("afl_tables", year)
+    matches = match_players(source_players, canonical_players)
+    output = Path(f"data/mapping/{year}_australian_football_to_review.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(matches.model_dump_json(by_alias=True, indent=2) + "\n")
+    click.echo(
+        f"Exact: {len(matches.exact)}, review: {len(matches.fuzzy)}, "
+        f"unmatched source: {len(matches.unmatched_afl)}, "
+        f"unmatched canonical: {len(matches.unmatched_tables)}"
+    )
+    click.echo(f"Saved historical mapping candidates to {output}")
+
+
+@map.command(
+    "review-historical",
+    help="Review AustralianFootball-to-canonical player mappings",
+)
+@click.option("--year", required=True, type=int)
+@click.option("-i", "--input", type=click.Path(exists=True, path_type=Path))
+def map_review_historical(year, input):
+    """Approve exact mappings and explicitly resolve ambiguous candidates."""
+    import json
+
+    from .models import MatchResult, SourcePlayerMapping
+    from .transform import validate_source_mappings
+
+    input = input or Path(f"data/mapping/{year}_australian_football_to_review.json")
+    matches = MatchResult.model_validate_json(input.read_text(encoding="utf-8"))
+    approved = [
+        SourcePlayerMapping(source_player_id=match.afl.id, player_id=match.tables.id)
+        for match in matches.exact
+    ]
+    click.echo(f"Auto-approved {len(approved)} exact name-and-team mappings")
+    for match in matches.fuzzy:
+        click.echo(f"\n{match.afl.display_name()} ({match.afl.team})")
+        for index, option in enumerate(match.tables, start=1):
+            click.echo(f"  [{index}] {option.id} ({option.team})")
+        choice = click.prompt(
+            "Select option (number, or s to skip)", default="s", show_default=False
+        )
+        if choice.isdigit() and 1 <= int(choice) <= len(match.tables):
+            option = match.tables[int(choice) - 1]
+            approved.append(
+                SourcePlayerMapping(source_player_id=match.afl.id, player_id=option.id)
+            )
+    validate_source_mappings(approved)
+    output = Path(f"data/mapping/{year}_australian_football_approved.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps([mapping.model_dump() for mapping in approved], indent=2) + "\n"
+    )
+    click.echo(f"Saved {len(approved)} approved historical mappings to {output}")
+
+
+@map.command(
+    "upsert-historical",
+    help="Upsert complete AustralianFootball-to-canonical player mappings",
+)
+@click.option("--year", required=True, type=int)
+@click.option(
+    "-i",
+    "--input",
+    type=click.Path(exists=True, path_type=Path),
+    help="Reviewed JSON (defaults to the year-specific approved file).",
+)
+def map_upsert_historical(year, input):
+    """Require exact cache coverage before persisting historical mappings."""
+    import json
+
+    from .models import SourcePlayerMapping
+    from .pipelines.historical import historical_source_player_ids
+    from .transform import upsert_source_mappings, validate_source_mapping_coverage
+
+    input = input or Path(f"data/mapping/{year}_australian_football_approved.json")
+    mappings = [
+        SourcePlayerMapping.model_validate(item)
+        for item in json.loads(input.read_text(encoding="utf-8"))
+    ]
+    validate_source_mapping_coverage(historical_source_player_ids(year), mappings)
+    count = upsert_source_mappings(mappings, year, "australian_football")
+    click.echo(f"✅ Upserted {count} complete historical mappings for {year}")
