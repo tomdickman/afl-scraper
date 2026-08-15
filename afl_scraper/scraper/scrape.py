@@ -16,7 +16,7 @@ from .fixture import (
     get_round_buttons,
     navigate_to_round,
 )
-from .models import DiscoveredRound, SeasonManifest
+from .models import CachedRawMatch, DiscoveredRound, RawMatchData, SeasonManifest
 from .parser import (
     display_player_stats,
     extract_table_data,
@@ -130,6 +130,78 @@ def save_season_manifest(
     return path
 
 
+def load_season_manifest(
+    year: int,
+    input_root: Path = Path("data/raw/afl_official/season"),
+) -> SeasonManifest:
+    """Load and revalidate a previously discovered official season."""
+    path = input_root / str(year) / "manifest.json"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Season manifest not found: {path}. Run `scrape season {year}` first."
+        )
+    manifest = SeasonManifest.model_validate_json(path.read_text(encoding="utf-8"))
+    if manifest.year != year:
+        raise ValueError(
+            f"Season manifest at {path} contains year {manifest.year}, expected {year}"
+        )
+    return manifest
+
+
+def raw_match_data_path(
+    match_id: int | str,
+    raw_root: Path = Path("data/raw/afl_official/match"),
+) -> Path:
+    """Return the canonical validated JSON path for an official match."""
+    return raw_root / str(_normalise_match_id(match_id)) / "match.json"
+
+
+def save_raw_match_data(
+    raw_data: RawMatchData,
+    match_id: int | str,
+    raw_root: Path = Path("data/raw/afl_official/match"),
+) -> Path:
+    """Atomically persist one fully validated raw match for safe reuse."""
+    raw_match = RawMatchData.model_validate(raw_data)
+    normalized_match_id = _normalise_match_id(match_id)
+    path = raw_match_data_path(normalized_match_id, raw_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.parent / f".match-{uuid4().hex}.tmp"
+    cached_match = CachedRawMatch(
+        match_id=normalized_match_id,
+        source_url=f"{PATHS['MATCH'].rstrip('/')}/{normalized_match_id}",
+        scraped_at=datetime.now(timezone.utc),
+        data=raw_match,
+    )
+    try:
+        temporary_path.write_text(
+            cached_match.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
+        temporary_path.replace(path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+    return path
+
+
+def load_raw_match_data(
+    match_id: int | str,
+    raw_root: Path = Path("data/raw/afl_official/match"),
+) -> RawMatchData:
+    """Load and revalidate a cached official match."""
+    normalized_match_id = _normalise_match_id(match_id)
+    path = raw_match_data_path(normalized_match_id, raw_root)
+    if not path.exists():
+        raise FileNotFoundError(f"Validated raw match not found: {path}")
+    cached_match = CachedRawMatch.model_validate_json(path.read_text(encoding="utf-8"))
+    if cached_match.match_id != normalized_match_id:
+        raise ValueError(
+            f"Raw match cache at {path} contains match {cached_match.match_id}, "
+            f"expected {normalized_match_id}"
+        )
+    return cached_match.data
+
+
 def scrape_match(browser: BrowserContext, match_id: int | str):
     match_id = _normalise_match_id(match_id)
     page = browser.new_page()
@@ -146,7 +218,9 @@ def scrape_match(browser: BrowserContext, match_id: int | str):
         select_team_stats(page, 2)
         _save_raw_html(raw_dir / "away_player_stats.html", page.content())
 
-        return extract_table_data(page)
+        raw_data = extract_table_data(page)
+        save_raw_match_data(raw_data, match_id)
+        return raw_data
     except Exception as exc:
         raise RuntimeError(
             f"Failed to scrape AFL match {match_id} ({url}): {exc}"

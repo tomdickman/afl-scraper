@@ -234,6 +234,74 @@ def map_scrape(headless, year):
         )
 
 
+@map.command(
+    "scrape-season",
+    help="Derive historical official player IDs from completed season matches",
+)
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    help="Run the scraper in headless mode (default: headless).",
+)
+@click.option(
+    "--year",
+    default=lambda: datetime.now().year - 1,
+    type=int,
+    help="A completed official fixture season (defaults to last year).",
+)
+@click.option(
+    "--refresh/--reuse-cache",
+    default=False,
+    help="Re-scrape every match instead of reusing validated match JSON.",
+)
+def map_scrape_season(headless, year, refresh):
+    """Create mapping snapshots from all participants in a completed season."""
+    from .scraper import load_season_manifest, scrape_season_player_ids
+    from .scraper.scrape_player_ids import (
+        save_player_id_snapshots,
+        scrape_player_ids,
+    )
+
+    if year >= datetime.now().year:
+        raise click.UsageError(
+            "scrape-season requires a completed historical season; "
+            "use `map scrape` for the current roster"
+        )
+
+    manifest = load_season_manifest(year)
+
+    def report_progress(index, total, match_id, cached):
+        if index == 1 or index == total or index % 10 == 0:
+            source = "cache" if cached else "live"
+            click.echo(f"[{index}/{total}] match {match_id} ({source})")
+
+    with sync_browser_context(headless) as browser:
+        click.echo(
+            f"Collecting AFL official participants from "
+            f"{manifest.match_count} matches in {year}..."
+        )
+        afl_players = scrape_season_player_ids(
+            browser,
+            manifest,
+            refresh=refresh,
+            progress=report_progress,
+        )
+
+        click.echo(f"Scraping AFL Tables players for {year}...")
+        tables_players = scrape_player_ids(browser, year, "afl_tables")
+
+    paths = save_player_id_snapshots(
+        {"afl_official": afl_players, "afl_tables": tables_players}, year
+    )
+    click.echo(
+        f"Saved {len(afl_players)} participating AFL official players to "
+        f"{paths['afl_official']}"
+    )
+    click.echo(
+        f"Saved {len(tables_players)} AFL Tables players to " f"{paths['afl_tables']}"
+    )
+
+
 @map.command("match")
 @click.option(
     "--year",
@@ -363,7 +431,12 @@ def map_review(year, input):
     type=click.Path(exists=True),
     help="Input JSON file (default: data/mapping/{year}_approved.json)",
 )
-def map_upsert(year, input):
+@click.option(
+    "--require-complete/--allow-incomplete",
+    default=False,
+    help="Require mappings for every official ID in the year snapshot.",
+)
+def map_upsert(year, input, require_complete):
     """Upsert approved player ID mappings to database."""
     import json
 
@@ -376,7 +449,15 @@ def map_upsert(year, input):
         data = json.load(f)
     mappings = [PlayerMapping(**m) for m in data]
 
-    from .transform.map_players import upsert_mappings
+    from .transform.map_players import (
+        load_player_ids_from_json,
+        upsert_mappings,
+        validate_mapping_coverage,
+    )
+
+    if require_complete:
+        required_players = load_player_ids_from_json("afl_official", year)
+        validate_mapping_coverage(required_players, mappings)
 
     click.echo(f"Upserting {len(mappings)} mappings to database...")
     count = upsert_mappings(mappings, year)

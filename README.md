@@ -106,6 +106,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `transform players` | Transforms stored player records and loads the resulting player models. | Yes |
 | `pipeline players` | Runs the player transform/load pipeline, optionally refreshing raw pages first. | Yes |
 | `map scrape` | Saves player identity data from each configured source to `data/mapping/`. | No |
+| `map scrape-season` | Derives participating historical official IDs from every match in a completed season. | No |
 | `map match` | Produces exact, reviewable, and unmatched cross-source player ID groups. | No |
 | `map review` | Interactively reviews mappings and writes an approved mapping file. | No |
 | `map upsert` | Upserts an approved mapping file into PostgreSQL. | Yes |
@@ -220,6 +221,34 @@ historical `--year` rather than labeling current players as historical data. The
 Official scrape requires plausible, unique rosters from all 18 clubs. Snapshot
 writes reject empty, duplicate, or wrong-year records and atomically replace the
 last-known-good file.
+
+For a completed historical season in the reviewed 2012-2026 official fixture
+range, first discover its manifest and then derive identities from the completed
+match pages:
+
+```sh
+uv run afl-scraper scrape season 2012
+uv run afl-scraper map scrape-season --year 2012
+uv run afl-scraper map match --year 2012
+uv run afl-scraper map review --year 2012
+uv run afl-scraper map upsert --year 2012 --require-complete
+```
+
+Each fully validated match is cached as
+`data/raw/afl_official/match/<match-id>/match.json`. Subsequent mapping runs reuse
+that cache; pass `--refresh` to reacquire every page deliberately. Invalid cached
+JSON fails closed rather than being silently replaced.
+
+Historical identities are the union of players who actually appeared in the
+season manifest. Repeated official IDs must retain the same normalized name,
+team, and year across every match. Benign punctuation, suffix, and middle-initial
+differences can match exactly when the team also agrees. Nickname differences
+remain interactive review items using same-team, same-surname candidates.
+
+Use `--require-complete` when upserting match-derived mappings. It verifies that
+every participating official ID has an approved canonical mapping before opening
+a database connection. Individual match loading retains its existing mapping
+coverage check as a second guard.
 
 The AFL Tables mapping source likewise requires all 18 team sections, plausible
 player counts, valid unique identifiers, and complete names. Both mapping sources
