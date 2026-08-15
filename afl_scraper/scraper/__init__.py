@@ -1,4 +1,19 @@
 from .browser import sync_browser_context, async_browser_context, get_team_page
+from .australian_football import (
+    australian_football_manifest_path,
+    australian_football_match_cache_path,
+    australian_football_match_url,
+    australian_football_season_url,
+    cache_australian_football_season_matches,
+    discover_australian_football_season,
+    load_australian_football_manifest,
+    load_australian_football_match,
+    parse_australian_football_match,
+    parse_australian_football_season,
+    save_australian_football_manifest,
+    save_australian_football_match,
+    scrape_australian_football_match,
+)
 from .scrape import (
     discover_official_season,
     load_raw_match_data,
@@ -23,7 +38,12 @@ from .sources import (
 )
 from .fixture import get_fixture_page, get_fixture_url, get_round_buttons
 from .models import (
+    AustralianFootballMatchData,
+    AustralianFootballMatchDetails,
+    AustralianFootballPlayerStat,
+    AustralianFootballSeasonManifest,
     CachedRawMatch,
+    CachedAustralianFootballMatch,
     DiscoveredRound,
     RawMatchData,
     RawMatchDetails,
@@ -37,6 +57,19 @@ __all__ = [
     "async_browser_context",
     "get_team_page",
     # Scraping functions
+    "australian_football_manifest_path",
+    "australian_football_match_cache_path",
+    "australian_football_match_url",
+    "australian_football_season_url",
+    "cache_australian_football_season_matches",
+    "discover_australian_football_season",
+    "load_australian_football_manifest",
+    "load_australian_football_match",
+    "parse_australian_football_match",
+    "parse_australian_football_season",
+    "save_australian_football_manifest",
+    "save_australian_football_match",
+    "scrape_australian_football_match",
     "scrape_match_ids",
     "discover_official_season",
     "load_raw_match_data",
@@ -61,6 +94,11 @@ __all__ = [
     "get_fixture_url",
     "get_round_buttons",
     # Models
+    "AustralianFootballMatchData",
+    "AustralianFootballMatchDetails",
+    "AustralianFootballPlayerStat",
+    "AustralianFootballSeasonManifest",
+    "CachedAustralianFootballMatch",
     "RawMatchDetails",
     "RawMatchData",
     "CachedRawMatch",
