@@ -144,5 +144,10 @@ class AFLOfficialSource(PlayerSource):
             raise ValueError(f"AFL roster scrape is missing clubs: {missing}")
         return all_players
 
-    def scrape_player(self, page: Page, player_id: str | None = None) -> Path:
+    def scrape_player(
+        self,
+        page: Page,
+        player_id: str | None = None,
+        output_dir: Path | None = None,
+    ) -> Path:
         raise NotImplementedError("AFL official scrape_player not yet implemented")

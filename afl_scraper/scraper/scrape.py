@@ -1,6 +1,9 @@
 from pathlib import Path
+import shutil
+import tempfile
 from typing import List
 from urllib.parse import urljoin
+from uuid import uuid4
 
 from playwright.sync_api import BrowserContext
 
@@ -86,9 +89,12 @@ def scrape_players(
     source_obj = PlayerSourceFactory.get(source)
     page = browser.new_page()
     list_url = source_obj.get_list_page_url(year)
+    staging_dir: Path | None = None
     try:
         try:
-            page.goto(list_url)
+            response = page.goto(list_url)
+            if source == "afl_tables":
+                source_obj.validate_list_navigation(page, response, year)
             links = source_obj.scrape_players_links(page)
             player_ids = list(
                 dict.fromkeys(
@@ -102,13 +108,24 @@ def scrape_players(
                 f"({list_url}): {exc}"
             ) from exc
 
+        if source == "afl_tables":
+            raw_root = source_obj.get_raw_data_dir()
+            raw_root.mkdir(parents=True, exist_ok=True)
+            staging_dir = Path(tempfile.mkdtemp(prefix=".player-run-", dir=raw_root))
+
         players_data_paths = []
 
         for player_id in player_ids:
             player_url = source_obj.get_player_page_url(player_id)
             try:
-                page.goto(player_url)
-                player_data_path = source_obj.scrape_player(page, player_id)
+                response = page.goto(player_url)
+                if source == "afl_tables":
+                    source_obj.validate_player_navigation(page, response, player_url)
+                    player_data_path = source_obj.scrape_player(
+                        page, player_id, output_dir=staging_dir
+                    )
+                else:
+                    player_data_path = source_obj.scrape_player(page, player_id)
             except Exception as exc:
                 raise RuntimeError(
                     f"Failed to scrape {source} player {player_id!r} "
@@ -117,6 +134,30 @@ def scrape_players(
             if player_data_path is not None:
                 players_data_paths.append(player_data_path)
 
+        if source == "afl_tables":
+            if len(players_data_paths) != len(player_ids):
+                raise RuntimeError(
+                    f"AFL Tables saved {len(players_data_paths)} of "
+                    f"{len(player_ids)} player pages"
+                )
+            final_dir = source_obj.get_raw_data_dir() / "player"
+            backup_dir = final_dir.with_name(f".player-backup-{uuid4().hex}")
+            try:
+                if final_dir.exists():
+                    final_dir.replace(backup_dir)
+                staging_dir.replace(final_dir)
+                staging_dir = None
+            except Exception:
+                if not final_dir.exists() and backup_dir.exists():
+                    backup_dir.replace(final_dir)
+                raise
+            else:
+                if backup_dir.exists():
+                    shutil.rmtree(backup_dir)
+            players_data_paths = [final_dir / path.name for path in players_data_paths]
+
         return players_data_paths
     finally:
+        if staging_dir is not None and staging_dir.exists():
+            shutil.rmtree(staging_dir)
         page.close()

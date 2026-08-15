@@ -2,14 +2,45 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from playwright.sync_api import Page
+from playwright.sync_api import Locator, Page, Response
 
 from ...models.player import PlayerInfo
 from .base import PlayerSource
 
 
+EXPECTED_TEAMS = (
+    "Adelaide",
+    "Brisbane Lions",
+    "Carlton",
+    "Collingwood",
+    "Essendon",
+    "Fremantle",
+    "Geelong",
+    "Gold Coast",
+    "Greater Western Sydney",
+    "Hawthorn",
+    "Melbourne",
+    "North Melbourne",
+    "Port Adelaide",
+    "Richmond",
+    "St Kilda",
+    "Sydney",
+    "West Coast",
+    "Western Bulldogs",
+)
+MIN_PLAYERS_PER_TEAM = 20
+MAX_PLAYERS_PER_TEAM = 60
+MIN_SUPPORTED_YEAR = 2012
+OUTAGE_SIGNATURES = ("site is down", "awaiting solutions")
+_BIRTHDATE_PATTERN = re.compile(r"\d{1,2}-[A-Za-z]{3}-\d{4}")
+
+
+def _text(locator) -> str:
+    return " ".join((locator.text_content() or "").split())
+
+
 class AFLTablesSource(PlayerSource):
-    """Player source implementation for https://afltables.com."""
+    """Validated player source implementation for https://afltables.com."""
 
     @property
     def name(self) -> str:
@@ -23,49 +54,114 @@ class AFLTablesSource(PlayerSource):
         return f"https://afltables.com/afl/stats/players/{initial}/{player_id}.html"
 
     def player_id_from_url(self, url: str) -> str:
-        pattern = r"/players/[A-Za-z]/([A-Za-z_-]+[0-9]*)\.html$"
+        pattern = r"(?:^|/)players/[A-Za-z]/([A-Za-z_-]+[0-9]*)\.html$"
         match = re.search(pattern, url)
         if match:
             return match.group(1)
         raise RuntimeError(f"Failed to parse player ID from URL: {url}")
 
+    def validate_list_navigation(
+        self, page: Page, response: Response | None, year: int
+    ) -> None:
+        if year < MIN_SUPPORTED_YEAR:
+            raise ValueError(
+                f"AFL Tables validation supports the 18-team era from "
+                f"{MIN_SUPPORTED_YEAR}; got {year}"
+            )
+        expected_url = self.get_list_page_url(year)
+        if response is None or not response.ok:
+            status = response.status if response is not None else "no response"
+            raise RuntimeError(f"AFL Tables season page returned HTTP {status}")
+        if page.url.rstrip("/") != expected_url:
+            raise RuntimeError(
+                f"AFL Tables season page navigated to unexpected URL {page.url!r}"
+            )
+        body = _text(page.locator("body")).casefold()
+        signature = next((value for value in OUTAGE_SIGNATURES if value in body), None)
+        if signature:
+            raise RuntimeError(
+                f"AFL Tables season page contains outage signature {signature!r}"
+            )
+
+    def validate_player_navigation(
+        self, page: Page, response: Response | None, expected_url: str
+    ) -> None:
+        if response is None or not response.ok:
+            status = response.status if response is not None else "no response"
+            raise RuntimeError(f"AFL Tables player page returned HTTP {status}")
+        if page.url.rstrip("/") != expected_url:
+            raise RuntimeError(
+                f"AFL Tables player page navigated to unexpected URL {page.url!r}"
+            )
+
+    def _team_tables(self, page: Page) -> dict[str, Locator]:
+        team_tables = {}
+        for table in page.locator("table").all():
+            team_links = table.locator("thead th a")
+            if team_links.count() == 0:
+                continue
+            team_name = _text(team_links.first)
+            if team_name not in EXPECTED_TEAMS:
+                raise ValueError(f"Unexpected AFL Tables team section: {team_name!r}")
+            if team_name in team_tables:
+                raise ValueError(f"Duplicate AFL Tables team section: {team_name}")
+            team_tables[team_name] = table
+
+        missing = sorted(set(EXPECTED_TEAMS) - set(team_tables))
+        if missing:
+            raise ValueError(f"AFL Tables season page is missing teams: {missing}")
+        return team_tables
+
+    def _validated_team_links(self, page: Page) -> dict[str, list[Locator]]:
+        links_by_team = {}
+        observed_ids: dict[str, str] = {}
+        for team_name, table in self._team_tables(page).items():
+            links = table.locator('tbody a[href*="players/"]').all()
+            if not MIN_PLAYERS_PER_TEAM <= len(links) <= MAX_PLAYERS_PER_TEAM:
+                raise ValueError(
+                    f"AFL Tables roster for {team_name} has {len(links)} players; "
+                    f"expected between {MIN_PLAYERS_PER_TEAM} and "
+                    f"{MAX_PLAYERS_PER_TEAM}"
+                )
+            for link in links:
+                href = link.get_attribute("href")
+                if not href:
+                    raise ValueError(
+                        f"AFL Tables player link for {team_name} has no href"
+                    )
+                player_id = self.player_id_from_url(href)
+                previous_team = observed_ids.get(player_id)
+                if previous_team is not None:
+                    raise ValueError(
+                        f"AFL Tables player ID {player_id} appeared more than once "
+                        f"({previous_team}, {team_name})"
+                    )
+                observed_ids[player_id] = team_name
+            links_by_team[team_name] = links
+        return links_by_team
+
     def scrape_player_ids(
         self, page: Page, year: int | None = None
     ) -> list[PlayerInfo]:
-        if year is None:
-            year = datetime.now().year
-
-        tables = page.locator("table").all()
-        all_players = []
-
-        for table in tables:
-            thead = table.locator("thead").all()
-            if not thead:
-                continue
-
-            team_link = table.locator("thead th a").first
-            team_name = team_link.text_content().strip() if team_link else ""
-
-            if not team_name:
-                continue
-
-            player_links = table.locator('tbody a[href*="players/"]').all()
-
-            for link in player_links:
+        year = datetime.now().year if year is None else year
+        players = []
+        for team_name, links in self._validated_team_links(page).items():
+            for link in links:
                 href = link.get_attribute("href")
-                player_id = href.split("/")[-1].replace(".html", "")
-
-                name_text = link.text_content().strip()
+                player_id = self.player_id_from_url(href)
+                name_text = _text(link)
                 parts = name_text.split(", ")
                 if len(parts) == 2:
-                    last_name = parts[0].strip()
-                    first_name = parts[1].strip()
+                    last_name, first_name = (part.strip() for part in parts)
                 else:
                     name_parts = name_text.split()
                     first_name = name_parts[0] if name_parts else ""
-                    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
-
-                all_players.append(
+                    last_name = " ".join(name_parts[1:])
+                if not first_name or not last_name:
+                    raise ValueError(
+                        f"AFL Tables player {player_id} has incomplete name {name_text!r}"
+                    )
+                players.append(
                     PlayerInfo(
                         id=player_id,
                         first_name=first_name,
@@ -74,29 +170,36 @@ class AFLTablesSource(PlayerSource):
                         year=year,
                     )
                 )
+        return players
 
-        return all_players
-
-    def scrape_player(self, page: Page, player_id: str | None = None) -> Path:
+    def scrape_player(
+        self,
+        page: Page,
+        player_id: str | None = None,
+        output_dir: Path | None = None,
+    ) -> Path:
         if player_id is None:
             player_id = self.player_id_from_url(page.url)
 
-        path = self.get_raw_data_dir() / "player" / f"{player_id}.html"
+        heading = page.locator("h1")
+        body = _text(page.locator("body"))
+        if heading.count() != 1 or not _text(heading):
+            raise ValueError(f"AFL Tables player {player_id} has no name heading")
+        if _BIRTHDATE_PATTERN.search(body) is None:
+            raise ValueError(f"AFL Tables player {player_id} has no birthdate")
+
+        player_dir = output_dir or (self.get_raw_data_dir() / "player")
+        path = player_dir / f"{player_id}.html"
         path.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(path, "w") as f:
-            f.write(page.content())
-
-        if not path.exists():
-            raise FileNotFoundError(f"Failed to create file at {path}")
-
-        if path.stat().st_size == 0:
-            raise ValueError(f"File created at {path} is empty")
-
+        content = page.content()
+        if not content.strip():
+            raise ValueError(f"Raw player page for {player_id} is empty")
+        path.write_text(content, encoding="utf-8")
         return path
 
     def scrape_players_links(self, page: Page) -> list[str]:
-        """Scrape links to raw player data from the year stats page."""
-        table_links = page.locator("table tbody tr td a").all()
-        hrefs = [link.get_attribute("href") for link in table_links]
-        return list(dict.fromkeys(h for h in hrefs if h and "players/" in h))
+        """Return unique links only after validating all 18 team sections."""
+        hrefs = []
+        for links in self._validated_team_links(page).values():
+            hrefs.extend(link.get_attribute("href") for link in links)
+        return list(dict.fromkeys(hrefs))

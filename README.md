@@ -146,6 +146,12 @@ uv run afl-scraper pipeline players --year 2026
 uv run afl-scraper pipeline players --scrape --year 2026
 ```
 
+A fresh AFL Tables extraction is staged separately and replaces the cached player
+directory only after every expected page passes validation. An unavailable,
+redirected, incomplete, or malformed source stops the pipeline before cached data
+is transformed or loaded. Because these structural checks require the current
+18-club competition, AFL Tables player scraping supports seasons from 2012 onward.
+
 ### Scrape matches
 
 Load one match by its source match ID:
@@ -196,6 +202,10 @@ historical `--year` rather than labeling current players as historical data. The
 Official scrape requires plausible, unique rosters from all 18 clubs. Snapshot
 writes reject empty, duplicate, or wrong-year records and atomically replace the
 last-known-good file.
+
+The AFL Tables mapping source likewise requires all 18 team sections, plausible
+player counts, valid unique identifiers, and complete names. Both mapping sources
+must pass before either year-scoped snapshot is promoted.
 
 `map review` auto-approves exact name-and-team matches, prompts for ambiguous matches, and lets you decide whether unmatched players should be retained without a corresponding cross-source ID. Use `--input PATH` with `map review` or `map upsert` to supply a non-default JSON file.
 

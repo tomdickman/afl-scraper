@@ -22,7 +22,9 @@ def scrape_player_ids(
 
     page = browser.new_page()
     try:
-        page.goto(source_obj.get_list_page_url(year))
+        response = page.goto(source_obj.get_list_page_url(year))
+        if source == "afl_tables":
+            source_obj.validate_list_navigation(page, response, year)
         return source_obj.scrape_player_ids(page, year)
     finally:
         page.close()
@@ -31,9 +33,10 @@ def scrape_player_ids(
 def save_player_ids_to_json(
     players: list[PlayerInfo], source_name: str, year: int
 ) -> Path:
-    path = Path(f"data/mapping/{year}_{source_name}.json")
-    path.parent.mkdir(parents=True, exist_ok=True)
+    return save_player_id_snapshots({source_name: players}, year)[source_name]
 
+
+def _validate_snapshot(players: list[PlayerInfo], source_name: str, year: int) -> None:
     if not players:
         raise ValueError(f"Refusing to save empty {source_name} player snapshot")
     wrong_year = sorted({player.year for player in players if player.year != year})
@@ -52,27 +55,76 @@ def save_player_ids_to_json(
             f"{', '.join(duplicates)}"
         )
 
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=path.parent,
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as temporary_file:
-            temporary_path = Path(temporary_file.name)
-            json.dump(
-                [player.model_dump(by_alias=True) for player in players],
-                temporary_file,
-                indent=2,
-            )
-            temporary_file.flush()
-            os.fsync(temporary_file.fileno())
-        temporary_path.replace(path)
-    finally:
-        if temporary_path is not None and temporary_path.exists():
-            temporary_path.unlink()
 
-    return path
+def _write_temporary_snapshot(players: list[PlayerInfo], path: Path) -> Path:
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as temporary_file:
+        temporary_path = Path(temporary_file.name)
+        json.dump(
+            [player.model_dump(by_alias=True) for player in players],
+            temporary_file,
+            indent=2,
+        )
+        temporary_file.flush()
+        os.fsync(temporary_file.fileno())
+    return temporary_path
+
+
+def save_player_id_snapshots(
+    snapshots: dict[str, list[PlayerInfo]], year: int
+) -> dict[str, Path]:
+    """Validate every source before promoting any year-scoped snapshot."""
+    if not snapshots:
+        raise ValueError("No player ID snapshots supplied")
+    for source_name, players in snapshots.items():
+        _validate_snapshot(players, source_name, year)
+
+    mapping_dir = Path("data/mapping")
+    mapping_dir.mkdir(parents=True, exist_ok=True)
+    paths = {
+        source_name: mapping_dir / f"{year}_{source_name}.json"
+        for source_name in snapshots
+    }
+    temporary_paths: dict[str, Path] = {}
+    backup_paths: dict[str, Path] = {}
+    promoted: list[str] = []
+    try:
+        for source_name, players in snapshots.items():
+            temporary_paths[source_name] = _write_temporary_snapshot(
+                players, paths[source_name]
+            )
+        for source_name, path in paths.items():
+            if path.exists():
+                backup = path.with_name(f".{path.name}.backup")
+                if backup.exists():
+                    raise RuntimeError(
+                        f"Refusing to overwrite unresolved snapshot backup {backup}"
+                    )
+                path.replace(backup)
+                backup_paths[source_name] = backup
+            temporary_paths[source_name].replace(path)
+            promoted.append(source_name)
+    except Exception:
+        for source_name in promoted:
+            path = paths[source_name]
+            if path.exists():
+                path.unlink()
+        for source_name, backup in backup_paths.items():
+            if backup.exists():
+                backup.replace(paths[source_name])
+        raise
+    finally:
+        for temporary_path in temporary_paths.values():
+            if temporary_path.exists():
+                temporary_path.unlink()
+
+    for backup in backup_paths.values():
+        if backup.exists():
+            backup.unlink()
+    return paths

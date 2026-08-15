@@ -7,7 +7,6 @@ from click.testing import CliRunner
 import afl_scraper.cli as cli_module
 from afl_scraper.scraper import browser as browser_helpers
 from afl_scraper.scraper import fixture, scrape
-from afl_scraper.scraper.sources.afl_tables import AFLTablesSource
 
 
 class FakeLocator:
@@ -284,18 +283,102 @@ def test_scrape_players_closes_page_and_adds_player_context(monkeypatch):
     assert page.closed is True
 
 
-def test_afl_tables_player_links_ignore_missing_hrefs_and_deduplicate():
+def test_failed_afl_tables_refresh_preserves_complete_cached_directory(
+    monkeypatch, tmp_path
+):
     page = FakePage()
-    page.locators["table tbody tr td a"] = FakeLocator(
-        items=[
-            FakeLocator(attributes={"href": "players/A/Ada_One.html"}),
-            FakeLocator(attributes={"href": "players/A/Ada_One.html"}),
-            FakeLocator(attributes={"href": None}),
-            FakeLocator(attributes={"href": "teams/adelaide.html"}),
-        ]
+    final_dir = tmp_path / "raw/afl_tables/player"
+    final_dir.mkdir(parents=True)
+    (final_dir / "last_known_good.html").write_text("good")
+
+    class FailingAFLTablesSource:
+        def get_list_page_url(self, _year):
+            return "https://example.test/list"
+
+        def validate_list_navigation(self, _page, _response, _year):
+            return None
+
+        def scrape_players_links(self, _page):
+            return ["players/A/Ada_One.html", "players/B/Bob_Two.html"]
+
+        def player_id_from_url(self, url):
+            return Path(url).stem
+
+        def get_player_page_url(self, player_id):
+            return f"https://example.test/player/{player_id}"
+
+        def get_raw_data_dir(self):
+            return tmp_path / "raw/afl_tables"
+
+        def validate_player_navigation(self, _page, _response, _url):
+            return None
+
+        def scrape_player(self, _page, player_id, output_dir=None):
+            if player_id == "Bob_Two":
+                raise ValueError("malformed player page")
+            path = output_dir / f"{player_id}.html"
+            path.write_text("new")
+            return path
+
+    monkeypatch.setattr(
+        scrape.PlayerSourceFactory,
+        "get",
+        lambda _source_name: FailingAFLTablesSource(),
     )
 
-    assert AFLTablesSource().scrape_players_links(page) == ["players/A/Ada_One.html"]
+    with pytest.raises(RuntimeError, match="Bob_Two"):
+        scrape.scrape_players(FakeBrowser(page), 2026, "afl_tables")
+
+    assert [path.name for path in final_dir.iterdir()] == ["last_known_good.html"]
+    assert not list((tmp_path / "raw/afl_tables").glob(".player-run-*"))
+
+
+def test_successful_afl_tables_refresh_replaces_stale_directory(monkeypatch, tmp_path):
+    page = FakePage()
+    final_dir = tmp_path / "raw/afl_tables/player"
+    final_dir.mkdir(parents=True)
+    (final_dir / "stale.html").write_text("stale")
+
+    class HealthyAFLTablesSource:
+        def get_list_page_url(self, _year):
+            return "https://example.test/list"
+
+        def validate_list_navigation(self, _page, _response, _year):
+            return None
+
+        def scrape_players_links(self, _page):
+            return ["players/A/Ada_One.html", "players/B/Bob_Two.html"]
+
+        def player_id_from_url(self, url):
+            return Path(url).stem
+
+        def get_player_page_url(self, player_id):
+            return f"https://example.test/player/{player_id}"
+
+        def get_raw_data_dir(self):
+            return tmp_path / "raw/afl_tables"
+
+        def validate_player_navigation(self, _page, _response, _url):
+            return None
+
+        def scrape_player(self, _page, player_id, output_dir=None):
+            path = output_dir / f"{player_id}.html"
+            path.write_text("new")
+            return path
+
+    monkeypatch.setattr(
+        scrape.PlayerSourceFactory,
+        "get",
+        lambda _source_name: HealthyAFLTablesSource(),
+    )
+
+    paths = scrape.scrape_players(FakeBrowser(page), 2026, "afl_tables")
+
+    assert {path.name for path in paths} == {"Ada_One.html", "Bob_Two.html"}
+    assert {path.name for path in final_dir.iterdir()} == {
+        "Ada_One.html",
+        "Bob_Two.html",
+    }
 
 
 def test_get_team_page_closes_page_when_navigation_fails():
