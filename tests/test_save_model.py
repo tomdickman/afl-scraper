@@ -103,6 +103,16 @@ class TestBuildUpsertFromModel:
             '"contested_possessions" = COALESCE(EXCLUDED."contested_possessions", '
             '"player_game_stats"."contested_possessions")' in rendered
         )
+        for column in (
+            "clearances",
+            "goal_assists",
+            "time_on_ground_percent",
+            "fantasy_points",
+        ):
+            assert (
+                f'"{column}" = COALESCE(EXCLUDED."{column}", '
+                f'"player_game_stats"."{column}")' in rendered
+            )
 
 
 class TestSaveModel:

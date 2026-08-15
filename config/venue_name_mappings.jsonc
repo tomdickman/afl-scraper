@@ -4,7 +4,7 @@
 
   "_notes": {
     "format": "source_name used on site venue page mapped to venue_id in venue table",
-    "sources": ["AFL official site", "AFL tables"]
+    "sources": ["AFL official site", "AFL tables", "AustralianFootball"]
   },
 
   "afl_official": {
@@ -62,6 +62,33 @@
     "Sydney Showground": "Sydney Showground",
     "Traeger Park": "Traeger Park",
     "Wellington": "Wellington",
+    "York Park": "York Park"
+  },
+
+  "australian_football": {
+    "AAMI Stadium": "Football Park",
+    "ANZ Stadium": "Stadium Australia",
+    "Aurora Stadium": "York Park",
+    "Cazaly's Stadium": "Cazaly's Stadium",
+    "Carrara": "Carrara",
+    "Docklands": "Docklands",
+    "Etihad Stadium": "Docklands",
+    "Football Park": "Football Park",
+    "Gabba": "Gabba",
+    "Kardinia Park": "Kardinia Park",
+    "M.C.G.": "M.C.G.",
+    "MCG": "M.C.G.",
+    "Manuka Oval": "Manuka Oval",
+    "Marrara Oval": "Marrara Oval",
+    "S.C.G.": "S.C.G.",
+    "SCG": "S.C.G.",
+    "Skilled Stadium": "Kardinia Park",
+    "Stadium Australia": "Stadium Australia",
+    "Subiaco": "Subiaco",
+    "Subiaco Oval": "Subiaco",
+    "TIO Stadium": "Marrara Oval",
+    "Telstra Dome": "Docklands",
+    "Telstra Stadium": "Stadium Australia",
     "York Park": "York Park"
   }
 }

@@ -7,6 +7,7 @@ from .player import (
     PlayerMatch,
     FuzzyMatch,
     MatchResult,
+    SourcePlayerMapping,
 )
 from .player_game_stats import PlayerGameStats
 
@@ -20,4 +21,5 @@ __all__ = [
     "PlayerMatch",
     "FuzzyMatch",
     "MatchResult",
+    "SourcePlayerMapping",
 ]

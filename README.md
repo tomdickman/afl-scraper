@@ -227,9 +227,50 @@ The default 500 ms delay applies only between live match requests. Use
 This extraction boundary deliberately retains AustralianFootball player IDs as
 source-specific IDs. Match pages publish jumper number, kicks, marks, handballs,
 disposals, goals, behinds, hitouts, tackles, and frees for/against. Statistics
-the source does not publish are absent rather than recorded as zero. These caches
-are not loaded into PostgreSQL until source identity mapping and nullable-field
-integration have been completed.
+the source does not publish are absent rather than recorded as zero.
+
+### Map and load a cached 2006-2011 season
+
+Apply the source-qualified identity and nullable-stat migration first:
+
+```sh
+uv run alembic upgrade head
+```
+
+Historical loading uses the AFL Tables player ID as the existing canonical
+database player ID, but never treats an AustralianFootball numeric ID as the
+same namespace. Generate conservative candidates from the complete match cache
+and an existing `data/mapping/<year>_afl_tables.json` snapshot, review ambiguous
+names, and require exact season coverage when saving the approved mappings:
+
+```sh
+uv run afl-scraper map match-historical --year 2006
+uv run afl-scraper map review-historical --year 2006
+uv run afl-scraper map upsert-historical --year 2006
+```
+
+The upsert fails before opening a database connection if any participating
+source ID is missing, unexpected, or aliases another canonical player. It also
+fails through the database foreign key if a canonical player has not yet been
+loaded.
+
+Run the complete cache, mapping, team, venue, timezone and database-reference
+preflight. This is the safe default and performs no writes:
+
+```sh
+uv run afl-scraper pipeline historical-season 2006
+```
+
+After reviewing the counts, load the season explicitly:
+
+```sh
+uv run afl-scraper pipeline historical-season 2006 --load
+```
+
+Provider match IDs are resolved through a source-qualified identity before an
+internal game ID is allocated. Each game and all of its player rows are one
+transaction. Replaying a season updates the same records, and null historical
+fields do not erase richer values already stored for those records.
 
 ### Map player IDs across sources
 
@@ -288,7 +329,10 @@ It is not used to discover or scrape the AustralianFootball historical match
 cache. Both identity snapshots must pass before either year-scoped mapping
 snapshot is promoted.
 
-`map review` auto-approves exact name-and-team matches, prompts for ambiguous matches, and lets you decide whether unmatched players should be retained without a corresponding cross-source ID. Use `--input PATH` with `map review` or `map upsert` to supply a non-default JSON file.
+`map review` auto-approves exact name-and-team matches and prompts for ambiguous
+matches. Unmatched canonical players require no source-identity row. Use
+`--input PATH` with `map review` or `map upsert` to supply a non-default JSON
+file.
 
 ## Data and architecture
 

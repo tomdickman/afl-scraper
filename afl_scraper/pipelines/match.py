@@ -1,6 +1,12 @@
 from ..scraper import scrape_match, sync_browser_context
 from ..scraper.models import RawMatchData, RawPlayerStat
-from ..storage import admin_connection_pool, save_model
+from ..storage import (
+    admin_connection_pool,
+    allocate_game_id,
+    load_player_source_id_map,
+    save_game_source_identity,
+    save_model,
+)
 from ..transform.match import parse_match_datetime, transform_match
 
 
@@ -11,25 +17,7 @@ def _load_player_id_map(conn, raw_match: RawMatchData, year: int) -> dict[str, s
             for stat in raw_match.home_team_stats + raw_match.away_team_stats
         }
     )
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT afl_official_id, player_id
-            FROM player_id_mapping
-            WHERE year = %(year)s
-              AND afl_official_id = ANY(%(official_ids)s)
-            """,
-            {"year": year, "official_ids": official_ids},
-        )
-        mappings = dict(cur.fetchall())
-
-    missing = sorted(set(official_ids) - set(mappings))
-    if missing:
-        raise ValueError(
-            f"Missing {len(missing)} AFL official player mappings for {year}: "
-            f"{', '.join(missing)}"
-        )
-    return mappings
+    return load_player_source_id_map(conn, "afl_official", year, official_ids)
 
 
 def load_match_data(raw_data: RawMatchData | dict, match_id: int) -> dict:
@@ -44,6 +32,9 @@ def load_match_data(raw_data: RawMatchData | dict, match_id: int) -> dict:
         # failed statistic rolls back the game and every preceding statistic.
         with conn.transaction():
             player_id_map = _load_player_id_map(conn, raw_match, match_year)
+            game_id, is_new_identity = allocate_game_id(
+                conn, "afl_official", str(match_id)
+            )
 
             def resolve_player_id(
                 stat: RawPlayerStat, _team: str, _year: int
@@ -52,13 +43,15 @@ def load_match_data(raw_data: RawMatchData | dict, match_id: int) -> dict:
 
             game, player_stats = transform_match(
                 raw_match,
-                match_id=match_id,
+                match_id=game_id,
                 source="afl_official",
                 resolve_player_id=resolve_player_id,
             )
             game_result = save_model(conn, game)
+            if is_new_identity:
+                save_game_source_identity(conn, "afl_official", str(match_id), game_id)
             print(
-                f"Game {match_id} "
+                f"Game {match_id} (internal {game_id}) "
                 f"{'inserted' if game_result.was_inserted else 'updated'} in DB"
             )
 

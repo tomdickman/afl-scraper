@@ -68,3 +68,20 @@ class PlayerMapping(BaseModel):
         if not value:
             raise ValueError("mapping IDs must not be blank")
         return value
+
+
+class SourcePlayerMapping(BaseModel):
+    """An approved external-source identity mapped to one canonical player."""
+
+    source_player_id: str = Field(min_length=1)
+    player_id: str = Field(min_length=1)
+
+    @field_validator("source_player_id", "player_id", mode="before")
+    @classmethod
+    def strip_ids(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("mapping IDs must be strings")
+        value = value.strip()
+        if not value:
+            raise ValueError("mapping IDs must not be blank")
+        return value

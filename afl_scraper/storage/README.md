@@ -66,3 +66,11 @@ Use `career_game_number = 100` to find a player's 100th stored game. This is the
 player's true 100th career game only when the database contains their complete
 AFL career. Consumers should describe it as a stored or recorded game number
 when historical coverage is incomplete.
+
+## Source identities
+
+`game.id` and `player.id` are internal/canonical identities. External provider
+identifiers are stored with their source in `game_source_identity` and
+`player_source_identity`; code must not assume that numeric IDs from different
+sites share a namespace. Player mappings are year-scoped so a season load can
+require complete, reviewable coverage before it writes any match data.

@@ -20,7 +20,7 @@ def _load_jsonc(path: Path) -> dict:
 
 
 def _load_venue_mappings(source: str) -> dict[str, str]:
-    path = Path("config/venue_name_mappings.jsonc")
+    path = Path(__file__).resolve().parents[2] / "config/venue_name_mappings.jsonc"
     data = _load_jsonc(path)
     return data.get(source, {})
 
