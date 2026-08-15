@@ -25,3 +25,10 @@ silently omitting those seasons.
 The reviewed constants are bounded at the latest configured season. Additions or
 future competition changes require updating the season catalogue and competition
 rules together with source-contract tests.
+
+Validated match JSON is the resumable boundary for historical identity work. A
+historical player snapshot is promoted only after every match in the season
+manifest has been loaded from a valid cache or successfully scraped, all matches
+agree with the requested year, and each repeated official ID retains one name and
+team identity. Source snapshots for official participants and AFL Tables players
+are then promoted together.

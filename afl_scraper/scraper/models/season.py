@@ -72,3 +72,8 @@ class SeasonManifest(BaseModel):
     @property
     def match_count(self) -> int:
         return sum(len(round_.match_ids) for round_ in self.rounds)
+
+    @property
+    def match_ids(self) -> list[int]:
+        """Return every season match ID in source round order."""
+        return [match_id for round_ in self.rounds for match_id in round_.match_ids]

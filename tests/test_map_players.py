@@ -52,6 +52,41 @@ def test_historical_kangaroos_name_matches_north_melbourne():
     ]
 
 
+def test_name_suffix_omitted_by_one_source_matches_within_same_team():
+    result = map_players.match_players(
+        [player("7536", "Robert Hansen Jr", "North Melbourne")],
+        [player("Robert_Hansen", "Robert Hansen", "North Melbourne")],
+    )
+
+    assert [(match.afl.id, match.tables.id) for match in result.exact] == [
+        ("7536", "Robert_Hansen")
+    ]
+
+
+def test_middle_initial_omitted_by_one_source_matches_within_same_team():
+    result = map_players.match_players(
+        [player("629", "Josh P. Kennedy", "Sydney Swans")],
+        [player("Josh_Kennedy1", "Josh Kennedy", "Sydney")],
+    )
+
+    assert [(match.afl.id, match.tables.id) for match in result.exact] == [
+        ("629", "Josh_Kennedy1")
+    ]
+
+
+def test_nickname_mismatch_with_same_team_and_surname_is_reviewable_not_exact():
+    result = map_players.match_players(
+        [player("1243", "Marty Mattner", "Sydney Swans")],
+        [player("Martin_Mattner", "Martin Mattner", "Sydney")],
+    )
+
+    assert not result.exact
+    assert [(match.afl.id, [p.id for p in match.tables]) for match in result.fuzzy] == [
+        ("1243", ["Martin_Mattner"])
+    ]
+    assert not result.unmatched_afl
+
+
 def test_duplicate_names_are_matched_deterministically_by_team():
     result = map_players.match_players(
         [player("afl-syd", team="Sydney Swans"), player("afl-gws", team="GWS Giants")],
@@ -129,7 +164,7 @@ def test_missing_team_is_not_auto_approved():
 def test_players_without_same_name_are_unmatched_on_the_correct_source():
     result = map_players.match_players(
         [player("afl-only", "AFL Only")],
-        [player("tables-only", "Tables Only")],
+        [player("tables-only", "Tables Different")],
     )
 
     assert [item.id for item in result.unmatched_afl] == ["afl-only"]

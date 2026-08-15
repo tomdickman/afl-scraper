@@ -1,10 +1,10 @@
 import json
-import re
 from collections import defaultdict
 from pathlib import Path
 
 from ..models.player import PlayerInfo, PlayerMapping, MatchResult
 from ..storage import admin_connection_pool
+from ..utils.identity import normalize_person_name
 
 
 def load_player_ids_from_json(source: str, year: int) -> list[PlayerInfo]:
@@ -20,8 +20,13 @@ def load_player_ids_from_json(source: str, year: int) -> list[PlayerInfo]:
 
 def normalize_name(name: str) -> str:
     """Normalize harmless name punctuation and whitespace across both sources."""
-    without_apostrophes = re.sub(r"['’]", "", name.casefold())
-    return " ".join(without_apostrophes.replace("-", " ").split())
+    return normalize_person_name(name)
+
+
+def normalize_family_name(player: PlayerInfo) -> str:
+    """Normalize a source surname without treating nicknames as exact matches."""
+    normalized = normalize_person_name(f"given {player.last_name}")
+    return normalized.removeprefix("given ")
 
 
 _TEAM_ALIASES = {
@@ -152,6 +157,25 @@ def match_players(
             matched_afl.add(afl.id)
             matched_tables.update(tables.id for tables in review_candidates)
 
+    # Different given-name forms (for example Marty/Martin) must not be
+    # auto-approved. Present same-team, same-surname candidates for explicit
+    # review instead of leaving the official identity impossible to resolve.
+    remaining_afl = [p for p in afl_players if p.id not in matched_afl]
+    remaining_tables = [p for p in tables_players if p.id not in matched_tables]
+    for afl in remaining_afl:
+        review_candidates = [
+            tables
+            for tables in remaining_tables
+            if teams_match(afl.team, tables.team)
+            and normalize_family_name(afl) == normalize_family_name(tables)
+        ]
+        if not review_candidates:
+            continue
+        review_candidates.sort(key=lambda player: player.id)
+        fuzzy.append({"afl": afl, "tables": review_candidates})
+        matched_afl.add(afl.id)
+        matched_tables.update(tables.id for tables in review_candidates)
+
     unmatched_afl = [p for p in afl_players if p.id not in matched_afl]
     unmatched_tables = [p for p in tables_players if p.id not in matched_tables]
 
@@ -178,6 +202,25 @@ def validate_mappings(mappings: list[PlayerMapping]) -> None:
                 f"Duplicate AFL Official player ID: {mapping.afl_official_id}"
             )
         official_ids.add(mapping.afl_official_id)
+
+
+def validate_mapping_coverage(
+    required_players: list[PlayerInfo], mappings: list[PlayerMapping]
+) -> None:
+    """Require a canonical mapping for every participating official player."""
+    validate_mappings(mappings)
+    required_ids = {player.id for player in required_players}
+    mapped_ids = {
+        mapping.afl_official_id
+        for mapping in mappings
+        if mapping.afl_official_id is not None
+    }
+    missing = sorted(required_ids - mapped_ids)
+    if missing:
+        raise ValueError(
+            f"Missing {len(missing)} participating AFL official mappings: "
+            f"{', '.join(missing)}"
+        )
 
 
 def save_matches_to_json(matches: MatchResult, year: int) -> Path:
