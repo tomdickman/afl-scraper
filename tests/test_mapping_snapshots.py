@@ -119,6 +119,48 @@ def test_promotion_failure_restores_every_previous_snapshot(monkeypatch, tmp_pat
     assert tables_path.read_text() == "old tables"
 
 
+def test_rollback_cleanup_failure_does_not_mask_promotion_error_or_skip_restore(
+    monkeypatch, tmp_path, caplog
+):
+    monkeypatch.chdir(tmp_path)
+    mapping_dir = tmp_path / "data/mapping"
+    mapping_dir.mkdir(parents=True)
+    official_path = mapping_dir / "2026_afl_official.json"
+    tables_path = mapping_dir / "2026_afl_tables.json"
+    official_path.write_text("old official")
+    tables_path.write_text("old tables")
+    path_type = type(official_path)
+    real_replace = path_type.replace
+    real_unlink = path_type.unlink
+
+    def fail_second_temporary_promotion(path, target):
+        target = path_type(target)
+        if path.suffix == ".tmp" and target.name == tables_path.name:
+            raise OSError("simulated promotion failure")
+        return real_replace(path, target)
+
+    def fail_promoted_snapshot_cleanup(path, *args, **kwargs):
+        if path.name == official_path.name:
+            raise OSError("simulated rollback cleanup failure")
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(path_type, "replace", fail_second_temporary_promotion)
+    monkeypatch.setattr(path_type, "unlink", fail_promoted_snapshot_cleanup)
+
+    with pytest.raises(OSError, match="simulated promotion failure"):
+        save_player_id_snapshots(
+            {
+                "afl_official": [player("101")],
+                "afl_tables": [player("Alex_Smith")],
+            },
+            2026,
+        )
+
+    assert official_path.read_text() == "old official"
+    assert tables_path.read_text() == "old tables"
+    assert "Could not remove obsolete snapshot file" in caplog.text
+
+
 def test_map_scrape_does_not_promote_official_when_tables_scrape_fails(monkeypatch):
     @contextmanager
     def browser_context(_headless):

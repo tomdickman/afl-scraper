@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 def _unlink_best_effort(path: Path) -> None:
     """Remove obsolete snapshot data without changing a completed operation."""
     try:
-        path.unlink()
+        if path.exists():
+            path.unlink()
     except OSError as exc:
         logger.warning("Could not remove obsolete snapshot file %s: %s", path, exc)
 
@@ -119,21 +120,31 @@ def save_player_id_snapshots(
                 backup_paths[source_name] = backup
             temporary_paths[source_name].replace(path)
             promoted.append(source_name)
-    except Exception:
+    except Exception as promotion_error:
         for source_name in promoted:
-            path = paths[source_name]
-            if path.exists():
-                path.unlink()
+            _unlink_best_effort(paths[source_name])
+        restore_errors = []
         for source_name, backup in backup_paths.items():
             if backup.exists():
-                backup.replace(paths[source_name])
+                try:
+                    backup.replace(paths[source_name])
+                except OSError as exc:
+                    restore_errors.append(f"{source_name}: {exc}")
+                    logger.error(
+                        "Could not restore %s snapshot from %s: %s",
+                        source_name,
+                        backup,
+                        exc,
+                    )
+        if restore_errors:
+            promotion_error.add_note(
+                "Snapshot rollback also failed: " + "; ".join(restore_errors)
+            )
         raise
     finally:
         for temporary_path in temporary_paths.values():
-            if temporary_path.exists():
-                _unlink_best_effort(temporary_path)
+            _unlink_best_effort(temporary_path)
 
     for backup in backup_paths.values():
-        if backup.exists():
-            _unlink_best_effort(backup)
+        _unlink_best_effort(backup)
     return paths
