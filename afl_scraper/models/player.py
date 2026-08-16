@@ -2,9 +2,15 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .db import DBModel
 
-class Player(BaseModel):
+
+class Player(DBModel):
     """A database player record transformed from AFL Tables."""
+
+    __table_name__ = "player"
+    __conflict_cols__ = ["id"]
+    __exclude_updates_cols__ = []
 
     id: str
     givenname: str

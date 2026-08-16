@@ -90,6 +90,52 @@ def _write_temporary_snapshot(players: list[PlayerInfo], path: Path) -> Path:
     return temporary_path
 
 
+def _promote_snapshot_files(
+    snapshots: dict[object, list[PlayerInfo]], paths: dict[object, Path]
+) -> None:
+    """Atomically promote a related set of validated snapshot files."""
+    temporary_paths: dict[object, Path] = {}
+    backup_paths: dict[object, Path] = {}
+    promoted: list[object] = []
+    try:
+        for key, players in snapshots.items():
+            temporary_paths[key] = _write_temporary_snapshot(players, paths[key])
+        for key, path in paths.items():
+            if path.exists():
+                backup = path.with_name(f".{path.name}.{uuid4().hex}.backup")
+                path.replace(backup)
+                backup_paths[key] = backup
+            temporary_paths[key].replace(path)
+            promoted.append(key)
+    except Exception as promotion_error:
+        for key in promoted:
+            _unlink_best_effort(paths[key])
+        restore_errors = []
+        for key, backup in backup_paths.items():
+            if backup.exists():
+                try:
+                    backup.replace(paths[key])
+                except OSError as exc:
+                    restore_errors.append(f"{key}: {exc}")
+                    logger.error(
+                        "Could not restore %s snapshot from %s: %s",
+                        key,
+                        backup,
+                        exc,
+                    )
+        if restore_errors:
+            promotion_error.add_note(
+                "Snapshot rollback also failed: " + "; ".join(restore_errors)
+            )
+        raise
+    finally:
+        for temporary_path in temporary_paths.values():
+            _unlink_best_effort(temporary_path)
+
+    for backup in backup_paths.values():
+        _unlink_best_effort(backup)
+
+
 def save_player_id_snapshots(
     snapshots: dict[str, list[PlayerInfo]], year: int
 ) -> dict[str, Path]:
@@ -105,46 +151,21 @@ def save_player_id_snapshots(
         source_name: mapping_dir / f"{year}_{source_name}.json"
         for source_name in snapshots
     }
-    temporary_paths: dict[str, Path] = {}
-    backup_paths: dict[str, Path] = {}
-    promoted: list[str] = []
-    try:
-        for source_name, players in snapshots.items():
-            temporary_paths[source_name] = _write_temporary_snapshot(
-                players, paths[source_name]
-            )
-        for source_name, path in paths.items():
-            if path.exists():
-                backup = path.with_name(f".{path.name}.{uuid4().hex}.backup")
-                path.replace(backup)
-                backup_paths[source_name] = backup
-            temporary_paths[source_name].replace(path)
-            promoted.append(source_name)
-    except Exception as promotion_error:
-        for source_name in promoted:
-            _unlink_best_effort(paths[source_name])
-        restore_errors = []
-        for source_name, backup in backup_paths.items():
-            if backup.exists():
-                try:
-                    backup.replace(paths[source_name])
-                except OSError as exc:
-                    restore_errors.append(f"{source_name}: {exc}")
-                    logger.error(
-                        "Could not restore %s snapshot from %s: %s",
-                        source_name,
-                        backup,
-                        exc,
-                    )
-        if restore_errors:
-            promotion_error.add_note(
-                "Snapshot rollback also failed: " + "; ".join(restore_errors)
-            )
-        raise
-    finally:
-        for temporary_path in temporary_paths.values():
-            _unlink_best_effort(temporary_path)
+    _promote_snapshot_files(snapshots, paths)
+    return paths
 
-    for backup in backup_paths.values():
-        _unlink_best_effort(backup)
+
+def save_player_id_snapshot_range(
+    snapshots: dict[int, list[PlayerInfo]], source_name: str
+) -> dict[int, Path]:
+    """Validate and atomically promote one source across a range of years."""
+    if not snapshots:
+        raise ValueError("No player ID snapshots supplied")
+    for year, players in snapshots.items():
+        _validate_snapshot(players, source_name, year)
+
+    mapping_dir = Path("data/mapping")
+    mapping_dir.mkdir(parents=True, exist_ok=True)
+    paths = {year: mapping_dir / f"{year}_{source_name}.json" for year in snapshots}
+    _promote_snapshot_files(snapshots, paths)
     return paths

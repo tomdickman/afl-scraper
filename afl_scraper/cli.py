@@ -383,6 +383,72 @@ def pipeline_historical_backfill(
     click.echo(f"Reconciliation report: {result.report_path}")
 
 
+@pipeline.command(
+    "prepare-historical-players",
+    help="Prepare AFL Tables players and snapshots required for 2006-2011",
+)
+@click.option("--from-year", "start_year", default=2006, type=int, show_default=True)
+@click.option("--to-year", "end_year", default=2011, type=int, show_default=True)
+@click.option(
+    "--load/--dry-run",
+    default=False,
+    help="Upsert canonical players only after every snapshot and profile validates.",
+)
+@click.option(
+    "--refresh",
+    is_flag=True,
+    help="Deliberately replace all requested snapshots and player profiles.",
+)
+@click.option(
+    "--offline",
+    is_flag=True,
+    help="Require complete valid local caches and make no web requests.",
+)
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    help="Run live AFL Tables requests in headless mode (default: headless).",
+)
+@click.option(
+    "--delay-ms",
+    default=500,
+    type=click.IntRange(min=0),
+    show_default=True,
+    help="Delay between live AFL Tables requests.",
+)
+def pipeline_prepare_historical_players(
+    start_year, end_year, load, refresh, offline, headless, delay_ms
+):
+    """Build canonical player prerequisites for the historical backfill."""
+    from .pipelines import prepare_historical_players
+
+    report = prepare_historical_players(
+        start_year,
+        end_year,
+        load=load,
+        refresh=refresh,
+        offline=offline,
+        headless=headless,
+        delay_ms=delay_ms,
+        progress=click.echo,
+    )
+    action = "Loaded" if load else "Prepared"
+    click.echo(
+        f"{action} {report.unique_players} unique AFL Tables players across "
+        f"{report.snapshots} season snapshots ({report.start_year}-"
+        f"{report.end_year})"
+    )
+    click.echo(
+        f"Profiles downloaded: {report.downloaded_profiles}; "
+        f"reused: {report.reused_profiles}"
+    )
+    if load:
+        click.echo(
+            f"Players inserted: {report.inserted_players}; "
+            f"updated: {report.updated_players}"
+        )
+
+
 @cli.command(name="smoke")
 @click.option(
     "--headless/--no-headless",

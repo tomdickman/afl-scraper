@@ -1,10 +1,12 @@
 """Unit tests for generic model UPSERT persistence."""
 
+from datetime import datetime
+
 from unittest.mock import MagicMock
 
 from psycopg import sql
 
-from afl_scraper.models import DBModel, PlayerGameStats
+from afl_scraper.models import DBModel, Player, PlayerGameStats
 from afl_scraper.storage.save_model import (
     SaveResult,
     build_upsert_from_model,
@@ -60,6 +62,27 @@ class TestBuildUpsertFromModel:
 
         assert 'ON CONFLICT ("player_id", "game_id")' in rendered
         assert '"kicks" = EXCLUDED."kicks"' in rendered
+
+    def test_real_player_model_builds_idempotent_upsert(self):
+        model = Player(
+            id="Alex_Smith",
+            givenname="Alex",
+            familyname="Smith",
+            birthdate=datetime(1980, 1, 1),
+        )
+
+        query, values = build_upsert_from_model(model)
+        rendered = query.as_string()
+
+        assert 'INSERT INTO "player"' in rendered
+        assert 'ON CONFLICT ("id")' in rendered
+        assert '"givenname" = EXCLUDED."givenname"' in rendered
+        assert values == [
+            "Alex_Smith",
+            "Alex",
+            "Smith",
+            datetime(1980, 1, 1),
+        ]
 
     def test_player_stats_replay_does_not_erase_unavailable_historical_fields(self):
         model = PlayerGameStats(
