@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from afl_scraper.cli import cli
-from afl_scraper.models import SourcePlayerMapping
+from afl_scraper.models import HistoricalReconciliationReport, SourcePlayerMapping
 from afl_scraper.pipelines import historical
 from afl_scraper.scraper.models import (
     AustralianFootballMatchData,
@@ -168,6 +168,17 @@ def test_replaying_historical_season_reuses_internal_game_identity(monkeypatch):
         )
 
     monkeypatch.setattr(historical, "save_model", save)
+    monkeypatch.setattr(
+        historical,
+        "reconcile_historical_season",
+        lambda *_args: HistoricalReconciliationReport(
+            year=2006,
+            expected_matches=1,
+            database_matches=1,
+            expected_player_stats=2,
+            database_player_stats=2,
+        ),
+    )
 
     first = historical.historical_season_pipeline(2006, load=True)
     second = historical.historical_season_pipeline(2006, load=True)

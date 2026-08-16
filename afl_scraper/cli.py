@@ -262,6 +262,69 @@ def pipeline_historical_season(year, load):
         )
 
 
+@pipeline.command(
+    "historical-backfill",
+    help="Preflight, reconcile, and optionally load a cached historical range",
+)
+@click.option("--from-year", "start_year", default=2006, type=int, show_default=True)
+@click.option("--to-year", "end_year", default=2011, type=int, show_default=True)
+@click.option(
+    "--load/--dry-run",
+    default=False,
+    help="Load only after every requested year passes preflight.",
+)
+@click.option(
+    "--resume/--reprocess",
+    default=True,
+    help="Skip only years that reconcile completely with the database.",
+)
+@click.option(
+    "--checkpoint",
+    type=click.Path(path_type=Path),
+    help="Override the atomic checkpoint JSON path.",
+)
+@click.option(
+    "--report",
+    type=click.Path(path_type=Path),
+    help="Override the reconciliation report JSON path.",
+)
+def pipeline_historical_backfill(
+    start_year, end_year, load, resume, checkpoint, report
+):
+    """Run the resumable 2006-2011 backfill orchestrator."""
+    from .pipelines import historical_backfill_pipeline
+
+    def progress(year, status):
+        click.echo(f"[{year}] {status}")
+
+    result = historical_backfill_pipeline(
+        start_year,
+        end_year,
+        load=load,
+        resume=resume,
+        checkpoint_path=checkpoint,
+        report_path=report,
+        progress=progress,
+    )
+    for year_report in result.report.years:
+        click.echo(
+            f"{year_report.year}: DB matches "
+            f"{year_report.database_matches}/{year_report.expected_matches}; "
+            f"player stats {year_report.database_player_stats}/"
+            f"{year_report.expected_player_stats}; "
+            f"differences {year_report.mismatch_count}"
+        )
+    click.echo(
+        f"Range totals: DB matches {result.report.database_matches}/"
+        f"{result.report.expected_matches}; player stats "
+        f"{result.report.database_player_stats}/"
+        f"{result.report.expected_player_stats}; differences "
+        f"{result.report.mismatch_count}"
+    )
+    click.echo(f"Checkpoint: {result.checkpoint_path}")
+    click.echo(f"Reconciliation report: {result.report_path}")
+
+
 @cli.command(name="smoke")
 @click.option(
     "--headless/--no-headless",

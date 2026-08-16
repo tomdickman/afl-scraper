@@ -10,6 +10,12 @@ from .player import (
     SourcePlayerMapping,
 )
 from .player_game_stats import PlayerGameStats
+from .historical_backfill import (
+    HistoricalBackfillCheckpoint,
+    HistoricalBackfillReport,
+    HistoricalBackfillYear,
+    HistoricalReconciliationReport,
+)
 
 __all__ = [
     "DBModel",
@@ -22,4 +28,8 @@ __all__ = [
     "FuzzyMatch",
     "MatchResult",
     "SourcePlayerMapping",
+    "HistoricalBackfillCheckpoint",
+    "HistoricalBackfillReport",
+    "HistoricalBackfillYear",
+    "HistoricalReconciliationReport",
 ]
