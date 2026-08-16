@@ -183,6 +183,7 @@ def _scrape_profiles_into(
     *,
     delay_ms: int,
     promote_to: Path | None = None,
+    remove_existing: bool = False,
     progress=None,
 ) -> None:
     source = PlayerSourceFactory.get(SOURCE)
@@ -192,6 +193,10 @@ def _scrape_profiles_into(
         for index, player_id in enumerate(player_ids, start=1):
             if index > 1:
                 time.sleep(delay_ms / 1000)
+            if remove_existing:
+                # Preserve unrelated cached profiles while ensuring a requested
+                # refresh can never be satisfied by its stale staged copy.
+                (output_dir / f"{player_id}.html").unlink(missing_ok=True)
             url = source.get_player_page_url(player_id)
             response = page.goto(url)
             source.validate_player_navigation(page, response, url)
@@ -228,6 +233,7 @@ def _fetch_profiles(
                     player_ids,
                     staging,
                     delay_ms=delay_ms,
+                    remove_existing=True,
                     progress=progress,
                 )
             else:

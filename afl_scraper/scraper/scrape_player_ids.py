@@ -8,6 +8,7 @@ import tempfile
 from uuid import uuid4
 
 from ..models.player import PlayerInfo
+from ..diagnostics import summarize_identifiers
 from .sources import PlayerSourceFactory
 
 
@@ -65,8 +66,8 @@ def _validate_snapshot(players: list[PlayerInfo], source_name: str, year: int) -
     )
     if duplicates:
         raise ValueError(
-            f"Refusing to save {source_name} snapshot with duplicate IDs: "
-            f"{', '.join(duplicates)}"
+            f"Refusing to save {source_name} snapshot with "
+            f"{len(duplicates)} duplicate IDs: {summarize_identifiers(duplicates)}"
         )
 
 

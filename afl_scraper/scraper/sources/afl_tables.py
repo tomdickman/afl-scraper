@@ -6,6 +6,7 @@ from pathlib import Path
 from playwright.sync_api import Locator, Page, Response
 
 from ...models.player import PlayerInfo
+from ...diagnostics import summarize_identifiers
 from ..constants import MIN_HISTORY_YEAR, competition_rules_for_year
 from .base import PlayerSource
 
@@ -180,8 +181,8 @@ class AFLTablesSource(PlayerSource):
         )
         if duplicates:
             raise ValueError(
-                "AFL Tables snapshot contains duplicate player IDs: "
-                + ", ".join(duplicates)
+                f"AFL Tables snapshot contains {len(duplicates)} duplicate player "
+                f"IDs: {summarize_identifiers(duplicates)}"
             )
 
         counts = Counter(player.team for player in players)

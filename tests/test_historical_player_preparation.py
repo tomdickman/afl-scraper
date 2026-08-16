@@ -125,6 +125,59 @@ def test_interrupted_profile_scrape_retains_each_validated_profile(
     assert not (tmp_path / "player" / "Second_Player.html").exists()
 
 
+def test_refresh_cannot_reuse_stale_requested_profile(monkeypatch, tmp_path):
+    final = tmp_path / "player"
+    final.mkdir(parents=True)
+    requested = final / "First_Player.html"
+    unrelated = final / "Other_Player.html"
+    requested.write_text("<h1>Old Player</h1><p>1-Jan-1980</p>")
+    unrelated.write_text("<h1>Other Player</h1><p>1-Jan-1980</p>")
+
+    class Page:
+        def goto(self, _url):
+            return object()
+
+        def close(self):
+            pass
+
+    class Browser:
+        def new_page(self):
+            return Page()
+
+    class Source:
+        def get_player_page_url(self, player_id):
+            return f"https://example.test/{player_id}"
+
+        def validate_player_navigation(self, _page, _response, _url):
+            pass
+
+        def scrape_player(self, _page, player_id, output_dir):
+            # Simulate a future source adapter incorrectly claiming success
+            # without writing the requested refreshed profile.
+            return output_dir / f"{player_id}.html"
+
+    @contextmanager
+    def browser_context(_headless):
+        yield Browser()
+
+    monkeypatch.setattr(historical_players, "RAW_ROOT", tmp_path)
+    monkeypatch.setattr(historical_players, "sync_browser_context", browser_context)
+    monkeypatch.setattr(
+        historical_players.PlayerSourceFactory, "get", Mock(return_value=Source())
+    )
+
+    with pytest.raises(ValueError, match="Invalid cached AFL Tables profile"):
+        historical_players._fetch_profiles(
+            ["First_Player"],
+            refresh=True,
+            delay_ms=0,
+            headless=True,
+        )
+
+    assert requested.read_text() == "<h1>Old Player</h1><p>1-Jan-1980</p>"
+    assert unrelated.exists()
+
+
 def test_invalid_profile_cache_fails_closed_without_live_refresh(monkeypatch, tmp_path):
     monkeypatch.setattr(historical_players, "RAW_ROOT", tmp_path)
     profile = tmp_path / "player" / "Alex_Smith.html"
