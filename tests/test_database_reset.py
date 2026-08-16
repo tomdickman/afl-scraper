@@ -26,8 +26,9 @@ def database_environment(monkeypatch):
     return values
 
 
-def test_reset_target_rejects_non_local_host(database_environment, monkeypatch):
-    monkeypatch.setenv("DB_HOST", "database.example.com")
+@pytest.mark.parametrize("host", ["database.example.com", "::1"])
+def test_reset_target_rejects_unsupported_host(database_environment, monkeypatch, host):
+    monkeypatch.setenv("DB_HOST", host)
 
     with pytest.raises(ValueError, match="restricted to local hosts"):
         get_development_database_target()
@@ -42,6 +43,7 @@ def test_reset_target_rejects_system_database(database_environment, monkeypatch)
 
 def test_reset_target_requires_complete_configuration(monkeypatch):
     for name in (
+        "DB_HOST",
         "DB_NAME",
         "DB_USER_OWNER",
         "DB_PASSWORD_OWNER",
@@ -49,7 +51,7 @@ def test_reset_target_requires_complete_configuration(monkeypatch):
     ):
         monkeypatch.delenv(name, raising=False)
 
-    with pytest.raises(ValueError, match="DB_NAME"):
+    with pytest.raises(ValueError, match="DB_HOST"):
         get_development_database_target()
 
 

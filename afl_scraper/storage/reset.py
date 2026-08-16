@@ -11,7 +11,7 @@ from psycopg import sql
 from .connection import admin_connection_pool
 
 
-_LOCAL_DATABASE_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_LOCAL_DATABASE_HOSTS = frozenset({"localhost", "127.0.0.1"})
 _SYSTEM_DATABASES = frozenset({"postgres", "template0", "template1"})
 
 
@@ -29,7 +29,7 @@ class DevelopmentDatabaseTarget:
 def get_development_database_target() -> DevelopmentDatabaseTarget:
     """Validate the environment and refuse targets that are not clearly local."""
     values = {
-        "DB_HOST": os.environ.get("DB_HOST", "localhost").strip(),
+        "DB_HOST": os.environ.get("DB_HOST", "").strip(),
         "DB_PORT": os.environ.get("DB_PORT", "5432").strip(),
         "DB_NAME": os.environ.get("DB_NAME", "").strip(),
         "DB_USER_OWNER": os.environ.get("DB_USER_OWNER", "").strip(),
