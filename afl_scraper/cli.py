@@ -45,6 +45,64 @@ def dbcheck():
         click.echo(f"❌   Failed {e}")
 
 
+@cli.group(name="database")
+def database():
+    """Manage the local development database."""
+
+
+@database.command(name="reset")
+@click.option(
+    "--confirm-database",
+    metavar="NAME",
+    help="Exact DB_NAME confirmation; prompts when omitted.",
+)
+@click.option(
+    "--migrate/--no-migrate",
+    default=True,
+    help="Apply checked-out migrations after clearing the schema (default: migrate).",
+)
+def database_reset(confirm_database, migrate):
+    """Irreversibly clear and rebuild a disposable local PostgreSQL database."""
+    from .storage.reset import (
+        get_development_database_target,
+        reset_public_schema,
+        upgrade_database_to_head,
+    )
+
+    try:
+        target = get_development_database_target()
+    except ValueError as error:
+        raise click.ClickException(str(error)) from error
+
+    click.echo(
+        f"WARNING: this permanently deletes every object in public on "
+        f"{target.host}:{target.port}/{target.name}."
+    )
+    click.echo("Files under data/ are not deleted.")
+    if confirm_database is None:
+        confirm_database = click.prompt("Type the database name to continue")
+    if confirm_database != target.name:
+        raise click.ClickException("database confirmation did not match DB_NAME")
+
+    try:
+        reset_public_schema(target)
+    except Exception as error:
+        raise click.ClickException(f"database reset failed: {error}") from error
+    click.echo(f"Cleared PostgreSQL schema public in {target.name}")
+
+    if not migrate:
+        click.echo("Database left empty (--no-migrate).")
+        return
+
+    try:
+        upgrade_database_to_head()
+    except Exception as error:
+        raise click.ClickException(
+            "schema was cleared, but migration to head failed: " f"{error}"
+        ) from error
+    click.echo("Rebuilt database schema at Alembic head")
+
+
 @cli.group(name="scrape")
 def scrape():
     """

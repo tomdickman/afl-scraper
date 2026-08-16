@@ -90,6 +90,29 @@ uv run afl-scraper dbcheck
 
 If you use existing roles or a differently named database, create and grant them yourself, set the corresponding environment variables, and run only the Alembic command. See [`afl_scraper/storage/README.md`](afl_scraper/storage/README.md) for schema development and migration conventions.
 
+### Reset a disposable development database
+
+To discard all PostgreSQL data and Alembic state in a local development
+database, then rebuild it from the migrations in the current checkout, run:
+
+```sh
+uv run afl-scraper database reset
+```
+
+The command displays the resolved target and requires its exact database name
+as confirmation. It refuses non-loopback hosts and PostgreSQL system databases.
+It drops and recreates only the target database's `public` schema, restores the
+restricted app-role access configured by `bootstrap.sql`, and migrates to
+`head`. It does not delete roles, the database itself, or cached and reviewed
+files under `data/`.
+
+For an intentionally empty schema, use `--no-migrate`. For a non-interactive
+development script, pass the same value as `DB_NAME` explicitly:
+
+```sh
+uv run afl-scraper database reset --confirm-database "$DB_NAME"
+```
+
 ## CLI overview
 
 All examples below use `uv run afl-scraper`. If the virtual environment is active, omit `uv run`.
@@ -99,6 +122,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `health` | Launches headless Chromium and verifies that the player-data source is reachable. | No |
 | `smoke` | Checks that expected fixture controls still exist at the match-data source. | No |
 | `dbcheck` | Tests both the owner/write and app connections and reports the PostgreSQL version. | Yes |
+| `database reset` | Clears and rebuilds a disposable local PostgreSQL database. | Yes |
 | `scrape players YEAR` | Saves raw player records under `data/raw/`. | No |
 | `scrape season YEAR` | Discovers every source round and match ID and writes a validated season manifest. | No |
 | `scrape historical-season YEAR` | Discovers AustralianFootball matches from 2006-2011 and optionally caches every validated match page. | No |
