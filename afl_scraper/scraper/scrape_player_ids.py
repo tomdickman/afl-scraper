@@ -5,6 +5,7 @@ import logging
 import os
 from pathlib import Path
 import tempfile
+from typing import TypeVar
 from uuid import uuid4
 
 from ..models.player import PlayerInfo
@@ -13,6 +14,8 @@ from .sources import PlayerSourceFactory
 
 
 logger = logging.getLogger(__name__)
+
+_SnapshotKey = TypeVar("_SnapshotKey", str, int)
 
 
 def _unlink_best_effort(path: Path) -> None:
@@ -92,12 +95,13 @@ def _write_temporary_snapshot(players: list[PlayerInfo], path: Path) -> Path:
 
 
 def _promote_snapshot_files(
-    snapshots: dict[object, list[PlayerInfo]], paths: dict[object, Path]
+    snapshots: dict[_SnapshotKey, list[PlayerInfo]],
+    paths: dict[_SnapshotKey, Path],
 ) -> None:
     """Atomically promote a related set of validated snapshot files."""
-    temporary_paths: dict[object, Path] = {}
-    backup_paths: dict[object, Path] = {}
-    promoted: list[object] = []
+    temporary_paths: dict[_SnapshotKey, Path] = {}
+    backup_paths: dict[_SnapshotKey, Path] = {}
+    promoted: list[_SnapshotKey] = []
     try:
         for key, players in snapshots.items():
             temporary_paths[key] = _write_temporary_snapshot(players, paths[key])
