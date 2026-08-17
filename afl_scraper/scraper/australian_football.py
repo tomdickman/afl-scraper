@@ -335,14 +335,11 @@ def parse_australian_football_match(
     if "Match Details:" not in title:
         raise ValueError(f"Unexpected AustralianFootball match page title {title!r}")
 
-    summary_tables = [
-        table
-        for table in soup.find_all("table")
-        if all(
-            marker in _normalize_text(table.get_text(" ", strip=True))
-            for marker in ("Venue:", "Date:", "Crowd:")
-        )
-    ]
+    summary_tables = []
+    for table in soup.find_all("table"):
+        table_text = _normalize_text(table.get_text(" ", strip=True))
+        if all(marker in table_text for marker in ("Venue:", "Date:", "Crowd:")):
+            summary_tables.append(table)
     if len(summary_tables) != 1:
         raise ValueError(
             f"Expected one AustralianFootball match summary, found {len(summary_tables)}"
