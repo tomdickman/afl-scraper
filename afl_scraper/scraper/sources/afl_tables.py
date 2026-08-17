@@ -204,8 +204,8 @@ class AFLTablesSource(PlayerSource):
         )
         if incomplete:
             raise ValueError(
-                "AFL Tables snapshot contains incomplete names: "
-                + ", ".join(incomplete)
+                f"AFL Tables snapshot contains {len(incomplete)} incomplete names: "
+                f"{summarize_identifiers(incomplete)}"
             )
 
     def scrape_player(
