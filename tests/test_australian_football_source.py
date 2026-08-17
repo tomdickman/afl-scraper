@@ -212,6 +212,7 @@ def test_match_contract_parses_stable_ids_and_only_published_statistics():
 
     assert match.details.home_team == "Collingwood"
     assert match.details.away_team == "Brisbane"
+    assert match.details.round == "10"
     assert match.details.home_team_total == 109
     assert match.details.crowd == 54820
     assert len(match.home_team_stats) == len(match.away_team_stats) == 22
