@@ -12,3 +12,9 @@ the first database write. It stores atomic per-year checkpoints but confirms
 them against exact database reconciliation before skipping work. Interrupted
 runs therefore resume after the last reconciled year without treating local
 checkpoint state as authoritative.
+
+The historical-player preparation pipeline builds the canonical prerequisites
+for that backfill. It validates year-scoped AFL Tables snapshots, deduplicates
+profiles across seasons, resumes from each validated immutable cache, and opens
+the database only after the complete requested range passes preflight. A load
+upserts every canonical player in one transaction.

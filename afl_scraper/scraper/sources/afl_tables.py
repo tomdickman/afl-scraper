@@ -1,10 +1,12 @@
 import re
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
 from playwright.sync_api import Locator, Page, Response
 
 from ...models.player import PlayerInfo
+from ...diagnostics import summarize_identifiers
 from ..constants import MIN_HISTORY_YEAR, competition_rules_for_year
 from .base import PlayerSource
 
@@ -152,7 +154,59 @@ class AFLTablesSource(PlayerSource):
                         year=year,
                     )
                 )
+        self.validate_player_snapshot(players, year)
         return players
+
+    def validate_player_snapshot(self, players: list[PlayerInfo], year: int) -> None:
+        """Revalidate a cached AFL Tables season snapshot without the website."""
+        expected_teams = set(competition_rules_for_year(year).teams)
+        observed_teams = {player.team for player in players}
+        if observed_teams != expected_teams:
+            missing = sorted(expected_teams - observed_teams)
+            unexpected = sorted(observed_teams - expected_teams)
+            raise ValueError(
+                f"AFL Tables snapshot for {year} has wrong clubs; "
+                f"missing={missing}, unexpected={unexpected}"
+            )
+
+        wrong_year = sorted({player.year for player in players if player.year != year})
+        if wrong_year:
+            raise ValueError(
+                f"AFL Tables snapshot for {year} contains years {wrong_year}"
+            )
+
+        ids = [player.id for player in players]
+        duplicates = sorted(
+            player_id for player_id, count in Counter(ids).items() if count > 1
+        )
+        if duplicates:
+            raise ValueError(
+                f"AFL Tables snapshot contains {len(duplicates)} duplicate player "
+                f"IDs: {summarize_identifiers(duplicates)}"
+            )
+
+        counts = Counter(player.team for player in players)
+        invalid_counts = {
+            team: count
+            for team, count in sorted(counts.items())
+            if not MIN_PLAYERS_PER_TEAM <= count <= MAX_PLAYERS_PER_TEAM
+        }
+        if invalid_counts:
+            raise ValueError(
+                f"AFL Tables snapshot for {year} has implausible club counts: "
+                f"{invalid_counts}"
+            )
+
+        incomplete = sorted(
+            player.id
+            for player in players
+            if not player.first_name.strip() or not player.last_name.strip()
+        )
+        if incomplete:
+            raise ValueError(
+                f"AFL Tables snapshot contains {len(incomplete)} incomplete names: "
+                f"{summarize_identifiers(incomplete)}"
+            )
 
     def scrape_player(
         self,

@@ -130,6 +130,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `scrape round ROUND` | Processes every match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
 | `transform players` | Transforms stored player records and loads the resulting player models. | Yes |
 | `pipeline players` | Runs the player transform/load pipeline, optionally refreshing raw pages first. | Yes |
+| `pipeline prepare-historical-players` | Prepares validated AFL Tables snapshots and canonical players for 2006-2011. | Only with `--load` |
 | `map scrape` | Saves player identity data from each configured source to `data/mapping/`. | No |
 | `map scrape-season` | Derives participating historical official IDs from every match in a completed season. | No |
 | `map match` | Produces exact, reviewable, and unmatched cross-source player ID groups. | No |
@@ -252,6 +253,39 @@ This extraction boundary deliberately retains AustralianFootball player IDs as
 source-specific IDs. Match pages publish jumper number, kicks, marks, handballs,
 disposals, goals, behinds, hitouts, tackles, and frees for/against. Statistics
 the source does not publish are absent rather than recorded as zero.
+
+### Prepare canonical players for 2006-2011
+
+Before reviewing AustralianFootball identities, prepare the corresponding
+year-scoped AFL Tables snapshots and canonical player records:
+
+```sh
+uv run afl-scraper pipeline prepare-historical-players
+```
+
+The safe default acquires only missing data, validates all six season snapshots
+and every unique player profile, and performs no database writes. Each newly
+validated snapshot and profile is retained as a resume boundary, so rerunning
+after an interruption skips completed work. Requests have a default 500 ms
+delay; use `--delay-ms` to increase it if the source is under load.
+
+After the complete dry run succeeds, load the same validated caches:
+
+```sh
+uv run afl-scraper pipeline prepare-historical-players --offline --load
+```
+
+The offline load performs no web requests and upserts all canonical players in
+one transaction. Replaying it is idempotent. `--refresh` deliberately replaces
+all requested snapshots and profiles, retaining the previous complete profile
+cache if the refresh fails. It cannot be combined with `--offline`.
+
+Use `--from-year` and `--to-year` for a smaller inclusive pilot, for example:
+
+```sh
+uv run afl-scraper pipeline prepare-historical-players \
+  --from-year 2006 --to-year 2006
+```
 
 ### Map and load a cached 2006-2011 season
 

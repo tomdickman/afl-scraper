@@ -128,6 +128,24 @@ def test_duplicate_player_id_across_teams_fails_closed():
         AFLTablesSource().scrape_player_ids(page, 2026)
 
 
+def test_cached_snapshot_duplicate_diagnostic_is_bounded():
+    players = AFLTablesSource().scrape_player_ids(healthy_page(2006), 2006)
+
+    with pytest.raises(ValueError, match=r"12 duplicate player IDs: .+\(\+2 more\)"):
+        AFLTablesSource().validate_player_snapshot(players + players[:12], 2006)
+
+
+def test_cached_snapshot_incomplete_name_diagnostic_is_bounded():
+    players = AFLTablesSource().scrape_player_ids(healthy_page(2006), 2006)
+    corrupted = [
+        player.model_copy(update={"first_name": ""}) if index < 12 else player
+        for index, player in enumerate(players)
+    ]
+
+    with pytest.raises(ValueError, match=r"12 incomplete names: .+\(\+2 more\)"):
+        AFLTablesSource().validate_player_snapshot(corrupted, 2006)
+
+
 def test_outage_signature_is_rejected_even_with_http_200():
     page = Page(
         body="Site is down, awaiting solutions.",
