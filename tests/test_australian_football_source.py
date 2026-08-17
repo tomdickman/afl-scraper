@@ -237,6 +237,15 @@ def test_match_contract_accepts_source_spacing_inside_score_totals():
     assert match.details.away_team_total == 83
 
 
+def test_match_contract_accepts_compact_finals_metadata():
+    finals_page = match_html().replace("Round: 10 Venue:", "2EF Venue:")
+
+    match = source.parse_australian_football_match(finals_page, 2006)
+
+    assert match.details.round == "2EF"
+    assert match.details.venue == "M.C.G."
+
+
 @pytest.mark.parametrize("year", [2006, 2007, 2008])
 def test_retrospective_north_melbourne_name_validates_against_each_era(year):
     historical_club = match_html(year).replace("Collingwood", "North Melbourne")

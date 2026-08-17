@@ -28,7 +28,7 @@ PLAYER_PATH_PATTERN = re.compile(
     r"^/players/player/[^/]+/(?P<player_id>\d+)$", re.IGNORECASE
 )
 _MATCH_METADATA_PATTERN = re.compile(
-    r"^Round:\s*(?P<round>.+?)\s+Venue:\s*(?P<venue>.+?)\s+"
+    r"^(?:Round:\s*)?(?P<round>.+?)\s+Venue:\s*(?P<venue>.+?)\s+"
     r"Date:\s*(?P<date>[A-Za-z]{3},\s*\d{1,2}-\d{1,2}-\d{4})\s+"
     r"(?P<time>\d{1,2}:\d{2}\s*[ap]m)\s+Crowd:\s*(?P<crowd>[\d,]+|N/A|-)$",
     re.IGNORECASE,
@@ -338,8 +338,10 @@ def parse_australian_football_match(
     summary_tables = [
         table
         for table in soup.find_all("table")
-        if "Round:" in _normalize_text(table.get_text(" ", strip=True))
-        and "Venue:" in _normalize_text(table.get_text(" ", strip=True))
+        if all(
+            marker in _normalize_text(table.get_text(" ", strip=True))
+            for marker in ("Venue:", "Date:", "Crowd:")
+        )
     ]
     if len(summary_tables) != 1:
         raise ValueError(
