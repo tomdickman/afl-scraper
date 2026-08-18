@@ -52,6 +52,17 @@ def test_historical_kangaroos_name_matches_north_melbourne():
     ]
 
 
+def test_known_team_punctuation_alias_is_an_exact_match():
+    result = map_players.match_players(
+        [player("14537", "Luke Ball", "St. Kilda")],
+        [player("Luke_Ball", "Luke Ball", "St Kilda")],
+    )
+
+    assert [(match.afl.id, match.tables.id) for match in result.exact] == [
+        ("14537", "Luke_Ball")
+    ]
+
+
 def test_name_suffix_omitted_by_one_source_matches_within_same_team():
     result = map_players.match_players(
         [player("7536", "Robert Hansen Jr", "North Melbourne")],
@@ -85,6 +96,29 @@ def test_nickname_mismatch_with_same_team_and_surname_is_reviewable_not_exact():
         ("1243", ["Martin_Mattner"])
     ]
     assert not result.unmatched_afl
+
+
+@pytest.mark.parametrize(
+    ("source_name", "canonical_name"),
+    [
+        ("Adrian Deluca", "Adrian De Luca"),
+        ("Lance 'Buddy' Franklin", "Lance Franklin"),
+    ],
+)
+def test_source_surname_format_variants_are_reviewable_not_exact(
+    source_name, canonical_name
+):
+    result = map_players.match_players(
+        [player("source-1", source_name, "Hawthorn")],
+        [player("canonical-1", canonical_name, "Hawthorn")],
+    )
+
+    assert not result.exact
+    assert [(match.afl.id, [p.id for p in match.tables]) for match in result.fuzzy] == [
+        ("source-1", ["canonical-1"])
+    ]
+    assert not result.unmatched_afl
+    assert not result.unmatched_tables
 
 
 def test_duplicate_names_are_matched_deterministically_by_team():

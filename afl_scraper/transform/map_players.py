@@ -1,10 +1,14 @@
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 
 from ..models.player import PlayerInfo, PlayerMapping, MatchResult
 from ..storage import admin_connection_pool
 from ..utils.identity import normalize_person_name
+
+
+_QUOTED_NICKNAME_PATTERN = re.compile(r'(?:"[^"]+"|[\'’][^\'’]+[\'’])')
 
 
 def load_player_ids_from_json(source: str, year: int) -> list[PlayerInfo]:
@@ -24,9 +28,10 @@ def normalize_name(name: str) -> str:
 
 
 def normalize_family_name(player: PlayerInfo) -> str:
-    """Normalize a source surname without treating nicknames as exact matches."""
-    normalized = normalize_person_name(f"given {player.last_name}")
-    return normalized.removeprefix("given ")
+    """Normalize a surname for review candidates, never for exact matching."""
+    without_quoted_nicknames = _QUOTED_NICKNAME_PATTERN.sub(" ", player.last_name)
+    normalized = normalize_person_name(f"given {without_quoted_nicknames}")
+    return normalized.removeprefix("given ").replace(" ", "")
 
 
 _TEAM_ALIASES = {
@@ -52,6 +57,7 @@ _TEAM_ALIASES = {
     "north melbourne": "north melbourne",
     "port adelaide": "port adelaide",
     "richmond": "richmond",
+    "st. kilda": "st kilda",
     "st kilda": "st kilda",
     "sydney": "sydney",
     "sydney swans": "sydney",
