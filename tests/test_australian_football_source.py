@@ -212,6 +212,7 @@ def test_match_contract_parses_stable_ids_and_only_published_statistics():
 
     assert match.details.home_team == "Collingwood"
     assert match.details.away_team == "Brisbane"
+    assert match.details.round == "10"
     assert match.details.home_team_total == 109
     assert match.details.crowd == 54820
     assert len(match.home_team_stats) == len(match.away_team_stats) == 22
@@ -235,6 +236,15 @@ def test_match_contract_accepts_source_spacing_inside_score_totals():
 
     assert match.details.home_team_total == 109
     assert match.details.away_team_total == 83
+
+
+def test_match_contract_accepts_compact_finals_metadata():
+    finals_page = match_html().replace("Round: 10 Venue:", "2EF Venue:")
+
+    match = source.parse_australian_football_match(finals_page, 2006)
+
+    assert match.details.round == "2EF"
+    assert match.details.venue == "M.C.G."
 
 
 @pytest.mark.parametrize("year", [2006, 2007, 2008])
