@@ -74,6 +74,16 @@ class TestResolveVenue:
     def test_afl_tables_source(self):
         assert resolve_venue("M.C.G.", "afl_tables") == "M.C.G."
 
+    @pytest.mark.parametrize(
+        ("source_name", "venue_id"),
+        [
+            ("Carrara Stadium", "Carrara"),
+            ("Marrara Stadium", "Marrara Oval"),
+        ],
+    )
+    def test_australian_football_historical_aliases(self, source_name, venue_id):
+        assert resolve_venue(source_name, "australian_football") == venue_id
+
 
 class TestResolveTeam:
     def test_full_name_nickname_and_case(self):
