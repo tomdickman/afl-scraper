@@ -2,6 +2,11 @@
 
 This module contains pipelines for orchestrating data lifecycles, utilising the `scraper`, `transform` and `storage` modules to extract data, transform it into known structures and then loading it into a database for use.
 
+The AFL Official season cache preflight is a read-only boundary for future
+season loading. It revalidates every manifest-member cache, reports missing or
+same-season unexpected matches, and rejects wrong-year data or player identity
+drift without opening a browser or database connection.
+
 The historical-season pipeline is cache-only: scraping is a separate operator
 step. It preflights the complete season before writes and defaults to dry-run.
 When loading is explicit, each game and all player statistics share one database
