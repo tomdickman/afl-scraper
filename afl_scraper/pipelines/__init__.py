@@ -4,6 +4,11 @@ from .round import round_pipeline
 from .historical import historical_season_pipeline
 from .historical_backfill import historical_backfill_pipeline
 from .historical_players import prepare_historical_players
+from .official import (
+    OfficialSeasonCacheReport,
+    inspect_official_season_cache,
+    preflight_official_season_cache,
+)
 
 __all__ = [
     "historical_season_pipeline",
@@ -13,4 +18,7 @@ __all__ = [
     "match_pipeline",
     "players_pipeline",
     "round_pipeline",
+    "OfficialSeasonCacheReport",
+    "inspect_official_season_cache",
+    "preflight_official_season_cache",
 ]
