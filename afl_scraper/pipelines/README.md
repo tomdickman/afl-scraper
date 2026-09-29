@@ -7,6 +7,11 @@ season loading. It revalidates every manifest-member cache, reports missing or
 same-season unexpected matches, and rejects wrong-year data or player identity
 drift without opening a browser or database connection.
 
+Official season preparation runs only after that cache preflight. It resolves
+year-scoped canonical player mappings, transforms every match with placeholder
+internal IDs, and checks player, team, and venue references using read-only
+database queries. It does not allocate identities or persist models.
+
 The historical-season pipeline is cache-only: scraping is a separate operator
 step. It preflights the complete season before writes and defaults to dry-run.
 When loading is explicit, each game and all player statistics share one database
