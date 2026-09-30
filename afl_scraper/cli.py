@@ -294,6 +294,28 @@ def pipeline_players(scrape: bool, year=2026):
 
 
 @pipeline.command(
+    "official-season",
+    help="Validate and prepare one cached AFL Official season without writing",
+)
+@click.argument("year", nargs=1, type=int)
+def pipeline_official_season(year):
+    """Run the read-only AFL Official season preparation pipeline."""
+    from .pipelines import prepare_official_season
+
+    try:
+        prepared = prepare_official_season(year)
+    except Exception as error:
+        raise click.ClickException(str(error)) from error
+
+    player_stats = sum(len(match.player_stats) for match in prepared)
+    click.echo(
+        f"Validated {len(prepared)} official matches and "
+        f"{player_stats} player-stat rows for {year}"
+    )
+    click.echo("Database writes: 0 (dry run)")
+
+
+@pipeline.command(
     "historical-season",
     help="Preflight and optionally load one cached 2006-2011 season",
 )
