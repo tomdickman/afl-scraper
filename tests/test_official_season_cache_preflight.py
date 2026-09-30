@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from afl_scraper.pipelines.official import (
+from afl_scraper.pipelines.official_season import (
     OfficialSeasonCacheReport,
     inspect_official_season_cache,
     preflight_official_season_cache,

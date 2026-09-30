@@ -1,13 +1,18 @@
-"""Read-only preflight for cached AFL Official seasons."""
+"""Preflight and preparation for cached AFL Official seasons."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..diagnostics import summarize_identifiers
+from ..models import Game, PlayerGameStats
 from ..scraper import load_raw_match_data, load_season_manifest
 from ..scraper.models import RawMatchData
 from ..scraper.season_identities import collect_match_identities
-from ..transform.match import parse_match_datetime
+from ..storage import admin_connection_pool, load_player_source_id_map
+from ..transform.match import parse_match_datetime, transform_match
+
+
+SOURCE = "afl_official"
 
 
 @dataclass(frozen=True)
@@ -25,6 +30,15 @@ class OfficialSeasonCacheReport:
     @property
     def ok(self) -> bool:
         return not self.missing_match_ids and not self.unexpected_match_ids
+
+
+@dataclass(frozen=True)
+class PreparedOfficialMatch:
+    """One transformed official match ready for a later persistence step."""
+
+    source_match_id: str
+    game: Game
+    player_stats: list[PlayerGameStats]
 
 
 def _cached_match_ids(raw_root: Path) -> set[int]:
@@ -134,3 +148,98 @@ def preflight_official_season_cache(
             + "; ".join(problems)
         )
     return report
+
+
+def _existing_ids(conn, table: str, identifiers: set[str]) -> set[str]:
+    if not identifiers:
+        return set()
+    if table not in {"player", "team", "venue"}:
+        raise ValueError(f"Unsupported reference table: {table}")
+    with conn.cursor() as cur:
+        cur.execute(
+            f'SELECT id FROM "{table}" WHERE id = ANY(%(identifiers)s)',
+            {"identifiers": sorted(identifiers)},
+        )
+        return {row[0] for row in cur.fetchall()}
+
+
+def _validate_database_references(conn, prepared: list[PreparedOfficialMatch]) -> None:
+    expected = {
+        "player": {stat.player_id for match in prepared for stat in match.player_stats},
+        "team": {
+            team
+            for match in prepared
+            for team in (match.game.home_team, match.game.away_team)
+        },
+        "venue": {match.game.venue for match in prepared},
+    }
+    errors = []
+    for table, identifiers in expected.items():
+        missing = sorted(identifiers - _existing_ids(conn, table, identifiers))
+        if missing:
+            errors.append(f"missing {table} rows: {', '.join(missing)}")
+    if errors:
+        raise ValueError("AFL Official season preparation failed; " + "; ".join(errors))
+
+
+def _prepare_official_matches(
+    conn,
+    year: int,
+    matches: list[tuple[int, RawMatchData]],
+) -> list[PreparedOfficialMatch]:
+    source_player_ids = {
+        stat.afl_official_id
+        for _, match in matches
+        for stat in match.home_team_stats + match.away_team_stats
+    }
+    player_id_map = load_player_source_id_map(conn, SOURCE, year, source_player_ids)
+
+    prepared = []
+    for placeholder_id, (source_match_id, raw_match) in enumerate(matches, start=1):
+
+        def resolve_player_id(stat, _team, _year):
+            return player_id_map.get(stat.afl_official_id)
+
+        game, player_stats = transform_match(
+            raw_match,
+            match_id=placeholder_id,
+            source=SOURCE,
+            resolve_player_id=resolve_player_id,
+        )
+        canonical_ids = [stat.player_id for stat in player_stats]
+        if len(canonical_ids) != len(set(canonical_ids)):
+            raise ValueError(
+                f"Canonical player mapping aliases two participants in "
+                f"AFL Official match {source_match_id}"
+            )
+        prepared.append(PreparedOfficialMatch(str(source_match_id), game, player_stats))
+
+    _validate_database_references(conn, prepared)
+    return prepared
+
+
+def prepare_official_season(
+    year: int,
+    *,
+    manifest_root: Path = Path("data/raw/afl_official/season"),
+    raw_root: Path = Path("data/raw/afl_official/match"),
+) -> list[PreparedOfficialMatch]:
+    """Transform a complete official season after read-only preflight.
+
+    Every manifest cache is loaded before the database is opened. The database
+    phase performs mapping and reference lookups only; persistence belongs to a
+    later pipeline feature.
+    """
+    preflight_official_season_cache(
+        year,
+        manifest_root=manifest_root,
+        raw_root=raw_root,
+    )
+    manifest = load_season_manifest(year, manifest_root)
+    matches = [
+        (match_id, load_raw_match_data(match_id, raw_root))
+        for match_id in manifest.match_ids
+    ]
+
+    with admin_connection_pool() as conn:
+        return _prepare_official_matches(conn, year, matches)
