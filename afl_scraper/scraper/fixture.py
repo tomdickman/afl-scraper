@@ -55,8 +55,12 @@ def get_round_buttons(page: Page) -> Dict[str, Locator]:
     page.wait_for_selector(FIXTURE_CLASSNAMES["ROUND_NAV"])
 
     round_nav = page.locator(FIXTURE_CLASSNAMES["ROUND_NAV"])
-
-    round_buttons = round_nav.get_by_role("button").all()
+    round_button_locator = round_nav.get_by_role("button")
+    # The AFL page renders the navigation shell before React hydrates its
+    # buttons. Locator.all() does not wait, so require real round content before
+    # taking the snapshot.
+    round_button_locator.first.wait_for(state="visible")
+    round_buttons = round_button_locator.all()
 
     keyed_buttons = {}
 
