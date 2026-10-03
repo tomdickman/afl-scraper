@@ -12,6 +12,7 @@ import afl_scraper.cli as cli_module
 from afl_scraper.transform import map_players
 from afl_scraper.models.player import PlayerInfo, PlayerMapping
 from afl_scraper.scraper import scrape, season_identities
+from afl_scraper.scraper.constants import official_season_id
 from afl_scraper.scraper.models import (
     DiscoveredRound,
     RawMatchData,
@@ -74,11 +75,14 @@ def raw_match(
     )
 
 
-def manifest(match_ids=(100, 101)) -> SeasonManifest:
+def manifest(match_ids=(100, 101), *, year=2012) -> SeasonManifest:
+    season_id = official_season_id(year)
     return SeasonManifest(
-        year=2012,
-        season_id=2,
-        fixture_url="https://www.afl.com.au/fixture?Competition=1&Season=2",
+        year=year,
+        season_id=season_id,
+        fixture_url=(
+            f"https://www.afl.com.au/fixture?Competition=1&Season={season_id}"
+        ),
         discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
         rounds=[DiscoveredRound(label="1", match_ids=list(match_ids))],
     )
@@ -246,15 +250,21 @@ def test_complete_mapping_gate_reports_every_missing_participant():
     )
 
 
+@pytest.mark.parametrize("year", [2012, 2026])
 def test_scrape_season_mapping_cli_promotes_both_sources_together(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, year
 ):
+    class CurrentDate:
+        @classmethod
+        def now(cls):
+            return datetime(2026, 10, 3)
+
     official = PlayerInfo(
         id="101",
         first_name="Alex",
         last_name="Smith",
         team="Carlton",
-        year=2012,
+        year=year,
     )
     tables = official.model_copy(update={"id": "Alex_Smith"})
     saved = {}
@@ -263,9 +273,12 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
     def browser_context(_headless):
         yield object()
 
+    monkeypatch.setattr(cli_module, "datetime", CurrentDate)
     monkeypatch.setattr(cli_module, "sync_browser_context", browser_context)
     monkeypatch.setattr(
-        scraper_package, "load_season_manifest", lambda _year: manifest()
+        scraper_package,
+        "load_season_manifest",
+        lambda requested_year: manifest(year=requested_year),
     )
     monkeypatch.setattr(
         scraper_package,
@@ -289,11 +302,34 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
     )
 
     result = CliRunner().invoke(
-        cli_module.cli, ["map", "scrape-season", "--year", "2012"]
+        cli_module.cli, ["map", "scrape-season", "--year", str(year)]
     )
 
     assert result.exit_code == 0, result.output
     assert saved == {"afl_official": [official], "afl_tables": [tables]}
+
+
+def test_scrape_season_mapping_cli_rejects_future_year_before_manifest(monkeypatch):
+    class CurrentDate:
+        @classmethod
+        def now(cls):
+            return datetime(2026, 10, 3)
+
+    manifest_calls = []
+    monkeypatch.setattr(cli_module, "datetime", CurrentDate)
+    monkeypatch.setattr(
+        scraper_package,
+        "load_season_manifest",
+        lambda year: manifest_calls.append(year),
+    )
+
+    result = CliRunner().invoke(
+        cli_module.cli, ["map", "scrape-season", "--year", "2027"]
+    )
+
+    assert result.exit_code == 2
+    assert "cannot process a future season" in result.output
+    assert manifest_calls == []
 
 
 def test_mapping_upsert_complete_gate_runs_before_database(monkeypatch, tmp_path):
