@@ -392,9 +392,9 @@ Official scrape requires plausible, unique rosters from all 18 clubs. Snapshot
 writes reject empty, duplicate, or wrong-year records and atomically replace the
 last-known-good file.
 
-For a completed historical season in the reviewed 2012-2026 official fixture
-range, first discover its manifest and then derive identities from the completed
-match pages:
+For a completed season in the reviewed 2012-2026 official fixture range, first
+discover its manifest and then derive identities from the completed match pages.
+This includes the current calendar year once its final match is complete:
 
 ```sh
 uv run afl-scraper scrape season 2012
