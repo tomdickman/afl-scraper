@@ -201,9 +201,17 @@ class RoundButton:
 class RoundNavigation:
     def __init__(self, buttons):
         self.buttons = buttons
+        self.waited_for = None
+
+    @property
+    def first(self):
+        return self
 
     def get_by_role(self, _role):
         return self
+
+    def wait_for(self, *, state):
+        self.waited_for = state
 
     def all(self):
         return self.buttons
@@ -211,13 +219,22 @@ class RoundNavigation:
 
 class RoundPage:
     def __init__(self, buttons):
-        self.buttons = buttons
+        self.navigation = RoundNavigation(buttons)
 
     def wait_for_selector(self, _selector):
         return None
 
     def locator(self, _selector):
-        return RoundNavigation(self.buttons)
+        return self.navigation
+
+
+def test_round_discovery_waits_for_hydrated_buttons():
+    page = RoundPage([RoundButton("OR"), RoundButton("1")])
+
+    buttons = fixture.get_round_buttons(page)
+
+    assert list(buttons) == ["OR", "1"]
+    assert page.navigation.waited_for == "visible"
 
 
 def test_round_discovery_rejects_blank_and_duplicate_labels():
