@@ -510,7 +510,7 @@ def map_scrape(headless, year):
 
 @map.command(
     "scrape-season",
-    help="Derive historical official player IDs from completed season matches",
+    help="Derive official player IDs from every match in a completed season",
 )
 @click.option(
     "--headless/--no-headless",
@@ -536,11 +536,8 @@ def map_scrape_season(headless, year, refresh):
         scrape_player_ids,
     )
 
-    if year >= datetime.now().year:
-        raise click.UsageError(
-            "scrape-season requires a completed historical season; "
-            "use `map scrape` for the current roster"
-        )
+    if year > datetime.now().year:
+        raise click.UsageError("scrape-season cannot process a future season")
 
     manifest = load_season_manifest(year)
 
