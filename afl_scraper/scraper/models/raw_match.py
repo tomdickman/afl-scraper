@@ -53,7 +53,8 @@ class RawPlayerStat(BaseModel):
     clearances: int = Field(ge=0)
     goal_assists: int = Field(ge=0)
     time_on_ground_percent: Decimal = Field(ge=0, le=100)
-    fantasy_points: int = Field(ge=0)
+    # AFL fantasy points are a scoring measure and can be negative.
+    fantasy_points: int
     disposals: int | None = Field(default=None, ge=0)
     # Metres gained is a net field-position measure and can be negative.
     metres_gained: int | None = None

@@ -62,7 +62,7 @@ _REQUIRED_FIELDS = {
 
 _DECIMAL_FIELDS = {"time_on_ground_percent"}
 _TEXT_FIELDS = {"player_name"}
-_SIGNED_INTEGER_FIELDS = {"metres_gained"}
+_SIGNED_INTEGER_FIELDS = {"fantasy_points", "metres_gained"}
 
 
 def _normalize_text(value: str) -> str:

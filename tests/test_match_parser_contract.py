@@ -136,6 +136,16 @@ def test_metres_gained_accepts_historical_negative_net_values():
         _parse_integer("-1", "kicks")
 
 
+def test_fantasy_points_accept_negative_scores():
+    row = _observed_row()
+    values = list(row["values"])
+    values[row["headers"].index("AF")] = "-1"
+
+    stat = _parse_player_stat(row["headers"], values, row["href"])
+
+    assert stat.fantasy_points == -1
+
+
 @pytest.mark.parametrize(("year", "count"), [(2012, 22), (2021, 23), (2026, 23)])
 def test_team_validation_uses_season_roster_rules(year, count):
     row = _observed_row()
