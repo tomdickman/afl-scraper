@@ -38,16 +38,6 @@ def test_current_afl_headers_parse_by_name_not_position():
     assert stat.time_on_ground_percent == 86
 
 
-def test_legacy_cached_injury_status_is_not_treated_as_part_of_player_name():
-    row = _observed_row()
-    values = list(row["values"])
-    values[row["headers"].index("Player")] += " Injured"
-
-    stat = _parse_player_stat(row["headers"], values, row["href"])
-
-    assert stat.player_name == "Marcus Bontempelli"
-
-
 def test_player_identity_comes_from_semantic_name_element_not_whole_cell():
     row = MagicMock()
     player_link = MagicMock()

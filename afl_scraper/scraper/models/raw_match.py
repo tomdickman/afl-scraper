@@ -1,13 +1,8 @@
-import re
 from decimal import Decimal
 from typing import Literal
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
-# Compatibility for schema-v1 caches written before the match parser extracted
-# the dedicated player-name element instead of the whole table cell.
-_LEGACY_PLAYER_STATUS_SUFFIX = re.compile(r"\s+Injured$")
 
 
 class RawMatchDetails(BaseModel):
@@ -78,7 +73,7 @@ class RawPlayerStat(BaseModel):
     @field_validator("player_name")
     @classmethod
     def normalize_player_name(cls, value: str) -> str:
-        normalized = _LEGACY_PLAYER_STATUS_SUFFIX.sub("", " ".join(value.split()))
+        normalized = " ".join(value.split())
         if not normalized:
             raise ValueError("Player name must not be blank")
         return normalized
