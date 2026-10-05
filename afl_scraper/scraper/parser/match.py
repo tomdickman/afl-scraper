@@ -10,7 +10,6 @@ from ..constants import (
 )
 from ..models import RawMatchData, RawMatchDetails, RawPlayerStat
 
-
 _PLAYER_ID_PATTERN = re.compile(r"/players/(?P<player_id>\d+)(?:/|$)")
 _COMPLETED_STATUS = "FULL TIME"
 
@@ -242,11 +241,26 @@ def _parse_player_stat(
     return RawPlayerStat.model_validate(parsed)
 
 
+def _extract_player_identity(row: Locator) -> tuple[str, str | None]:
+    """Extract identity from the semantic player link, excluding sibling metadata."""
+    player_link = row.locator(
+        'a.mc-player-stats-table__player[href*="/players/"]'
+    )
+    if player_link.count() != 1:
+        raise ValueError("Player row must contain exactly one semantic player link")
+
+    player_name = player_link.locator(".mc-player-stats-table__name")
+    if player_name.count() != 1:
+        raise ValueError("Player link must contain exactly one semantic player name")
+    return _normalize_text(player_name.inner_text()), player_link.get_attribute("href")
+
+
 def _extract_team_stats(table: Locator, rules: CompetitionRules) -> list[RawPlayerStat]:
     columns = _extract_header_columns(table)
     if not columns:
         raise ValueError("No column headers found in player stats table")
-    _canonical_fields(columns)
+    fields = _canonical_fields(columns)
+    player_name_index = fields.index("player_name")
 
     rows = table.locator("tbody tr").all()
     stats: list[RawPlayerStat] = []
@@ -254,8 +268,9 @@ def _extract_team_stats(table: Locator, rules: CompetitionRules) -> list[RawPlay
         values = [
             _normalize_text(value) for value in row.locator("th, td").all_inner_texts()
         ]
-        player_link = row.locator('a[href*="/players/"]').first
-        href = player_link.get_attribute("href") if player_link.count() else None
+        player_name, href = _extract_player_identity(row)
+        if len(values) == len(columns):
+            values[player_name_index] = player_name
         stats.append(_parse_player_stat(columns, values, href))
     return _remove_non_participating_extra(stats, rules)
 
