@@ -15,7 +15,6 @@ from afl_scraper.scraper.parser.match import (
     _validate_team_stats,
 )
 
-
 FIXTURE = Path(__file__).parent / "fixtures/afl_match_8224_player_row.json"
 
 
@@ -35,6 +34,16 @@ def test_current_afl_headers_parse_by_name_not_position():
     assert stat.disposals == 25
     assert stat.metres_gained == 360
     assert stat.time_on_ground_percent == 86
+
+
+def test_nested_injury_status_is_not_treated_as_part_of_player_name():
+    row = _observed_row()
+    values = list(row["values"])
+    values[row["headers"].index("Player")] += " Injured"
+
+    stat = _parse_player_stat(row["headers"], values, row["href"])
+
+    assert stat.player_name == "Marcus Bontempelli"
 
 
 def test_reordered_columns_produce_the_same_record():

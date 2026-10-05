@@ -1,8 +1,11 @@
+import re
 from decimal import Decimal
 from typing import Literal
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+_PLAYER_STATUS_SUFFIX = re.compile(r"\s+Injured$")
 
 
 class RawMatchDetails(BaseModel):
@@ -73,7 +76,9 @@ class RawPlayerStat(BaseModel):
     @field_validator("player_name")
     @classmethod
     def normalize_player_name(cls, value: str) -> str:
-        normalized = " ".join(value.split())
+        # AFL nests the in-game injury status inside the player-name table cell,
+        # so Playwright's inner_text() can yield e.g. "Jack Scrimshaw Injured".
+        normalized = _PLAYER_STATUS_SUFFIX.sub("", " ".join(value.split()))
         if not normalized:
             raise ValueError("Player name must not be blank")
         return normalized
