@@ -8,6 +8,7 @@ INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES (
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Eureka Stadium', 'Mars Stadium', 'Ballarat', 'Victoria', 'Australia', -37.538340, 143.848015);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Football Park', 'Football Park', 'Adelaide', 'South Australia', 'Australia', -34.879837, 138.495317);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Gabba', 'The Gabba', 'Brisbane', 'Queensland', 'Australia', -27.48539, 153.03827);
+INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Hands Oval', 'Hands Oval', 'Bunbury', 'Western Australia', 'Australia', -33.34616, 115.64297);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Jiangwan Stadium', 'Jiangwan Stadium', 'Shanghai', 'Shanghai', 'China', 31.306607, 121.515530);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('Kardinia Park', 'GMHBA Stadium', 'Geelong', 'Victoria', 'Australia', -38.158006, 144.354544);
 INSERT INTO venue (id, name, city, state, country, latitude, longitude) VALUES ('M.C.G.', 'Melbourne Cricket Ground', 'Melbourne', 'Victoria', 'Australia', -37.82056, 144.98389);
