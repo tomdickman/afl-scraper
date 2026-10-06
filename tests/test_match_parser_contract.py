@@ -2,19 +2,20 @@
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from afl_scraper.scraper.constants import competition_rules_for_year
 from afl_scraper.scraper.parser.match import (
     _canonical_fields,
+    _extract_player_identity,
     _parse_integer,
     _parse_player_stat,
     _player_id_from_href,
     _remove_non_participating_extra,
     _validate_team_stats,
 )
-
 
 FIXTURE = Path(__file__).parent / "fixtures/afl_match_8224_player_row.json"
 
@@ -35,6 +36,28 @@ def test_current_afl_headers_parse_by_name_not_position():
     assert stat.disposals == 25
     assert stat.metres_gained == 360
     assert stat.time_on_ground_percent == 86
+
+
+def test_player_identity_comes_from_semantic_name_element_not_whole_cell():
+    row = MagicMock()
+    player_link = MagicMock()
+    player_name = MagicMock()
+    row.locator.return_value = player_link
+    player_link.count.return_value = 1
+    player_link.locator.return_value = player_name
+    player_link.get_attribute.return_value = "/players/1336/jack-scrimshaw"
+    player_link.inner_text.return_value = "Jack Scrimshaw Injured"
+    player_name.count.return_value = 1
+    player_name.inner_text.return_value = "Jack Scrimshaw"
+
+    name, href = _extract_player_identity(row)
+
+    assert name == "Jack Scrimshaw"
+    assert href == "/players/1336/jack-scrimshaw"
+    row.locator.assert_called_once_with(
+        'a.mc-player-stats-table__player[href*="/players/"]'
+    )
+    player_link.locator.assert_called_once_with(".mc-player-stats-table__name")
 
 
 def test_reordered_columns_produce_the_same_record():
@@ -111,6 +134,16 @@ def test_metres_gained_accepts_historical_negative_net_values():
     assert stat.metres_gained == -14
     with pytest.raises(ValueError, match="Negative integer value for kicks"):
         _parse_integer("-1", "kicks")
+
+
+def test_fantasy_points_accept_negative_scores():
+    row = _observed_row()
+    values = list(row["values"])
+    values[row["headers"].index("AF")] = "-1"
+
+    stat = _parse_player_stat(row["headers"], values, row["href"])
+
+    assert stat.fantasy_points == -1
 
 
 @pytest.mark.parametrize(("year", "count"), [(2012, 22), (2021, 23), (2026, 23)])
