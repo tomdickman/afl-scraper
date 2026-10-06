@@ -130,6 +130,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `scrape round ROUND` | Processes every match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
 | `transform players` | Transforms stored player records and loads the resulting player models. | Yes |
 | `pipeline players` | Runs the player transform/load pipeline, optionally refreshing raw pages first. | Yes |
+| `pipeline official-season YEAR` | Validates and prepares a complete cached AFL Official season without writing. | Yes |
 | `pipeline prepare-historical-players` | Prepares validated AFL Tables snapshots and canonical players for 2006-2011. | Only with `--load` |
 | `map scrape` | Saves player identity data from each configured source to `data/mapping/`. | No |
 | `map scrape-season` | Derives participating historical official IDs from every match in a completed season. | No |
@@ -224,6 +225,20 @@ uv run afl-scraper scrape round 1 --year 2026 --no-load
 ```
 
 The round pipeline isolates match failures: it reports an error for the affected match and continues processing the remaining fixture.
+
+After a completed season manifest, match caches, and player mappings exist,
+validate and transform the complete AFL Official season without writing:
+
+```sh
+uv run afl-scraper pipeline official-season 2025
+```
+
+This command fails before opening PostgreSQL if the cache is incomplete or
+invalid. It then checks year-scoped player mappings and database references,
+transforms every match using placeholder IDs, and reports the match and
+player-stat totals. It uses the app connection for these read-only checks,
+fails immediately when required database environment variables are missing,
+and never allocates game identities or writes database rows.
 
 ### Cache the 2006-2011 historical source
 
