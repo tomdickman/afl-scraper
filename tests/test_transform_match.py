@@ -67,6 +67,17 @@ class TestResolveVenue:
     def test_case_and_whitespace_insensitive(self):
         assert resolve_venue(" marvel   stadium ", "afl_official") == "Docklands"
 
+    @pytest.mark.parametrize(
+        ("source_name", "venue_id"),
+        [
+            ("Corroboree Group Oval Manuka, Canberra", "Manuka Oval"),
+            ("Hands Oval, Bunbury", "Hands Oval"),
+            ("UTAS Stadium, Launceston", "York Park"),
+        ],
+    )
+    def test_current_official_venue_aliases(self, source_name, venue_id):
+        assert resolve_venue(source_name, "afl_official") == venue_id
+
     def test_unknown_venue_raises(self):
         with pytest.raises(KeyError):
             resolve_venue("Nonexistent Stadium", "afl_official")

@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TABLES = REPO_ROOT / "afl_scraper/storage/tables"
 MIGRATIONS = REPO_ROOT / "afl_scraper/storage/migrations/versions"
@@ -76,3 +75,12 @@ def test_historical_loader_migration_qualifies_identities_and_sparse_stats():
         "fantasy_points",
     ):
         assert f"{column} int not null" not in current_schema
+
+
+def test_hands_oval_venue_migration_follows_current_head_and_updates_seed():
+    migration = (MIGRATIONS / "a4d9c2e71b30_add_hands_oval_venue.py").read_text()
+    venue_seed = _normalized(REPO_ROOT / "afl_scraper/storage/data/init_venues.sql")
+
+    assert 'down_revision: str | Sequence[str] | None = "b6df0c4a1e92"' in migration
+    assert "hands oval" in migration.lower()
+    assert "'hands oval', 'hands oval', 'bunbury', 'western australia'" in venue_seed
