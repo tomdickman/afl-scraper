@@ -115,7 +115,7 @@ def test_prepares_complete_season_with_canonical_players_and_no_writes(
             [("M.C.G.",)],
         ]
     )
-    monkeypatch.setattr(official_season, "admin_connection_pool", _pool(connection))
+    monkeypatch.setattr(official_season, "connection_pool", _pool(connection))
 
     prepared = official_season.prepare_official_season(
         2012, manifest_root=manifest_root, raw_root=raw_root
@@ -144,7 +144,7 @@ def test_incomplete_cache_fails_before_database_is_opened(monkeypatch, tmp_path)
     save_season_manifest(_manifest(), manifest_root)
     save_raw_match_data(_match(), 100, raw_root)
     pool = MagicMock()
-    monkeypatch.setattr(official_season, "admin_connection_pool", pool)
+    monkeypatch.setattr(official_season, "connection_pool", pool)
 
     with pytest.raises(ValueError, match="missing 1 match caches: 101"):
         official_season.prepare_official_season(
@@ -157,7 +157,7 @@ def test_incomplete_cache_fails_before_database_is_opened(monkeypatch, tmp_path)
 def test_missing_player_mapping_fails_before_transform(monkeypatch, tmp_path):
     manifest_root, raw_root = _complete_cache(tmp_path, (100,))
     connection, cursor = _connection([[("101", "Alex_Smith")]])
-    monkeypatch.setattr(official_season, "admin_connection_pool", _pool(connection))
+    monkeypatch.setattr(official_season, "connection_pool", _pool(connection))
     transform = MagicMock()
     monkeypatch.setattr(official_season, "transform_match", transform)
 
@@ -181,7 +181,7 @@ def test_missing_database_references_are_reported_together(monkeypatch, tmp_path
             [],
         ]
     )
-    monkeypatch.setattr(official_season, "admin_connection_pool", _pool(connection))
+    monkeypatch.setattr(official_season, "connection_pool", _pool(connection))
 
     with pytest.raises(ValueError) as error:
         official_season.prepare_official_season(
@@ -196,7 +196,7 @@ def test_missing_database_references_are_reported_together(monkeypatch, tmp_path
 def test_canonical_mapping_cannot_alias_match_participants(monkeypatch, tmp_path):
     manifest_root, raw_root = _complete_cache(tmp_path, (100,))
     connection, cursor = _connection([[("101", "Same_Player"), ("202", "Same_Player")]])
-    monkeypatch.setattr(official_season, "admin_connection_pool", _pool(connection))
+    monkeypatch.setattr(official_season, "connection_pool", _pool(connection))
 
     with pytest.raises(ValueError, match="aliases two participants.*100"):
         official_season.prepare_official_season(

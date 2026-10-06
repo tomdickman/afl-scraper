@@ -8,9 +8,8 @@ from ..models import Game, PlayerGameStats
 from ..scraper import load_raw_match_data, load_season_manifest
 from ..scraper.models import RawMatchData
 from ..scraper.season_identities import collect_match_identities
-from ..storage import admin_connection_pool, load_player_source_id_map
+from ..storage import connection_pool, load_player_source_id_map
 from ..transform.match import parse_match_datetime, transform_match
-
 
 SOURCE = "afl_official"
 
@@ -241,5 +240,5 @@ def prepare_official_season(
         for match_id in manifest.match_ids
     ]
 
-    with admin_connection_pool() as conn:
+    with connection_pool() as conn:
         return _prepare_official_matches(conn, year, matches)

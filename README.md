@@ -236,7 +236,9 @@ uv run afl-scraper pipeline official-season 2025
 This command fails before opening PostgreSQL if the cache is incomplete or
 invalid. It then checks year-scoped player mappings and database references,
 transforms every match using placeholder IDs, and reports the match and
-player-stat totals. It never allocates game identities or writes database rows.
+player-stat totals. It uses the app connection for these read-only checks,
+fails immediately when required database environment variables are missing,
+and never allocates game identities or writes database rows.
 
 ### Cache the 2006-2011 historical source
 
