@@ -30,6 +30,7 @@ from .parser import (
     OfficialMatchDetailsUnavailable,
     OfficialPlayerStatsUnavailable,
     display_player_stats,
+    extract_team_player_identities,
     extract_table_data,
     select_team_stats,
 )
@@ -437,18 +438,31 @@ def scrape_match(
             )
 
         raw_dir = Path("data/raw/afl_official/match") / str(match_id)
+        fallback_identities = list(player_identities or [])
 
         try:
             if expected_year is None:
                 select_team_stats(page, 1)
             else:
                 select_team_stats(page, 1, expected_year)
+                if fixture is not None:
+                    fallback_identities.extend(
+                        extract_team_player_identities(
+                            page, fixture.home_team, expected_year
+                        )
+                    )
             _save_raw_html(raw_dir / "home_player_stats.html", page.content())
 
             if expected_year is None:
                 select_team_stats(page, 2)
             else:
                 select_team_stats(page, 2, expected_year)
+                if fixture is not None:
+                    fallback_identities.extend(
+                        extract_team_player_identities(
+                            page, fixture.away_team, expected_year
+                        )
+                    )
             _save_raw_html(raw_dir / "away_player_stats.html", page.content())
         except OfficialPlayerStatsUnavailable as error:
             return _scrape_match_player_stats_fallback(
@@ -456,7 +470,7 @@ def scrape_match(
                 match_id,
                 expected_year,
                 fixture,
-                player_identities,
+                fallback_identities,
                 error,
             )
         except OfficialMatchDetailsUnavailable as error:
@@ -478,7 +492,7 @@ def scrape_match(
                 match_id,
                 expected_year,
                 fixture,
-                player_identities,
+                fallback_identities,
                 error,
             )
         except OfficialMatchDetailsUnavailable as error:

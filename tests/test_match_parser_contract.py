@@ -10,6 +10,7 @@ import afl_scraper.scraper.parser.match as match_parser
 from afl_scraper.scraper.constants import competition_rules_for_year
 from afl_scraper.scraper.parser.match import (
     OfficialMatchDetailsUnavailable,
+    OfficialPlayerStatsUnavailable,
     _canonical_fields,
     _extract_match_details,
     _extract_match_year,
@@ -179,6 +180,18 @@ def test_fantasy_points_accept_negative_scores():
     stat = _parse_player_stat(row["headers"], values, row["href"])
 
     assert stat.fantasy_points == -1
+
+
+def test_impossible_official_time_on_ground_uses_typed_fallback_signal():
+    row = _observed_row()
+    values = list(row["values"])
+    values[row["headers"].index("ToG%")] = "108"
+
+    with pytest.raises(
+        OfficialPlayerStatsUnavailable,
+        match="impossible time on ground 108%",
+    ):
+        _parse_player_stat(row["headers"], values, row["href"])
 
 
 def test_team_option_dispatch_avoids_detached_node_actionability_wait(monkeypatch):

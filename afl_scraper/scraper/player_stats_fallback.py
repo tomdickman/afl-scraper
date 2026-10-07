@@ -81,19 +81,19 @@ def _official_id(
     team: str,
     identities: list[PlayerInfo],
 ) -> str:
-    candidates = [
-        player
+    candidates = {
+        player.id: player
         for player in identities
         if normalize_team(player.team) == normalize_team(team)
         and _names_match(player.display_name(), player_name)
-    ]
+    }
     if len(candidates) != 1:
-        candidate_ids = ", ".join(player.id for player in candidates) or "none"
+        candidate_ids = ", ".join(sorted(candidates)) or "none"
         raise ValueError(
             f"AFL Tables player {player_name!r} for {team} resolved to "
             f"{len(candidates)} official identities; candidates={candidate_ids}"
         )
-    return candidates[0].id
+    return next(iter(candidates))
 
 
 def _fantasy_points(stats: dict[str, int]) -> int:

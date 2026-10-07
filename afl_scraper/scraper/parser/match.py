@@ -8,6 +8,7 @@ from playwright.sync_api import (
     expect,
 )
 
+from ...models.player import PlayerInfo
 from ..constants import (
     FIXTURE_CLASSNAMES,
     CompetitionRules,
@@ -289,6 +290,12 @@ def _parse_player_stat(
 
     parsed["afl_official_id"] = _player_id_from_href(player_href)
     parsed["extra_stats"] = extra_stats
+    time_on_ground = parsed["time_on_ground_percent"]
+    if time_on_ground < 0 or time_on_ground > 100:
+        raise OfficialPlayerStatsUnavailable(
+            f"AFL Official player {parsed['player_name']!r} has impossible "
+            f"time on ground {time_on_ground}%"
+        )
     return RawPlayerStat.model_validate(parsed)
 
 
@@ -302,6 +309,38 @@ def _extract_player_identity(row: Locator) -> tuple[str, str | None]:
     if player_name.count() != 1:
         raise ValueError("Player link must contain exactly one semantic player name")
     return _normalize_text(player_name.inner_text()), player_link.get_attribute("href")
+
+
+def extract_team_player_identities(
+    page: Page,
+    team: str,
+    year: int,
+) -> list[PlayerInfo]:
+    """Read source IDs independently of the validity of published statistics."""
+    table = page.locator(".stats-table__table")
+    if table.count() != 1:
+        raise OfficialPlayerStatsUnavailable(
+            f"Expected one player stats table, found {table.count()}"
+        )
+    players = []
+    for row in table.locator("tbody tr").all():
+        name, href = _extract_player_identity(row)
+        name_parts = name.split(maxsplit=1)
+        if len(name_parts) != 2:
+            raise ValueError(f"AFL Official player has incomplete name {name!r}")
+        players.append(
+            PlayerInfo(
+                id=_player_id_from_href(href),
+                first_name=name_parts[0],
+                last_name=name_parts[1],
+                team=team,
+                year=year,
+            )
+        )
+    ids = [player.id for player in players]
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"AFL Official {team} roster contains duplicate player IDs")
+    return players
 
 
 def _extract_team_stats(table: Locator, rules: CompetitionRules) -> list[RawPlayerStat]:

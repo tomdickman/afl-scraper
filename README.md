@@ -259,9 +259,12 @@ selected without waiting on an option node that can detach from the DOM, then
 the resulting roster is still validated. When the legacy player-stat view is
 genuinely unavailable during a season scrape, the scraper uses the uniquely
 matched AFL Tables record and maps every participant back to an official
-identity already observed that season. AFL Fantasy points are calculated from
-the alternate source's published components; unavailable metres-gained values
-remain null.
+identity anchored by profile links in the current or an earlier match. AFL
+Fantasy points are calculated from the alternate source's published components;
+unavailable metres-gained values remain null. Impossible official values, such
+as an individual time-on-ground percentage outside 0-100, reject the complete
+official player-stat dataset and select the complete alternate dataset rather
+than clamping or mixing fields.
 When only the official match header is absent, match details also come from the
 matched AFL Tables record. Source URLs and compared fields are stored in the
 versioned raw match cache, and the alternate HTML is retained under
