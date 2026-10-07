@@ -79,7 +79,15 @@ def _normalize_header(value: str) -> str:
 
 def _extract_match_year(page: Page) -> int:
     """Read the season year from the match-centre date header."""
-    value = page.locator(FIXTURE_CLASSNAMES["MATCH_DATE_TIME"]).inner_text()
+    date_time = page.locator(FIXTURE_CLASSNAMES["MATCH_DATE_TIME"])
+    count = date_time.count()
+    if count == 0:
+        raise OfficialMatchDetailsUnavailable(
+            "AFL Official match date header is unavailable"
+        )
+    if count != 1:
+        raise ValueError(f"Expected one AFL Official match date header, found {count}")
+    value = date_time.inner_text()
     years = re.findall(r"\b(?:19|20)\d{2}\b", value)
     if len(years) != 1:
         raise ValueError(f"Could not parse one match year from {value!r}")

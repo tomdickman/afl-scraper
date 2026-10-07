@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+import afl_scraper.scraper.metadata_fallback as metadata_fallback
 from afl_scraper.scraper.match_metadata import parse_afl_tables_match_catalog
 from afl_scraper.scraper.metadata_fallback import (
     cross_check_official_match_details,
@@ -19,6 +20,18 @@ from afl_scraper.transform.match import parse_match_datetime
 
 
 FIXTURE = Path(__file__).parent / "fixtures/afl_tables_2013_match_292_season.html"
+
+
+def test_jsonc_config_is_cached_per_path(tmp_path):
+    path = tmp_path / "config.jsonc"
+    path.write_text('{"venue": "first"}', encoding="utf-8")
+    metadata_fallback._load_jsonc.cache_clear()
+    try:
+        assert metadata_fallback._load_jsonc(path) == {"venue": "first"}
+        path.write_text('{"venue": "second"}', encoding="utf-8")
+        assert metadata_fallback._load_jsonc(path) == {"venue": "first"}
+    finally:
+        metadata_fallback._load_jsonc.cache_clear()
 
 
 def _catalog():

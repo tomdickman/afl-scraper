@@ -10,13 +10,14 @@ from afl_scraper.scraper.constants import competition_rules_for_year
 from afl_scraper.scraper.parser.match import (
     OfficialMatchDetailsUnavailable,
     _canonical_fields,
+    _extract_match_details,
+    _extract_match_year,
     _extract_player_identity,
     _parse_integer,
     _parse_player_stat,
     _player_id_from_href,
     _remove_non_participating_extra,
     _validate_team_stats,
-    _extract_match_details,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures/afl_match_8224_player_row.json"
@@ -112,6 +113,14 @@ def test_completely_absent_official_header_has_typed_fallback_signal():
 
     with pytest.raises(OfficialMatchDetailsUnavailable):
         _extract_match_details(page)
+
+
+def test_missing_date_header_has_typed_fallback_signal():
+    page = MagicMock()
+    page.locator.return_value.count.return_value = 0
+
+    with pytest.raises(OfficialMatchDetailsUnavailable):
+        _extract_match_year(page)
 
 
 def test_partially_rendered_official_header_refuses_fallback():

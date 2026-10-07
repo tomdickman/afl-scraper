@@ -3,6 +3,7 @@
 import json
 import re
 from datetime import datetime, timezone
+from functools import cache
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -42,6 +43,7 @@ _OFFICIAL_FINALS_WEEKS = {
 }
 
 
+@cache
 def _load_jsonc(path: Path) -> dict:
     return json.loads(re.sub(r"//.*", "", path.read_text(encoding="utf-8")))
 

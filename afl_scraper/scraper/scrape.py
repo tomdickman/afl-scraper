@@ -74,7 +74,7 @@ def _normalise_match_id(match_id: int | str) -> int:
     return normalised
 
 
-def _parse_fixture_datetime(value: str):
+def _parse_fixture_datetime(value: str) -> datetime | None:
     match = _FIXTURE_DATETIME_PATTERN.fullmatch(" ".join(value.split()))
     if match is None:
         return None
@@ -82,11 +82,25 @@ def _parse_fixture_datetime(value: str):
     offset = _FIXTURE_TIMEZONES.get(timezone_name)
     if offset is None:
         return None
-    parsed = datetime.strptime(
-        f"{match.group('weekday')} {match.group('month')} "
-        f"{match.group('day')} {match.group('year')} {match.group('clock')}",
-        "%A %B %d %Y %I:%M %p",
+    date_time = (
+        f"{match.group('day')} {match.group('month')} "
+        f"{match.group('year')} {match.group('clock')}"
     )
+    parsed = None
+    for month_format in ("%B", "%b"):
+        try:
+            parsed = datetime.strptime(date_time, f"%d {month_format} %Y %I:%M %p")
+        except ValueError:
+            continue
+        break
+    if parsed is None:
+        return None
+    weekday = match.group("weekday").casefold()
+    if weekday not in {
+        parsed.strftime("%A").casefold(),
+        parsed.strftime("%a").casefold(),
+    }:
+        return None
     return parsed.replace(tzinfo=offset)
 
 
@@ -343,17 +357,23 @@ def scrape_match(
 
         raw_dir = Path("data/raw/afl_official/match") / str(match_id)
 
-        if expected_year is None:
-            select_team_stats(page, 1)
-        else:
-            select_team_stats(page, 1, expected_year)
-        _save_raw_html(raw_dir / "home_player_stats.html", page.content())
+        try:
+            if expected_year is None:
+                select_team_stats(page, 1)
+            else:
+                select_team_stats(page, 1, expected_year)
+            _save_raw_html(raw_dir / "home_player_stats.html", page.content())
 
-        if expected_year is None:
-            select_team_stats(page, 2)
-        else:
-            select_team_stats(page, 2, expected_year)
-        _save_raw_html(raw_dir / "away_player_stats.html", page.content())
+            if expected_year is None:
+                select_team_stats(page, 2)
+            else:
+                select_team_stats(page, 2, expected_year)
+            _save_raw_html(raw_dir / "away_player_stats.html", page.content())
+        except OfficialMatchDetailsUnavailable as error:
+            raise ValueError(
+                f"AFL match {match_id} has no official header; provide its "
+                "season year and a refreshed season manifest"
+            ) from error
 
         provenance = None
         try:
