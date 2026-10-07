@@ -371,35 +371,46 @@ def _select_team(
 ) -> None:
     previous_hrefs = _player_hrefs(table)
     selector = page.locator("button#teams-dropdown-button")
-    selector.click()
-    options = page.locator('.select__options-wrapper [role="option"]')
-    options.first.wait_for(state="visible")
-    if options.count() != 3 or _normalize_text(options.first.inner_text()) != "Both":
-        raise ValueError("Expected AFL team selector options: Both, home, away")
+    try:
+        selector.click()
+        options = page.locator('.select__options-wrapper [role="option"]')
+        options.first.wait_for(state="visible")
+        if (
+            options.count() != 3
+            or _normalize_text(options.first.inner_text()) != "Both"
+        ):
+            raise ValueError("Expected AFL team selector options: Both, home, away")
 
-    option = options.nth(option_index)
-    label = _normalize_text(option.inner_text())
-    option.click()
-    expect(selector).to_contain_text(label)
-    page.wait_for_function(
-        """
-        ({ previousHrefs, minimumPlayers, maximumPlayers }) => {
-          const hrefs = Array.from(document.querySelectorAll(
-            '.stats-table__table tbody tr'
-          )).map(row =>
-            row.querySelector('a[href*="/players/"]')?.getAttribute('href')
-          ).filter(Boolean);
-          return hrefs.length >= minimumPlayers &&
-            hrefs.length <= maximumPlayers &&
-            JSON.stringify(hrefs) !== JSON.stringify(previousHrefs);
-        }
-        """,
-        arg={
-            "previousHrefs": previous_hrefs,
-            "minimumPlayers": rules.participating_players_per_team,
-            "maximumPlayers": rules.maximum_published_players_per_team,
-        },
-    )
+        option = options.nth(option_index)
+        label = _normalize_text(option.inner_text())
+        # Downshift replaces its option nodes while the menu is open. Dispatching
+        # through the locator avoids waiting for a node that may detach, while
+        # the checks below still prove the requested roster was selected.
+        option.dispatch_event("click")
+        expect(selector).to_contain_text(label)
+        page.wait_for_function(
+            """
+            ({ previousHrefs, minimumPlayers, maximumPlayers }) => {
+              const hrefs = Array.from(document.querySelectorAll(
+                '.stats-table__table tbody tr'
+              )).map(row =>
+                row.querySelector('a[href*="/players/"]')?.getAttribute('href')
+              ).filter(Boolean);
+              return hrefs.length >= minimumPlayers &&
+                hrefs.length <= maximumPlayers &&
+                JSON.stringify(hrefs) !== JSON.stringify(previousHrefs);
+            }
+            """,
+            arg={
+                "previousHrefs": previous_hrefs,
+                "minimumPlayers": rules.participating_players_per_team,
+                "maximumPlayers": rules.maximum_published_players_per_team,
+            },
+        )
+    except PlaywrightTimeoutError as error:
+        raise OfficialPlayerStatsUnavailable(
+            "AFL Official team player statistics did not become available"
+        ) from error
     current_hrefs = _player_hrefs(table)
     if not (
         rules.participating_players_per_team
@@ -419,7 +430,9 @@ def select_team_stats(
     """Select one team and wait until its complete roster replaces the table."""
     table = page.locator(".stats-table__table")
     if table.count() != 1:
-        raise ValueError(f"Expected one player stats table, found {table.count()}")
+        raise OfficialPlayerStatsUnavailable(
+            f"Expected one player stats table, found {table.count()}"
+        )
     rules = competition_rules_for_year(
         expected_year if expected_year is not None else _extract_match_year(page)
     )

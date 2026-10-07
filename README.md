@@ -254,11 +254,14 @@ missing match header can use the enriched manifest and cross-source metadata:
 uv run afl-scraper scrape match 292 --year 2013
 ```
 
-Player tables normally come from AFL Official. When its legacy player-stat view
-is unavailable during a season scrape, the scraper uses the uniquely matched AFL
-Tables record and maps every participant back to an official identity already
-observed that season. AFL Fantasy points are calculated from the alternate
-source's published components; unavailable metres-gained values remain null.
+Player tables normally come from AFL Official. Its rerendering team dropdown is
+selected without waiting on an option node that can detach from the DOM, then
+the resulting roster is still validated. When the legacy player-stat view is
+genuinely unavailable during a season scrape, the scraper uses the uniquely
+matched AFL Tables record and maps every participant back to an official
+identity already observed that season. AFL Fantasy points are calculated from
+the alternate source's published components; unavailable metres-gained values
+remain null.
 When only the official match header is absent, match details also come from the
 matched AFL Tables record. Source URLs and compared fields are stored in the
 versioned raw match cache, and the alternate HTML is retained under
