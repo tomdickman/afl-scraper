@@ -1,7 +1,12 @@
 import re
 from decimal import Decimal, InvalidOperation
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import (
+    Locator,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+    expect,
+)
 
 from ..constants import (
     FIXTURE_CLASSNAMES,
@@ -67,6 +72,10 @@ _SIGNED_INTEGER_FIELDS = {"fantasy_points", "metres_gained"}
 
 class OfficialMatchDetailsUnavailable(ValueError):
     """The legacy match page has no rendered official match header."""
+
+
+class OfficialPlayerStatsUnavailable(ValueError):
+    """The legacy match page has no usable official player-stat view."""
 
 
 def _normalize_text(value: str) -> str:
@@ -188,8 +197,17 @@ def _parse_score_split(value: str) -> tuple[int, int]:
 
 def display_player_stats(page: Page) -> Page:
     player_stats_btn = page.get_by_role("tab", name="Player Stats")
-    player_stats_btn.click()
-    page.locator(".stats-table__table").wait_for(state="visible")
+    if player_stats_btn.count() != 1:
+        raise OfficialPlayerStatsUnavailable(
+            "AFL Official Player Stats tab is unavailable"
+        )
+    try:
+        player_stats_btn.click()
+        page.locator(".stats-table__table").wait_for(state="visible")
+    except PlaywrightTimeoutError as error:
+        raise OfficialPlayerStatsUnavailable(
+            "AFL Official Player Stats view is unavailable"
+        ) from error
     return page
 
 
@@ -276,9 +294,7 @@ def _parse_player_stat(
 
 def _extract_player_identity(row: Locator) -> tuple[str, str | None]:
     """Extract identity from the semantic player link, excluding sibling metadata."""
-    player_link = row.locator(
-        'a.mc-player-stats-table__player[href*="/players/"]'
-    )
+    player_link = row.locator('a.mc-player-stats-table__player[href*="/players/"]')
     if player_link.count() != 1:
         raise ValueError("Player row must contain exactly one semantic player link")
 

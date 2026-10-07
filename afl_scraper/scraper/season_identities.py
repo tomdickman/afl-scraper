@@ -142,6 +142,7 @@ def scrape_season_player_ids(
                 match_id,
                 expected_year=manifest.year,
                 fixture=manifest.fixture_for(match_id),
+                player_identities=list(identities.values()),
             )
         else:
             try:
@@ -153,6 +154,7 @@ def scrape_season_player_ids(
                     match_id,
                     expected_year=manifest.year,
                     fixture=manifest.fixture_for(match_id),
+                    player_identities=list(identities.values()),
                 )
 
         collect_match_identities(

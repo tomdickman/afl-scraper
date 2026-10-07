@@ -1,5 +1,6 @@
 from .match import (
     OfficialMatchDetailsUnavailable,
+    OfficialPlayerStatsUnavailable,
     display_player_stats,
     extract_table_data,
     select_team_stats,
@@ -7,6 +8,7 @@ from .match import (
 
 __all__ = [
     "OfficialMatchDetailsUnavailable",
+    "OfficialPlayerStatsUnavailable",
     "display_player_stats",
     "extract_table_data",
     "select_team_stats",

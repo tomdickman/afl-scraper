@@ -254,11 +254,17 @@ missing match header can use the enriched manifest and cross-source metadata:
 uv run afl-scraper scrape match 292 --year 2013
 ```
 
-The player tables still come from AFL Official. When the complete official match
-header is absent, match details come from a uniquely matched AFL Tables record;
-the source URLs and compared fields are stored in the versioned raw match cache.
-A partial header, ambiguous identity, or source conflict fails without promoting
-a cache. Complete official headers are retained but cross-checked as well.
+Player tables normally come from AFL Official. When its legacy player-stat view
+is unavailable during a season scrape, the scraper uses the uniquely matched AFL
+Tables record and maps every participant back to an official identity already
+observed that season. AFL Fantasy points are calculated from the alternate
+source's published components; unavailable metres-gained values remain null.
+When only the official match header is absent, match details also come from the
+matched AFL Tables record. Source URLs and compared fields are stored in the
+versioned raw match cache, and the alternate HTML is retained under
+`data/raw/afl_tables/match`. A partial source, unknown or ambiguous player,
+ambiguous match identity, or source conflict fails without promoting a cache.
+Complete official data is retained and cross-checked.
 
 Before scraping a season, validate all cross-source fixture identities without
 opening PostgreSQL:
