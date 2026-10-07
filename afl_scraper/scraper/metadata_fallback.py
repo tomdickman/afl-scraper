@@ -113,11 +113,11 @@ def _candidate_matches(
     return True
 
 
-def resolve_fallback_match_details(
+def resolve_fallback_match_record(
     fixture: OfficialFixtureMetadata | None,
     catalog: MatchMetadataCatalog,
-) -> tuple[RawMatchDetails, MatchDataProvenance]:
-    """Resolve one unique external record from complete official fixture evidence."""
+) -> MatchMetadataRecord:
+    """Resolve one external record only after every fixture field agrees."""
     if fixture is None:
         raise ValueError(
             "Match metadata fallback requires a schema-version-2 official season "
@@ -143,7 +143,14 @@ def resolve_fallback_match_details(
             f"Official match {fixture.match_id} resolved to {len(candidates)} "
             f"AFL Tables metadata candidates; candidates={sample}"
         )
-    record = candidates[0]
+    return candidates[0]
+
+
+def match_details_from_record(
+    fixture: OfficialFixtureMetadata,
+    record: MatchMetadataRecord,
+) -> RawMatchDetails:
+    """Synthesize the raw match-detail contract from a resolved record."""
     local_datetime = _external_datetime(record)
     offset = local_datetime.utcoffset()
     if offset is None:
@@ -168,6 +175,17 @@ def resolve_fallback_match_details(
         away_team_behinds=record.away_behinds,
         away_team_total=record.away_total,
     )
+    return details
+
+
+def resolve_fallback_match_details(
+    fixture: OfficialFixtureMetadata | None,
+    catalog: MatchMetadataCatalog,
+) -> tuple[RawMatchDetails, MatchDataProvenance]:
+    """Resolve one unique external record from complete official fixture evidence."""
+    record = resolve_fallback_match_record(fixture, catalog)
+    assert fixture is not None
+    details = match_details_from_record(fixture, record)
     provenance = MatchDataProvenance(
         player_stats_url=fixture.source_url,
         match_details_source="afl_tables",

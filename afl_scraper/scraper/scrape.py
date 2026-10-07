@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from playwright.sync_api import BrowserContext, Locator
 
+from ..models.player import PlayerInfo
 from .constants import FIXTURE_CLASSNAMES, PATHS, official_season_id
 from .fixture import (
     get_fixture_page,
@@ -27,7 +28,9 @@ from .models import (
 )
 from .parser import (
     OfficialMatchDetailsUnavailable,
+    OfficialPlayerStatsUnavailable,
     display_player_stats,
+    extract_team_player_identities,
     extract_table_data,
     select_team_stats,
 )
@@ -341,34 +344,135 @@ def load_raw_match_data(
     return cached_match.data
 
 
+def _scrape_match_player_stats_fallback(
+    browser: BrowserContext,
+    match_id: int,
+    expected_year: int | None,
+    fixture: OfficialFixtureMetadata | None,
+    player_identities: list[PlayerInfo] | None,
+    error: OfficialPlayerStatsUnavailable,
+) -> RawMatchData:
+    if expected_year is None:
+        raise ValueError(
+            f"AFL match {match_id} has no official player statistics; "
+            "provide its season year for the AFL Tables fallback"
+        ) from error
+    if not player_identities:
+        raise ValueError(
+            f"AFL match {match_id} has no official player statistics and "
+            "no prior official season identities are available"
+        ) from error
+
+    from .constants import competition_rules_for_year
+    from .match_metadata import get_match_metadata_catalog
+    from .metadata_fallback import (
+        match_details_from_record,
+        resolve_fallback_match_record,
+    )
+    from .player_stats_fallback import (
+        fetch_afl_tables_player_stats,
+        parse_afl_tables_player_stats,
+        save_afl_tables_match_html,
+    )
+
+    catalog = get_match_metadata_catalog(browser, expected_year)
+    record = resolve_fallback_match_record(fixture, catalog)
+    assert fixture is not None
+    details = match_details_from_record(fixture, record)
+    fallback_html = fetch_afl_tables_player_stats(browser, record)
+    raw_data = parse_afl_tables_player_stats(
+        fallback_html,
+        record,
+        details,
+        list(player_identities),
+        expected_players=competition_rules_for_year(
+            expected_year
+        ).participating_players_per_team,
+    )
+    save_afl_tables_match_html(fallback_html, record)
+    provenance = MatchDataProvenance(
+        player_stats_source="afl_tables",
+        player_stats_url=record.source_url,
+        match_details_source="afl_tables",
+        match_details_url=record.source_url,
+        official_fixture_url=fixture.source_url,
+        cross_checked_fields=(
+            "year",
+            "round",
+            "home_team",
+            "away_team",
+            "scheduled_at",
+            "venue",
+            "home_total",
+            "away_total",
+        ),
+        fallback_reason=str(error),
+    )
+    save_raw_match_data(raw_data, match_id, provenance=provenance)
+    return raw_data
+
+
 def scrape_match(
     browser: BrowserContext,
     match_id: int | str,
     *,
     expected_year: int | None = None,
     fixture: OfficialFixtureMetadata | None = None,
+    player_identities: list[PlayerInfo] | None = None,
 ):
     match_id = _normalise_match_id(match_id)
     page = browser.new_page()
     url = f"{PATHS['MATCH'].rstrip('/')}/{match_id}"
     try:
         page.goto(url)
-        display_player_stats(page)
+        try:
+            display_player_stats(page)
+        except OfficialPlayerStatsUnavailable as error:
+            return _scrape_match_player_stats_fallback(
+                browser,
+                match_id,
+                expected_year,
+                fixture,
+                player_identities,
+                error,
+            )
 
         raw_dir = Path("data/raw/afl_official/match") / str(match_id)
+        fallback_identities = list(player_identities or [])
 
         try:
             if expected_year is None:
                 select_team_stats(page, 1)
             else:
                 select_team_stats(page, 1, expected_year)
+                if fixture is not None:
+                    fallback_identities.extend(
+                        extract_team_player_identities(
+                            page, fixture.home_team, expected_year
+                        )
+                    )
             _save_raw_html(raw_dir / "home_player_stats.html", page.content())
 
             if expected_year is None:
                 select_team_stats(page, 2)
             else:
                 select_team_stats(page, 2, expected_year)
+                if fixture is not None:
+                    fallback_identities.extend(
+                        extract_team_player_identities(
+                            page, fixture.away_team, expected_year
+                        )
+                    )
             _save_raw_html(raw_dir / "away_player_stats.html", page.content())
+        except OfficialPlayerStatsUnavailable as error:
+            return _scrape_match_player_stats_fallback(
+                browser,
+                match_id,
+                expected_year,
+                fixture,
+                fallback_identities,
+                error,
+            )
         except OfficialMatchDetailsUnavailable as error:
             raise ValueError(
                 f"AFL match {match_id} has no official header; provide its "
@@ -381,6 +485,15 @@ def scrape_match(
                 extract_table_data(page)
                 if expected_year is None
                 else extract_table_data(page, expected_year=expected_year)
+            )
+        except OfficialPlayerStatsUnavailable as error:
+            return _scrape_match_player_stats_fallback(
+                browser,
+                match_id,
+                expected_year,
+                fixture,
+                fallback_identities,
+                error,
             )
         except OfficialMatchDetailsUnavailable as error:
             if expected_year is None:

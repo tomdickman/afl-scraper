@@ -71,7 +71,7 @@ class MatchDataProvenance(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    player_stats_source: Literal["afl_official"] = "afl_official"
+    player_stats_source: Literal["afl_official", "afl_tables"] = "afl_official"
     player_stats_url: str = Field(min_length=1)
     match_details_source: Literal["afl_official", "afl_tables"]
     match_details_url: str = Field(min_length=1)

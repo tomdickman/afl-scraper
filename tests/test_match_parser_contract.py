@@ -6,9 +6,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+import afl_scraper.scraper.parser.match as match_parser
 from afl_scraper.scraper.constants import competition_rules_for_year
 from afl_scraper.scraper.parser.match import (
     OfficialMatchDetailsUnavailable,
+    OfficialPlayerStatsUnavailable,
     _canonical_fields,
     _extract_match_details,
     _extract_match_year,
@@ -17,6 +19,7 @@ from afl_scraper.scraper.parser.match import (
     _parse_player_stat,
     _player_id_from_href,
     _remove_non_participating_extra,
+    _select_team,
     _validate_team_stats,
 )
 
@@ -177,6 +180,48 @@ def test_fantasy_points_accept_negative_scores():
     stat = _parse_player_stat(row["headers"], values, row["href"])
 
     assert stat.fantasy_points == -1
+
+
+def test_impossible_official_time_on_ground_uses_typed_fallback_signal():
+    row = _observed_row()
+    values = list(row["values"])
+    values[row["headers"].index("ToG%")] = "108"
+
+    with pytest.raises(
+        OfficialPlayerStatsUnavailable,
+        match="impossible time on ground 108%",
+    ):
+        _parse_player_stat(row["headers"], values, row["href"])
+
+
+def test_team_option_dispatch_avoids_detached_node_actionability_wait(monkeypatch):
+    page = MagicMock()
+    table = MagicMock()
+    rows = MagicMock()
+    previous = [f"/players/{index}" for index in range(100, 122)]
+    current = [f"/players/{index}" for index in range(200, 222)]
+    rows.evaluate_all.side_effect = [previous, current]
+    table.locator.return_value = rows
+
+    selector = MagicMock()
+    options = MagicMock()
+    first = MagicMock()
+    first.inner_text.return_value = "Both"
+    options.first = first
+    options.count.return_value = 3
+    away = MagicMock()
+    away.inner_text.return_value = "Collingwood"
+    options.nth.return_value = away
+    page.locator.side_effect = [selector, options]
+    expectation = MagicMock()
+    monkeypatch.setattr(match_parser, "expect", lambda _locator: expectation)
+
+    _select_team(page, table, 2, competition_rules_for_year(2013))
+
+    away.dispatch_event.assert_called_once_with("click")
+    away.click.assert_not_called()
+    expectation.to_contain_text.assert_called_once_with("Collingwood")
+    page.wait_for_function.assert_called_once()
 
 
 @pytest.mark.parametrize(("year", "count"), [(2012, 22), (2021, 23), (2026, 23)])

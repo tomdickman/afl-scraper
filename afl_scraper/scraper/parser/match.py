@@ -1,8 +1,14 @@
 import re
 from decimal import Decimal, InvalidOperation
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import (
+    Locator,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+    expect,
+)
 
+from ...models.player import PlayerInfo
 from ..constants import (
     FIXTURE_CLASSNAMES,
     CompetitionRules,
@@ -67,6 +73,10 @@ _SIGNED_INTEGER_FIELDS = {"fantasy_points", "metres_gained"}
 
 class OfficialMatchDetailsUnavailable(ValueError):
     """The legacy match page has no rendered official match header."""
+
+
+class OfficialPlayerStatsUnavailable(ValueError):
+    """The legacy match page has no usable official player-stat view."""
 
 
 def _normalize_text(value: str) -> str:
@@ -188,8 +198,17 @@ def _parse_score_split(value: str) -> tuple[int, int]:
 
 def display_player_stats(page: Page) -> Page:
     player_stats_btn = page.get_by_role("tab", name="Player Stats")
-    player_stats_btn.click()
-    page.locator(".stats-table__table").wait_for(state="visible")
+    if player_stats_btn.count() != 1:
+        raise OfficialPlayerStatsUnavailable(
+            "AFL Official Player Stats tab is unavailable"
+        )
+    try:
+        player_stats_btn.click()
+        page.locator(".stats-table__table").wait_for(state="visible")
+    except PlaywrightTimeoutError as error:
+        raise OfficialPlayerStatsUnavailable(
+            "AFL Official Player Stats view is unavailable"
+        ) from error
     return page
 
 
@@ -271,14 +290,18 @@ def _parse_player_stat(
 
     parsed["afl_official_id"] = _player_id_from_href(player_href)
     parsed["extra_stats"] = extra_stats
+    time_on_ground = parsed["time_on_ground_percent"]
+    if time_on_ground < 0 or time_on_ground > 100:
+        raise OfficialPlayerStatsUnavailable(
+            f"AFL Official player {parsed['player_name']!r} has impossible "
+            f"time on ground {time_on_ground}%"
+        )
     return RawPlayerStat.model_validate(parsed)
 
 
 def _extract_player_identity(row: Locator) -> tuple[str, str | None]:
     """Extract identity from the semantic player link, excluding sibling metadata."""
-    player_link = row.locator(
-        'a.mc-player-stats-table__player[href*="/players/"]'
-    )
+    player_link = row.locator('a.mc-player-stats-table__player[href*="/players/"]')
     if player_link.count() != 1:
         raise ValueError("Player row must contain exactly one semantic player link")
 
@@ -286,6 +309,38 @@ def _extract_player_identity(row: Locator) -> tuple[str, str | None]:
     if player_name.count() != 1:
         raise ValueError("Player link must contain exactly one semantic player name")
     return _normalize_text(player_name.inner_text()), player_link.get_attribute("href")
+
+
+def extract_team_player_identities(
+    page: Page,
+    team: str,
+    year: int,
+) -> list[PlayerInfo]:
+    """Read source IDs independently of the validity of published statistics."""
+    table = page.locator(".stats-table__table")
+    if table.count() != 1:
+        raise OfficialPlayerStatsUnavailable(
+            f"Expected one player stats table, found {table.count()}"
+        )
+    players = []
+    for row in table.locator("tbody tr").all():
+        name, href = _extract_player_identity(row)
+        name_parts = name.split(maxsplit=1)
+        if len(name_parts) != 2:
+            raise ValueError(f"AFL Official player has incomplete name {name!r}")
+        players.append(
+            PlayerInfo(
+                id=_player_id_from_href(href),
+                first_name=name_parts[0],
+                last_name=name_parts[1],
+                team=team,
+                year=year,
+            )
+        )
+    ids = [player.id for player in players]
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"AFL Official {team} roster contains duplicate player IDs")
+    return players
 
 
 def _extract_team_stats(table: Locator, rules: CompetitionRules) -> list[RawPlayerStat]:
@@ -355,35 +410,46 @@ def _select_team(
 ) -> None:
     previous_hrefs = _player_hrefs(table)
     selector = page.locator("button#teams-dropdown-button")
-    selector.click()
-    options = page.locator('.select__options-wrapper [role="option"]')
-    options.first.wait_for(state="visible")
-    if options.count() != 3 or _normalize_text(options.first.inner_text()) != "Both":
-        raise ValueError("Expected AFL team selector options: Both, home, away")
+    try:
+        selector.click()
+        options = page.locator('.select__options-wrapper [role="option"]')
+        options.first.wait_for(state="visible")
+        if (
+            options.count() != 3
+            or _normalize_text(options.first.inner_text()) != "Both"
+        ):
+            raise ValueError("Expected AFL team selector options: Both, home, away")
 
-    option = options.nth(option_index)
-    label = _normalize_text(option.inner_text())
-    option.click()
-    expect(selector).to_contain_text(label)
-    page.wait_for_function(
-        """
-        ({ previousHrefs, minimumPlayers, maximumPlayers }) => {
-          const hrefs = Array.from(document.querySelectorAll(
-            '.stats-table__table tbody tr'
-          )).map(row =>
-            row.querySelector('a[href*="/players/"]')?.getAttribute('href')
-          ).filter(Boolean);
-          return hrefs.length >= minimumPlayers &&
-            hrefs.length <= maximumPlayers &&
-            JSON.stringify(hrefs) !== JSON.stringify(previousHrefs);
-        }
-        """,
-        arg={
-            "previousHrefs": previous_hrefs,
-            "minimumPlayers": rules.participating_players_per_team,
-            "maximumPlayers": rules.maximum_published_players_per_team,
-        },
-    )
+        option = options.nth(option_index)
+        label = _normalize_text(option.inner_text())
+        # Downshift replaces its option nodes while the menu is open. Dispatching
+        # through the locator avoids waiting for a node that may detach, while
+        # the checks below still prove the requested roster was selected.
+        option.dispatch_event("click")
+        expect(selector).to_contain_text(label)
+        page.wait_for_function(
+            """
+            ({ previousHrefs, minimumPlayers, maximumPlayers }) => {
+              const hrefs = Array.from(document.querySelectorAll(
+                '.stats-table__table tbody tr'
+              )).map(row =>
+                row.querySelector('a[href*="/players/"]')?.getAttribute('href')
+              ).filter(Boolean);
+              return hrefs.length >= minimumPlayers &&
+                hrefs.length <= maximumPlayers &&
+                JSON.stringify(hrefs) !== JSON.stringify(previousHrefs);
+            }
+            """,
+            arg={
+                "previousHrefs": previous_hrefs,
+                "minimumPlayers": rules.participating_players_per_team,
+                "maximumPlayers": rules.maximum_published_players_per_team,
+            },
+        )
+    except PlaywrightTimeoutError as error:
+        raise OfficialPlayerStatsUnavailable(
+            "AFL Official team player statistics did not become available"
+        ) from error
     current_hrefs = _player_hrefs(table)
     if not (
         rules.participating_players_per_team
@@ -403,7 +469,9 @@ def select_team_stats(
     """Select one team and wait until its complete roster replaces the table."""
     table = page.locator(".stats-table__table")
     if table.count() != 1:
-        raise ValueError(f"Expected one player stats table, found {table.count()}")
+        raise OfficialPlayerStatsUnavailable(
+            f"Expected one player stats table, found {table.count()}"
+        )
     rules = competition_rules_for_year(
         expected_year if expected_year is not None else _extract_match_year(page)
     )
