@@ -10,6 +10,7 @@ from afl_scraper.pipelines import raw_all
 from afl_scraper.pipelines.historical_players import HistoricalPlayerPreparationReport
 from afl_scraper.scraper.models import (
     DiscoveredRound,
+    OfficialFixtureMetadata,
     RawMatchData,
     RawMatchDetails,
     RawPlayerStat,
@@ -60,6 +61,31 @@ def _match(venue="MCG"):
 
 
 def _manifest():
+    return SeasonManifest(
+        schema_version=2,
+        year=2012,
+        season_id=2,
+        fixture_url="https://example.test/fixture",
+        discovered_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        rounds=[DiscoveredRound(label="1", match_ids=[100])],
+        fixtures=[
+            OfficialFixtureMetadata(
+                match_id=100,
+                round="1",
+                home_team="Carlton",
+                away_team="Collingwood",
+                scheduled_at=datetime(2012, 3, 24, 19, 30, tzinfo=timezone.utc),
+                venue="MCG",
+                home_total=7,
+                away_total=8,
+                status="COMPLETED",
+                source_url="https://www.afl.com.au/afl/matches/100",
+            )
+        ],
+    )
+
+
+def _legacy_manifest():
     return SeasonManifest(
         year=2012,
         season_id=2,
@@ -117,6 +143,61 @@ def test_cached_official_range_reuses_manifest_and_match(monkeypatch, tmp_path):
     save_players.assert_called_once_with(players, "afl_official", 2012)
     assert (tmp_path / "catalog" / "2012.json").exists()
     assert (tmp_path / "catalog" / "2012-2012-report.json").exists()
+
+
+def test_legacy_official_manifest_is_refreshed_for_metadata_fallback(
+    monkeypatch, tmp_path
+):
+    enriched = _manifest()
+
+    @contextmanager
+    def browser_context(_headless):
+        yield object()
+
+    monkeypatch.setattr(raw_all, "CATALOG_ROOT", tmp_path / "catalog")
+    monkeypatch.setattr(raw_all, "sync_browser_context", browser_context)
+    monkeypatch.setattr(
+        raw_all,
+        "prepare_player_raw_data",
+        Mock(
+            return_value=HistoricalPlayerPreparationReport(2012, 2012, 1, 1, 0, 1, True)
+        ),
+    )
+    monkeypatch.setattr(
+        raw_all, "load_season_manifest", Mock(return_value=_legacy_manifest())
+    )
+    discover = Mock(return_value=enriched)
+    monkeypatch.setattr(raw_all, "discover_official_season", discover)
+    save_manifest = Mock()
+    monkeypatch.setattr(raw_all, "save_season_manifest", save_manifest)
+    monkeypatch.setattr(
+        raw_all,
+        "scrape_season_player_ids",
+        Mock(
+            return_value=[
+                PlayerInfo(
+                    id="101",
+                    first_name="Alex",
+                    last_name="Smith",
+                    team="Carlton",
+                    year=2012,
+                )
+            ]
+        ),
+    )
+    monkeypatch.setattr(raw_all, "load_raw_match_data", Mock(return_value=_match()))
+    monkeypatch.setattr(raw_all, "save_player_ids_to_json", Mock())
+
+    raw_all.scrape_all_raw_data(2012, 2012, delay_ms=0)
+
+    discover.assert_called_once()
+    save_manifest.assert_called_once_with(enriched)
+    raw_all.scrape_season_player_ids.assert_called_once_with(
+        ANY,
+        enriched,
+        refresh=False,
+        progress=ANY,
+    )
 
 
 def test_catalog_rejects_unmapped_venue(monkeypatch, tmp_path):

@@ -296,6 +296,11 @@ def scrape_all_raw_data(
                 except FileNotFoundError:
                     manifest = discover_official_season(browser, year)
                     save_season_manifest(manifest)
+                else:
+                    if manifest.schema_version < 2:
+                        emit(f"[{year}] refreshing legacy official season manifest")
+                        manifest = discover_official_season(browser, year)
+                        save_season_manifest(manifest)
 
             def official_progress(index, total, match_id, cached):
                 if index == 1 or index == total or index % 10 == 0:
