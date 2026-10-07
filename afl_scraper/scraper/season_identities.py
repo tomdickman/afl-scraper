@@ -13,6 +13,10 @@ from .scrape import load_raw_match_data, scrape_match
 
 ProgressCallback = Callable[[int, int, int, bool], None]
 
+_SAME_SOURCE_GIVEN_NAME_ALIASES = {
+    frozenset(("paddy", "patrick")),
+}
+
 
 def _player_info(
     stat: RawPlayerStat,
@@ -56,8 +60,10 @@ def _same_source_name(left: str, right: str) -> bool:
 
     left_given = left_parts[0]
     right_given = right_parts[0]
+    if frozenset((left_given, right_given)) in _SAME_SOURCE_GIVEN_NAME_ALIASES:
+        return True
     shorter, longer = sorted((left_given, right_given), key=len)
-    return len(shorter) >= 4 and longer.startswith(shorter)
+    return len(shorter) >= 3 and longer.startswith(shorter)
 
 
 def _add_identity(
