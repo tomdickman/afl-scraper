@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from ..models import Player, PlayerInfo
 from ..scraper import sync_browser_context
+from ..scraper.constants import MAX_CONFIGURED_YEAR, MIN_HISTORY_YEAR
 from ..scraper.models.australian_football import MAX_SUPPORTED_YEAR, MIN_SUPPORTED_YEAR
 from ..scraper.scrape_player_ids import (
     save_player_id_snapshot_range,
@@ -48,6 +49,18 @@ def validate_historical_player_range(start_year: int, end_year: int) -> None:
         raise ValueError(
             "Historical player preparation supports "
             f"{MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}; got "
+            f"{start_year}-{end_year}"
+        )
+
+
+def validate_player_raw_range(start_year: int, end_year: int) -> None:
+    """Validate the complete configured AFL Tables extraction range."""
+    if start_year > end_year:
+        raise ValueError("Player start year must not exceed end year")
+    if start_year < MIN_HISTORY_YEAR or end_year > MAX_CONFIGURED_YEAR:
+        raise ValueError(
+            "Player raw-data preparation supports "
+            f"{MIN_HISTORY_YEAR}-{MAX_CONFIGURED_YEAR}; got "
             f"{start_year}-{end_year}"
         )
 
@@ -283,6 +296,53 @@ def prepare_historical_players(
 ) -> HistoricalPlayerPreparationReport:
     """Prepare canonical AFL Tables players and year-scoped mapping snapshots."""
     validate_historical_player_range(start_year, end_year)
+    return _prepare_players(
+        start_year,
+        end_year,
+        load=load,
+        refresh=refresh,
+        offline=offline,
+        headless=headless,
+        delay_ms=delay_ms,
+        progress=progress,
+    )
+
+
+def prepare_player_raw_data(
+    start_year: int = MIN_HISTORY_YEAR,
+    end_year: int = MAX_CONFIGURED_YEAR,
+    *,
+    refresh: bool = False,
+    offline: bool = False,
+    headless: bool = True,
+    delay_ms: int = 500,
+    progress=None,
+) -> HistoricalPlayerPreparationReport:
+    """Cache and validate AFL Tables snapshots/profiles without database access."""
+    validate_player_raw_range(start_year, end_year)
+    return _prepare_players(
+        start_year,
+        end_year,
+        load=False,
+        refresh=refresh,
+        offline=offline,
+        headless=headless,
+        delay_ms=delay_ms,
+        progress=progress,
+    )
+
+
+def _prepare_players(
+    start_year: int,
+    end_year: int,
+    *,
+    load: bool,
+    refresh: bool,
+    offline: bool,
+    headless: bool,
+    delay_ms: int,
+    progress=None,
+) -> HistoricalPlayerPreparationReport:
     if refresh and offline:
         raise ValueError("--refresh and --offline cannot be used together")
     if delay_ms < 0:

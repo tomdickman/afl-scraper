@@ -70,6 +70,8 @@ class TestResolveVenue:
     @pytest.mark.parametrize(
         ("source_name", "venue_id"),
         [
+            ("AAMI Stadium, Adelaide", "Football Park"),
+            ("ANZ Stadium, Sydney", "Stadium Australia"),
             ("Corroboree Group Oval Manuka, Canberra", "Manuka Oval"),
             ("Hands Oval, Bunbury", "Hands Oval"),
             ("UTAS Stadium, Launceston", "York Park"),
@@ -88,6 +90,7 @@ class TestResolveVenue:
     @pytest.mark.parametrize(
         ("source_name", "venue_id"),
         [
+            ("Adelaide Oval", "Adelaide Oval"),
             ("Carrara Stadium", "Carrara"),
             ("Marrara Stadium", "Marrara Oval"),
         ],

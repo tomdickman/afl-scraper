@@ -10,6 +10,7 @@
   "afl_official": {
     "AAMI Stadium": "Football Park",
     "Adelaide Oval": "Adelaide Oval",
+    "ANZ Stadium": "Stadium Australia",
     "Barossa Park": "Barossa Oval",
     "Ninja Stadium": "Bellerive Oval",
     "Blacktown ISP": "Blacktown",
@@ -74,6 +75,7 @@
 
   "australian_football": {
     "AAMI Stadium": "Football Park",
+    "Adelaide Oval": "Adelaide Oval",
     "ANZ Stadium": "Stadium Australia",
     "Aurora Stadium": "York Park",
     "Cazaly's Stadium": "Cazaly's Stadium",

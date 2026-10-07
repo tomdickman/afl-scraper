@@ -13,6 +13,10 @@ from .scrape import load_raw_match_data, scrape_match
 
 ProgressCallback = Callable[[int, int, int, bool], None]
 
+_SAME_SOURCE_GIVEN_NAME_ALIASES = {
+    frozenset(("paddy", "patrick")),
+}
+
 
 def _player_info(
     stat: RawPlayerStat,
@@ -43,6 +47,25 @@ def _match_year(raw_match: RawMatchData) -> int:
     return int(years[0])
 
 
+def _same_source_name(left: str, right: str) -> bool:
+    """Accept conservative given-name shortening for one anchored source ID."""
+    left_parts = normalize_person_name(left).split()
+    right_parts = normalize_person_name(right).split()
+    if left_parts == right_parts:
+        return True
+    if len(left_parts) < 2 or len(right_parts) < 2:
+        return False
+    if left_parts[1:] != right_parts[1:]:
+        return False
+
+    left_given = left_parts[0]
+    right_given = right_parts[0]
+    if frozenset((left_given, right_given)) in _SAME_SOURCE_GIVEN_NAME_ALIASES:
+        return True
+    shorter, longer = sorted((left_given, right_given), key=len)
+    return len(shorter) >= 3 and longer.startswith(shorter)
+
+
 def _add_identity(
     identities: dict[str, PlayerInfo],
     player: PlayerInfo,
@@ -53,9 +76,7 @@ def _add_identity(
         identities[player.id] = player
         return
 
-    same_name = normalize_person_name(previous.display_name()) == normalize_person_name(
-        player.display_name()
-    )
+    same_name = _same_source_name(previous.display_name(), player.display_name())
     same_team = " ".join(previous.team.casefold().split()) == " ".join(
         player.team.casefold().split()
     )
@@ -65,6 +86,10 @@ def _add_identity(
             f"{previous.display_name()} ({previous.team}, {previous.year}) vs "
             f"{player.display_name()} ({player.team}, {player.year})"
         )
+    if len(normalize_person_name(player.display_name())) > len(
+        normalize_person_name(previous.display_name())
+    ):
+        identities[player.id] = player
 
 
 def collect_match_identities(

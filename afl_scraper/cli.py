@@ -9,6 +9,7 @@ from .scraper import (
     scrape_players,
     sync_browser_context,
 )
+from .scraper.constants import MAX_CONFIGURED_YEAR, MIN_HISTORY_YEAR
 from .storage import connection_check, test_all_connections
 from .utils import health_check, smoke_test
 
@@ -306,6 +307,65 @@ def players(year, headless):
     with sync_browser_context(headless) as browser:
         paths = scrape_players(browser, year)
     click.echo(f"Saved {len(paths)} player pages")
+
+
+@scrape.command(
+    "all",
+    help="Cache and validate every configured raw season without PostgreSQL access",
+)
+@click.option(
+    "--from-year",
+    "start_year",
+    default=MIN_HISTORY_YEAR,
+    type=int,
+    show_default=True,
+)
+@click.option(
+    "--to-year",
+    "end_year",
+    default=MAX_CONFIGURED_YEAR,
+    type=int,
+    show_default=True,
+)
+@click.option(
+    "--refresh",
+    is_flag=True,
+    help="Deliberately replace all manifests, matches, snapshots, and profiles.",
+)
+@click.option(
+    "--headless/--no-headless",
+    default=False,
+    help="Use headless mode; AustralianFootball may reject fresh headless sessions.",
+)
+@click.option(
+    "--delay-ms",
+    default=500,
+    type=click.IntRange(min=0),
+    show_default=True,
+    help="Delay between live requests to sources that support throttling.",
+)
+def scrape_all(start_year, end_year, refresh, headless, delay_ms):
+    """Build the complete resumable raw-data lake and mapping audit catalog."""
+    from .pipelines.raw_all import scrape_all_raw_data
+
+    report = scrape_all_raw_data(
+        start_year,
+        end_year,
+        refresh=refresh,
+        headless=headless,
+        delay_ms=delay_ms,
+        progress=click.echo,
+    )
+    click.echo(
+        f"Validated {len(report.seasons)} seasons, {report.matches} matches, "
+        f"{report.player_stats} player-stat rows, and "
+        f"{report.afl_tables_players} AFL Tables player profiles"
+    )
+    click.echo(
+        f"Player profiles downloaded: {report.downloaded_profiles}; "
+        f"reused: {report.reused_profiles}"
+    )
+    click.echo(f"Audit report: data/raw/catalog/{start_year}-{end_year}-report.json")
 
 
 @cli.group("transform")
