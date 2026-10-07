@@ -127,6 +127,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `scrape season YEAR` | Discovers every source round and match ID and writes a validated season manifest. | No |
 | `scrape historical-season YEAR` | Discovers AustralianFootball matches from 2006-2011 and optionally caches every validated match page. | No |
 | `scrape match ID` | Scrapes, transforms, and loads one match and its player statistics. | Yes |
+| `audit match-metadata --year YEAR` | Verifies every official fixture resolves to one AFL Tables metadata record and writes an atomic report. | No |
 | `scrape round ROUND` | Processes every match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
 | `transform players` | Transforms stored player records and loads the resulting player models. | Yes |
 | `pipeline players` | Runs the player transform/load pipeline, optionally refreshing raw pages first. | Yes |
@@ -200,11 +201,30 @@ rejects blank or duplicate rounds, invalid IDs, empty rounds, and any match ID
 that appears in more than one round. Seasons before 2012 fail with an explicit
 source-coverage error instead of being sent to the current fixture site.
 
-Load one match by its source match ID:
+Load one match by its source match ID. Pass its season so legacy pages with a
+missing match header can use the enriched manifest and cross-source metadata:
 
 ```sh
-uv run afl-scraper scrape match 6994
+uv run afl-scraper scrape match 292 --year 2013
 ```
+
+The player tables still come from AFL Official. When the complete official match
+header is absent, match details come from a uniquely matched AFL Tables record;
+the source URLs and compared fields are stored in the versioned raw match cache.
+A partial header, ambiguous identity, or source conflict fails without promoting
+a cache. Complete official headers are retained but cross-checked as well.
+
+Before scraping a season, validate all cross-source fixture identities without
+opening PostgreSQL:
+
+```sh
+uv run afl-scraper audit match-metadata --year 2013
+```
+
+The command reuses `data/raw/afl_tables/season/2013/matches.json` when present
+and writes `data/reports/match_metadata/2013.json`. Use `--refresh` to reacquire
+the AFL Tables catalogue. If the season manifest predates the enriched schema,
+rerun `scrape season 2013` first.
 
 Process a complete home-and-away round:
 

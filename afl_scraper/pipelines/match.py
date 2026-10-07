@@ -65,8 +65,20 @@ def load_match_data(raw_data: RawMatchData | dict, match_id: int) -> dict:
     return {"game": game, "player_stats": player_stats}
 
 
-def match_pipeline(match_id: int, headless: bool = True) -> dict:
+def match_pipeline(
+    match_id: int, headless: bool = True, *, year: int | None = None
+) -> dict:
     with sync_browser_context(headless) as browser:
-        raw_data = scrape_match(browser, match_id)
+        fixture = None
+        if year is not None:
+            from ..scraper import load_season_manifest
+
+            fixture = load_season_manifest(year).fixture_for(int(match_id))
+        raw_data = scrape_match(
+            browser,
+            match_id,
+            expected_year=year,
+            fixture=fixture,
+        )
 
     return load_match_data(raw_data, match_id)

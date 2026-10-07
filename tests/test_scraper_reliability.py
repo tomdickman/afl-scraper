@@ -148,6 +148,47 @@ def test_scrape_match_rejects_invalid_id_without_opening_page():
     assert browser.new_page_calls == 0
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (
+            "Thursday, April 25th 2013, 5:50 pm AEST",
+            "2013-04-25T17:50:00+10:00",
+        ),
+        ("Thu, Apr 25th 2013, 5:50 pm AEST", "2013-04-25T17:50:00+10:00"),
+    ],
+)
+def test_fixture_datetime_accepts_full_and_abbreviated_names(value, expected):
+    assert scrape._parse_fixture_datetime(value).isoformat() == expected
+
+
+def test_fixture_datetime_rejects_invalid_or_mismatched_dates():
+    assert (
+        scrape._parse_fixture_datetime("Friday, April 25th 2013, 5:50 pm AEST") is None
+    )
+    assert scrape._parse_fixture_datetime("Thu, Nope 25th 2013, 5:50 pm AEST") is None
+
+
+def test_scrape_match_without_year_explains_missing_legacy_header(monkeypatch):
+    page = FakePage()
+    browser = FakeBrowser(page)
+    monkeypatch.setattr(
+        scrape, "display_player_stats", lambda current_page: current_page
+    )
+    monkeypatch.setattr(
+        scrape,
+        "select_team_stats",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            scrape.OfficialMatchDetailsUnavailable("missing date header")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="provide its season year"):
+        scrape.scrape_match(browser, 292)
+
+    assert page.closed is True
+
+
 def test_scrape_match_uses_consistent_raw_path_and_closes_page(monkeypatch, tmp_path):
     page = FakePage()
     browser = FakeBrowser(page)
@@ -166,7 +207,7 @@ def test_scrape_match_uses_consistent_raw_path_and_closes_page(monkeypatch, tmp_
     monkeypatch.setattr(
         scrape,
         "save_raw_match_data",
-        lambda raw, match_id: saved_raw.append((raw, match_id)),
+        lambda raw, match_id, **_kwargs: saved_raw.append((raw, match_id)),
     )
 
     assert scrape.scrape_match(browser, "123") == {"ok": True}

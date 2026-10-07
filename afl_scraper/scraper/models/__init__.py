@@ -6,8 +6,13 @@ from .australian_football import (
     CachedAustralianFootballMatch,
 )
 from .match_cache import CachedRawMatch
+from .match_metadata import (
+    MatchDataProvenance,
+    MatchMetadataCatalog,
+    MatchMetadataRecord,
+)
 from .raw_match import RawMatchData, RawMatchDetails, RawPlayerStat
-from .season import DiscoveredRound, SeasonManifest
+from .season import DiscoveredRound, OfficialFixtureMetadata, SeasonManifest
 
 __all__ = [
     "AustralianFootballMatchData",
@@ -17,6 +22,10 @@ __all__ = [
     "CachedAustralianFootballMatch",
     "DiscoveredRound",
     "CachedRawMatch",
+    "MatchDataProvenance",
+    "MatchMetadataCatalog",
+    "MatchMetadataRecord",
+    "OfficialFixtureMetadata",
     "RawMatchData",
     "RawMatchDetails",
     "RawPlayerStat",

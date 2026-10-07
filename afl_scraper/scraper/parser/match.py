@@ -65,6 +65,10 @@ _TEXT_FIELDS = {"player_name"}
 _SIGNED_INTEGER_FIELDS = {"fantasy_points", "metres_gained"}
 
 
+class OfficialMatchDetailsUnavailable(ValueError):
+    """The legacy match page has no rendered official match header."""
+
+
 def _normalize_text(value: str) -> str:
     return " ".join(value.replace("\xa0", " ").split())
 
@@ -75,7 +79,15 @@ def _normalize_header(value: str) -> str:
 
 def _extract_match_year(page: Page) -> int:
     """Read the season year from the match-centre date header."""
-    value = page.locator(FIXTURE_CLASSNAMES["MATCH_DATE_TIME"]).inner_text()
+    date_time = page.locator(FIXTURE_CLASSNAMES["MATCH_DATE_TIME"])
+    count = date_time.count()
+    if count == 0:
+        raise OfficialMatchDetailsUnavailable(
+            "AFL Official match date header is unavailable"
+        )
+    if count != 1:
+        raise ValueError(f"Expected one AFL Official match date header, found {count}")
+    value = date_time.inner_text()
     years = re.findall(r"\b(?:19|20)\d{2}\b", value)
     if len(years) != 1:
         raise ValueError(f"Could not parse one match year from {value!r}")
@@ -83,6 +95,27 @@ def _extract_match_year(page: Page) -> int:
 
 
 def _extract_match_details(page: Page) -> RawMatchDetails:
+    required_selectors = (
+        FIXTURE_CLASSNAMES["MATCH_TEAMS"],
+        FIXTURE_CLASSNAMES["MATCH_DATE_TIME"],
+        FIXTURE_CLASSNAMES["MATCH_VENUE"],
+        FIXTURE_CLASSNAMES["MATCH_SCORE_TOTALS"],
+        FIXTURE_CLASSNAMES["MATCH_SCORE_SPLITS"],
+        ".mc-header__status-label",
+    )
+    counts = {
+        selector: page.locator(selector).count() for selector in required_selectors
+    }
+    if not any(counts.values()):
+        raise OfficialMatchDetailsUnavailable(
+            "AFL Official match header is unavailable"
+        )
+    missing = sorted(selector for selector, count in counts.items() if count == 0)
+    if missing:
+        raise ValueError(
+            "AFL Official match header is partially rendered; missing selectors: "
+            + ", ".join(missing)
+        )
     teams_text = _normalize_text(
         page.locator(FIXTURE_CLASSNAMES["MATCH_TEAMS"]).inner_text()
     )
@@ -364,12 +397,16 @@ def _select_team(
         )
 
 
-def select_team_stats(page: Page, option_index: int) -> None:
+def select_team_stats(
+    page: Page, option_index: int, expected_year: int | None = None
+) -> None:
     """Select one team and wait until its complete roster replaces the table."""
     table = page.locator(".stats-table__table")
     if table.count() != 1:
         raise ValueError(f"Expected one player stats table, found {table.count()}")
-    rules = competition_rules_for_year(_extract_match_year(page))
+    rules = competition_rules_for_year(
+        expected_year if expected_year is not None else _extract_match_year(page)
+    )
     _select_team(page, table, option_index, rules)
 
 
@@ -401,14 +438,26 @@ def _validate_team_stats(
         raise ValueError(f"Players appeared for both teams: {overlap}")
 
 
-def extract_table_data(page: Page) -> RawMatchData:
+def extract_table_data(
+    page: Page,
+    *,
+    expected_year: int | None = None,
+    fallback_details: RawMatchDetails | None = None,
+) -> RawMatchData:
     """Extract and validate a completed match from the AFL match centre."""
     table = page.locator(".stats-table__table")
     if table.count() != 1:
         raise ValueError(f"Expected one player stats table, found {table.count()}")
 
-    details = _extract_match_details(page)
-    rules = competition_rules_for_year(_extract_match_year(page))
+    try:
+        details = _extract_match_details(page)
+    except OfficialMatchDetailsUnavailable:
+        if fallback_details is None:
+            raise
+        details = fallback_details
+    rules = competition_rules_for_year(
+        expected_year if expected_year is not None else _extract_match_year(page)
+    )
     _select_team(page, table, 1, rules)
     home_stats = _extract_team_stats(table, rules)
     _select_team(page, table, 2, rules)

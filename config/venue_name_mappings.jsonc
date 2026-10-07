@@ -8,6 +8,7 @@
   },
 
   "afl_official": {
+    "AAMI Stadium": "Football Park",
     "Adelaide Oval": "Adelaide Oval",
     "Barossa Park": "Barossa Oval",
     "Ninja Stadium": "Bellerive Oval",
@@ -32,9 +33,11 @@
     "Accor Stadium Australia": "Stadium Australia",
     "Domain Stadium": "Subiaco",
     "Adelaide Hills": "Summit Sports Park",
+    "ANZ Stadium": "Stadium Australia",
     "ENGIE Stadium": "Sydney Showground",
     "TIO Traeger Park": "Traeger Park",
     "UTAS Stadium": "York Park",
+    "Westpac Stadium": "Wellington",
     "Wellington": "Wellington",
     "University of Tasmania Stadium": "York Park"
   },
@@ -49,6 +52,7 @@
     "Docklands": "Docklands",
     "Mars Stadium": "Eureka Stadium",
     "AAMI Stadium": "Football Park",
+    "Football Park": "Football Park",
     "Gabba": "Gabba",
     "Jiangwan Stadium": "Jiangwan Stadium",
     "Kardinia Park": "Kardinia Park",

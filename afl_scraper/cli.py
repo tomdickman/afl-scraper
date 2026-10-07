@@ -111,6 +111,57 @@ def scrape():
     click.echo("🕷️   Scraping...")
 
 
+@cli.group(name="audit")
+def audit():
+    """Run read-only checks over raw scraping evidence."""
+
+
+@audit.command("match-metadata")
+@click.option("--year", required=True, type=int, help="Official season to audit.")
+@click.option(
+    "--refresh/--reuse-cache",
+    default=False,
+    help="Refresh the AFL Tables season catalogue before auditing.",
+)
+@click.option(
+    "--headless/--no-headless",
+    default=True,
+    help="Run the browser in headless mode (default: headless).",
+)
+def audit_match_metadata_command(year, refresh, headless):
+    """Verify every official fixture has one cross-source metadata identity."""
+    from .scraper import (
+        audit_match_metadata,
+        get_match_metadata_catalog,
+        load_match_metadata_catalog,
+        load_season_manifest,
+        save_match_metadata_audit,
+    )
+
+    try:
+        manifest = load_season_manifest(year)
+        try:
+            if refresh:
+                raise FileNotFoundError
+            catalog = load_match_metadata_catalog(year)
+        except FileNotFoundError:
+            with sync_browser_context(headless) as browser:
+                catalog = get_match_metadata_catalog(browser, year, refresh=refresh)
+        report = audit_match_metadata(manifest, catalog)
+        path = save_match_metadata_audit(report)
+    except Exception as error:
+        raise click.ClickException(str(error)) from error
+
+    click.echo(
+        f"Resolved {report['resolved_count']}/{report['match_count']} match "
+        f"identities; report: {path}"
+    )
+    if report["unresolved_count"]:
+        raise click.ClickException(
+            f"{report['unresolved_count']} match metadata identities are unresolved"
+        )
+
+
 @scrape.command(
     "round",
     help="Scrape details of all the matches in a specific round for current season",
@@ -234,9 +285,14 @@ def historical_season(year, matches, refresh, delay_ms, headless):
     default=True,
     help="Run the scraper in headless mode (default: headless).",
 )
-def match(id, headless):
+@click.option(
+    "--year",
+    type=int,
+    help="Season year; required for metadata fallback on legacy broken headers.",
+)
+def match(id, headless, year):
     print(f"Scraping match ID {id}...")
-    match_pipeline(id, headless)
+    match_pipeline(id, headless, year=year)
 
 
 @scrape.command("players", help="Scrape player details for a specific year")
