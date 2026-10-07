@@ -2,14 +2,18 @@
 
 import json
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from ..models import PlayerInfo
 from ..scraper import (
+    audit_match_metadata,
+    cache_afl_tables_season_matches,
     cache_australian_football_season_matches,
     discover_australian_football_season,
     discover_official_season,
+    get_match_metadata_catalog,
     load_australian_football_manifest,
     load_australian_football_match,
     load_raw_match_data,
@@ -25,12 +29,11 @@ from ..scraper.constants import (
     MIN_HISTORY_YEAR,
     OFFICIAL_FIXTURE_MIN_YEAR,
 )
-from ..scraper.models.australian_football import MAX_SUPPORTED_YEAR
+from ..scraper.models.australian_football import MAX_AVAILABLE_YEAR
 from ..transform.australian_football import historical_match_datetime
 from ..transform.match import parse_match_datetime, resolve_team, resolve_venue
 from ..utils.identity import normalize_person_name
-from .historical_players import prepare_player_raw_data
-
+from .historical_players import load_player_snapshot, prepare_player_raw_data
 
 CATALOG_ROOT = Path("data/raw/catalog")
 
@@ -57,12 +60,26 @@ class RawScrapeReport:
     reused_profiles: int
 
     @property
+    def years(self) -> int:
+        return len({season.year for season in self.seasons})
+
+    @property
+    def sources(self) -> int:
+        return len(self.seasons)
+
+    @property
     def matches(self) -> int:
-        return sum(season.matches for season in self.seasons)
+        return sum(
+            max(item.matches for item in self.seasons if item.year == year)
+            for year in {item.year for item in self.seasons}
+        )
 
     @property
     def player_stats(self) -> int:
-        return sum(season.player_stats for season in self.seasons)
+        return sum(
+            max(item.player_stats for item in self.seasons if item.year == year)
+            for year in {item.year for item in self.seasons}
+        )
 
 
 def _atomic_json(path: Path, value) -> Path:
@@ -78,6 +95,10 @@ def _atomic_json(path: Path, value) -> Path:
 
 def _catalog_path(year: int) -> Path:
     return CATALOG_ROOT / f"{year}.json"
+
+
+def _source_catalog_path(year: int, source: str) -> Path:
+    return CATALOG_ROOT / str(year) / f"{source}.json"
 
 
 def _historical_players(year: int, matches) -> list[PlayerInfo]:
@@ -137,7 +158,7 @@ def _write_historical_catalog(year: int, manifest) -> RawSeasonReport:
 
     players = _historical_players(year, matches)
     save_player_ids_to_json(players, "australian_football", year)
-    path = _catalog_path(year)
+    path = _source_catalog_path(year, "australian_football")
     _atomic_json(
         path,
         {
@@ -188,7 +209,7 @@ def _write_official_catalog(year: int, manifest, players) -> RawSeasonReport:
         player_stats += len(match.home_team_stats) + len(match.away_team_stats)
 
     save_player_ids_to_json(players, "afl_official", year)
-    path = _catalog_path(year)
+    path = _source_catalog_path(year, "afl_official")
     _atomic_json(
         path,
         {
@@ -216,6 +237,128 @@ def _write_official_catalog(year: int, manifest, players) -> RawSeasonReport:
         len(teams),
         len(venues),
         str(path),
+    )
+
+
+def _write_afl_tables_catalog(
+    year: int, catalog, players, player_stats: int
+) -> RawSeasonReport:
+    teams = {}
+    venues = {}
+    for match in catalog.matches:
+        for raw_team in (match.home_team, match.away_team):
+            teams[raw_team] = resolve_team(raw_team)
+        venues[match.venue] = resolve_venue(match.venue, "afl_tables")
+    path = _source_catalog_path(year, "afl_tables")
+    _atomic_json(
+        path,
+        {
+            "year": year,
+            "source": "afl_tables",
+            "matches": len(catalog.matches),
+            "player_stats": player_stats,
+            "participants": len(players),
+            "data_types": [
+                "match_metadata",
+                "player_stats",
+                "season_roster",
+                "player_profiles",
+            ],
+            "metadata_path": str(Path("data/raw/afl_tables/season") / str(year) / "matches.json"),
+            "teams": [
+                {"source_name": raw, "canonical_id": canonical}
+                for raw, canonical in sorted(teams.items())
+            ],
+            "venues": [
+                {"source_name": raw, "canonical_id": canonical}
+                for raw, canonical in sorted(venues.items())
+            ],
+        },
+    )
+    return RawSeasonReport(
+        year, "afl_tables", len(catalog.matches), player_stats, len(players),
+        len(teams), len(venues), str(path)
+    )
+
+
+def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
+    """Verify every AustralianFootball match has one AFL Tables counterpart."""
+    available = {}
+    for record in catalog.matches:
+        key = (
+            resolve_team(record.home_team),
+            resolve_team(record.away_team),
+            record.local_date,
+            record.home_total,
+            record.away_total,
+        )
+        available.setdefault(key, []).append(record.source_match_id)
+
+    unresolved = []
+    for match_id in manifest.match_ids:
+        match = load_australian_football_match(match_id)
+        details = match.details
+        key = (
+            resolve_team(details.home_team),
+            resolve_team(details.away_team),
+            details.date,
+            details.home_team_total,
+            details.away_team_total,
+        )
+        candidates = available.get(key, [])
+        if len(candidates) != 1:
+            unresolved.append({"match_id": match_id, "candidate_ids": candidates})
+    return {
+        "sources": ["australian_football", "afl_tables"],
+        "match_count": manifest.match_count,
+        "resolved_count": manifest.match_count - len(unresolved),
+        "unresolved_count": len(unresolved),
+        "unresolved": unresolved,
+    }
+
+
+def _write_year_manifest(year: int, reports, validations) -> Path:
+    by_source = {report.source: report for report in reports}
+    sources = []
+    for source, supported, data_types in (
+        ("afl_official", year >= OFFICIAL_FIXTURE_MIN_YEAR,
+         ["fixtures", "match_details", "player_stats"]),
+        ("afl_tables", True,
+         ["match_metadata", "player_stats", "season_roster", "player_profiles"]),
+        ("australian_football", True,
+         ["fixtures", "match_details", "player_stats"]),
+    ):
+        report = by_source.get(source)
+        if report is not None:
+            sources.append({
+                "source": source,
+                "status": "complete",
+                "data_types": data_types,
+                "matches": report.matches,
+                "player_stats": report.player_stats,
+                "participants": report.participants,
+                "catalog_path": report.catalog_path,
+            })
+        else:
+            sources.append({
+                "source": source,
+                "status": "unavailable" if not supported else "failed",
+                "data_types": data_types,
+                "matches": 0,
+                "reason": (
+                    f"AFL Official fixture catalogue starts in {OFFICIAL_FIXTURE_MIN_YEAR}"
+                    if source == "afl_official" else "source did not complete"
+                ),
+            })
+    return _atomic_json(
+        _catalog_path(year),
+        {
+            "schema_version": 2,
+            "year": year,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "sources": sources,
+            "cross_source_validations": validations,
+        },
     )
 
 
@@ -257,7 +400,37 @@ def scrape_all_raw_data(
     with sync_browser_context(headless) as browser:
         for year in range(start_year, end_year + 1):
             emit(f"[{year}] preparing complete raw season cache")
-            if year <= MAX_SUPPORTED_YEAR:
+            year_reports = []
+            validations = []
+            afl_tables_players = load_player_snapshot(year)
+            emit(f"[{year}] preparing AFL Tables match catalogue")
+            afl_tables_catalog = get_match_metadata_catalog(
+                browser, year, refresh=refresh
+            )
+
+            def tables_progress(index, total, match_id, cached, year=year):
+                if index == 1 or index == total or index % 10 == 0:
+                    emit(
+                        f"[{year}] [{index}/{total}] AFL Tables match {match_id} "
+                        f"({'cache' if cached else 'live'})"
+                    )
+
+            tables_player_stats = cache_afl_tables_season_matches(
+                browser,
+                afl_tables_catalog,
+                refresh=refresh,
+                delay_ms=delay_ms,
+                progress=tables_progress,
+            )
+            tables_report = _write_afl_tables_catalog(
+                year,
+                afl_tables_catalog,
+                afl_tables_players,
+                tables_player_stats,
+            )
+            year_reports.append(tables_report)
+
+            if year <= MAX_AVAILABLE_YEAR:
                 if refresh:
                     manifest = discover_australian_football_season(browser, year)
                     save_australian_football_manifest(manifest)
@@ -268,7 +441,7 @@ def scrape_all_raw_data(
                         manifest = discover_australian_football_season(browser, year)
                         save_australian_football_manifest(manifest)
 
-                def historical_progress(index, total, match_id, cached):
+                def historical_progress(index, total, match_id, cached, year=year):
                     if index == 1 or index == total or index % 10 == 0:
                         emit(
                             f"[{year}] [{index}/{total}] match {match_id} "
@@ -282,40 +455,73 @@ def scrape_all_raw_data(
                     delay_ms=delay_ms,
                     progress=historical_progress,
                 )
-                season_reports.append(_write_historical_catalog(year, manifest))
-                continue
+                historical_report = _write_historical_catalog(year, manifest)
+                year_reports.append(historical_report)
+                historical_audit = _historical_metadata_audit(
+                    year, manifest, afl_tables_catalog
+                )
+                if historical_audit["unresolved_count"]:
+                    raise ValueError(
+                        f"AustralianFootball and AFL Tables disagree for "
+                        f"{historical_audit['unresolved_count']} matches in {year}"
+                    )
+                if manifest.match_count != len(afl_tables_catalog.matches):
+                    raise ValueError(
+                        f"AustralianFootball has {manifest.match_count} matches and "
+                        f"AFL Tables has {len(afl_tables_catalog.matches)} in {year}"
+                    )
+                validations.append(historical_audit)
 
-            if year < OFFICIAL_FIXTURE_MIN_YEAR:
-                raise ValueError(f"No match source configured for {year}")
-            if refresh:
-                manifest = discover_official_season(browser, year)
-                save_season_manifest(manifest)
-            else:
-                try:
-                    manifest = load_season_manifest(year)
-                except FileNotFoundError:
+            if year >= OFFICIAL_FIXTURE_MIN_YEAR:
+                if refresh:
                     manifest = discover_official_season(browser, year)
                     save_season_manifest(manifest)
                 else:
-                    if manifest.schema_version < 2:
-                        emit(f"[{year}] refreshing legacy official season manifest")
+                    try:
+                        manifest = load_season_manifest(year)
+                    except FileNotFoundError:
                         manifest = discover_official_season(browser, year)
                         save_season_manifest(manifest)
+                    else:
+                        if manifest.schema_version < 2:
+                            emit(f"[{year}] refreshing legacy official season manifest")
+                            manifest = discover_official_season(browser, year)
+                            save_season_manifest(manifest)
 
-            def official_progress(index, total, match_id, cached):
-                if index == 1 or index == total or index % 10 == 0:
-                    emit(
-                        f"[{year}] [{index}/{total}] match {match_id} "
-                        f"({'cache' if cached else 'live'})"
+                def official_progress(index, total, match_id, cached, year=year):
+                    if index == 1 or index == total or index % 10 == 0:
+                        emit(
+                            f"[{year}] [{index}/{total}] official match {match_id} "
+                            f"({'cache' if cached else 'live'})"
+                        )
+
+                players = scrape_season_player_ids(
+                    browser,
+                    manifest,
+                    refresh=refresh,
+                    progress=official_progress,
+                )
+                official_report = _write_official_catalog(
+                    year, manifest, players
+                )
+                year_reports.append(official_report)
+                official_audit = audit_match_metadata(
+                    manifest, afl_tables_catalog
+                )
+                if official_audit["unresolved_count"]:
+                    raise ValueError(
+                        f"AFL Official and AFL Tables disagree for "
+                        f"{official_audit['unresolved_count']} matches in {year}"
                     )
+                validations.append({
+                    "sources": ["afl_official", "afl_tables"],
+                    "match_count": official_audit["match_count"],
+                    "resolved_count": official_audit["resolved_count"],
+                    "unresolved_count": official_audit["unresolved_count"],
+                })
 
-            players = scrape_season_player_ids(
-                browser,
-                manifest,
-                refresh=refresh,
-                progress=official_progress,
-            )
-            season_reports.append(_write_official_catalog(year, manifest, players))
+            _write_year_manifest(year, year_reports, validations)
+            season_reports.extend(year_reports)
 
     report = RawScrapeReport(
         start_year,
