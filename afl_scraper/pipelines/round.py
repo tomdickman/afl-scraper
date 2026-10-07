@@ -1,4 +1,9 @@
-from ..scraper import scrape_match, scrape_match_ids, sync_browser_context
+from ..scraper import (
+    load_season_manifest,
+    scrape_match,
+    scrape_match_ids,
+    sync_browser_context,
+)
 from .match import load_match_data
 
 
@@ -12,12 +17,23 @@ def round_pipeline(
 
     with sync_browser_context(headless) as browser:
         ids = scrape_match_ids(browser, round_number, year)
-        print(f"Found {len(ids)} matches in round {round_number} of {year or 'current'}")
+        try:
+            manifest = load_season_manifest(year)
+        except FileNotFoundError:
+            manifest = None
+        print(
+            f"Found {len(ids)} matches in round {round_number} of {year or 'current'}"
+        )
 
         for match_id in ids:
             print(f"\n--- Match {match_id} ---")
             try:
-                raw_data = scrape_match(browser, match_id)
+                raw_data = scrape_match(
+                    browser,
+                    match_id,
+                    expected_year=year,
+                    fixture=manifest.fixture_for(match_id) if manifest else None,
+                )
                 if load:
                     result = load_match_data(raw_data, int(match_id))
                 else:

@@ -50,6 +50,14 @@ from .models import (
     SeasonManifest,
 )
 from .season_identities import collect_match_identities, scrape_season_player_ids
+from .match_metadata import (
+    afl_tables_season_url,
+    get_match_metadata_catalog,
+    load_match_metadata_catalog,
+    metadata_catalog_path,
+    parse_afl_tables_match_catalog,
+)
+from .metadata_audit import audit_match_metadata, save_match_metadata_audit
 
 __all__ = [
     # Browser context managers
@@ -84,6 +92,13 @@ __all__ = [
     "save_player_ids_to_json",
     "collect_match_identities",
     "scrape_season_player_ids",
+    "afl_tables_season_url",
+    "get_match_metadata_catalog",
+    "load_match_metadata_catalog",
+    "metadata_catalog_path",
+    "parse_afl_tables_match_catalog",
+    "audit_match_metadata",
+    "save_match_metadata_audit",
     # Player sources
     "PlayerSource",
     "PlayerSourceFactory",

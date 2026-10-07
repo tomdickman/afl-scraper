@@ -112,13 +112,23 @@ def scrape_season_player_ids(
     for index, match_id in enumerate(manifest.match_ids, start=1):
         cached = False
         if refresh:
-            raw_match = scrape_match(browser, match_id)
+            raw_match = scrape_match(
+                browser,
+                match_id,
+                expected_year=manifest.year,
+                fixture=manifest.fixture_for(match_id),
+            )
         else:
             try:
                 raw_match = load_raw_match_data(match_id)
                 cached = True
             except FileNotFoundError:
-                raw_match = scrape_match(browser, match_id)
+                raw_match = scrape_match(
+                    browser,
+                    match_id,
+                    expected_year=manifest.year,
+                    fixture=manifest.fixture_for(match_id),
+                )
 
         collect_match_identities(
             identities,

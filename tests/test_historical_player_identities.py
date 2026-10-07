@@ -157,7 +157,7 @@ def test_season_identity_scrape_reuses_cache_and_fetches_only_missing_matches(
             return cached_match
         raise FileNotFoundError
 
-    def scrape_live(_browser, match_id):
+    def scrape_live(_browser, match_id, **_kwargs):
         live_calls.append(match_id)
         return live_match
 
@@ -185,7 +185,7 @@ def test_invalid_cache_fails_instead_of_silently_refreshing(monkeypatch):
     monkeypatch.setattr(
         season_identities,
         "scrape_match",
-        lambda _browser, match_id: live_calls.append(match_id),
+        lambda _browser, match_id, **_kwargs: live_calls.append(match_id),
     )
 
     with pytest.raises(ValueError, match="invalid cache"):

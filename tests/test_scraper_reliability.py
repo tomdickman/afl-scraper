@@ -166,7 +166,7 @@ def test_scrape_match_uses_consistent_raw_path_and_closes_page(monkeypatch, tmp_
     monkeypatch.setattr(
         scrape,
         "save_raw_match_data",
-        lambda raw, match_id: saved_raw.append((raw, match_id)),
+        lambda raw, match_id, **_kwargs: saved_raw.append((raw, match_id)),
     )
 
     assert scrape.scrape_match(browser, "123") == {"ok": True}

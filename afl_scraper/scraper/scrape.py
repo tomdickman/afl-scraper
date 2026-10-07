@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import shutil
 import tempfile
@@ -7,7 +8,7 @@ from typing import List
 from urllib.parse import urljoin
 from uuid import uuid4
 
-from playwright.sync_api import BrowserContext
+from playwright.sync_api import BrowserContext, Locator
 
 from .constants import FIXTURE_CLASSNAMES, PATHS, official_season_id
 from .fixture import (
@@ -16,8 +17,16 @@ from .fixture import (
     get_round_buttons,
     navigate_to_round,
 )
-from .models import CachedRawMatch, DiscoveredRound, RawMatchData, SeasonManifest
+from .models import (
+    CachedRawMatch,
+    DiscoveredRound,
+    MatchDataProvenance,
+    OfficialFixtureMetadata,
+    RawMatchData,
+    SeasonManifest,
+)
 from .parser import (
+    OfficialMatchDetailsUnavailable,
     display_player_stats,
     extract_table_data,
     select_team_stats,
@@ -26,6 +35,22 @@ from .sources import PlayerSourceFactory
 
 
 logger = logging.getLogger(__name__)
+
+_FIXTURE_TIMEZONES = {
+    "AEST": timezone(timedelta(hours=10)),
+    "AEDT": timezone(timedelta(hours=11)),
+    "ACST": timezone(timedelta(hours=9, minutes=30)),
+    "ACDT": timezone(timedelta(hours=10, minutes=30)),
+    "AWST": timezone(timedelta(hours=8)),
+    "NZST": timezone(timedelta(hours=12)),
+    "NZDT": timezone(timedelta(hours=13)),
+}
+_FIXTURE_DATETIME_PATTERN = re.compile(
+    r"^(?P<weekday>[A-Za-z]+),\s+(?P<month>[A-Za-z]+)\s+"
+    r"(?P<day>\d{1,2})(?:st|nd|rd|th)\s+(?P<year>\d{4}),\s+"
+    r"(?P<clock>\d{1,2}:\d{2}\s+[ap]m)\s+(?P<timezone>[A-Z]{3,4})$",
+    re.IGNORECASE,
+)
 
 
 def _remove_directory_best_effort(path: Path) -> None:
@@ -47,6 +72,95 @@ def _normalise_match_id(match_id: int | str) -> int:
         raise ValueError(f"Invalid AFL match ID: {match_id!r}")
 
     return normalised
+
+
+def _parse_fixture_datetime(value: str):
+    match = _FIXTURE_DATETIME_PATTERN.fullmatch(" ".join(value.split()))
+    if match is None:
+        return None
+    timezone_name = match.group("timezone").upper()
+    offset = _FIXTURE_TIMEZONES.get(timezone_name)
+    if offset is None:
+        return None
+    parsed = datetime.strptime(
+        f"{match.group('weekday')} {match.group('month')} "
+        f"{match.group('day')} {match.group('year')} {match.group('clock')}",
+        "%A %B %d %Y %I:%M %p",
+    )
+    return parsed.replace(tzinfo=offset)
+
+
+def _fixture_metadata(match: Locator, round_label: str) -> OfficialFixtureMetadata:
+    match_id = _normalise_match_id(match.get_attribute("data-match-id"))
+    link = match.locator("a.fixtures__absolute-link")
+    if link.count() != 1:
+        raise ValueError(f"Fixture match {match_id} has no unique semantic link")
+    href = link.get_attribute("href")
+    if not href:
+        raise ValueError(f"Fixture match {match_id} has no source URL")
+
+    def one_text(selector: str, field: str) -> str:
+        locator = match.locator(selector)
+        if locator.count() != 1:
+            raise ValueError(f"Fixture match {match_id} has no unique {field}")
+        value = " ".join(locator.inner_text().split())
+        if not value:
+            raise ValueError(f"Fixture match {match_id} has a blank {field}")
+        return value
+
+    home_team = one_text(
+        ".fixtures__match-team--home .fixtures__match-team-name", "home team"
+    )
+    away_team = one_text(
+        ".fixtures__match-team--away .fixtures__match-team-name", "away team"
+    )
+    venue_locator = match.locator(".fixtures__match-venue")
+    venue = (
+        " ".join(venue_locator.inner_text().split()).rstrip(",")
+        if venue_locator.count() == 1
+        else None
+    )
+    totals = [
+        " ".join(value.split())
+        for value in match.locator(".fixtures__match-score-total").all_inner_texts()
+    ]
+    home_total = away_total = None
+    if len(totals) == 2 and all(value.isdigit() for value in totals):
+        home_total, away_total = map(int, totals)
+
+    aria_label = link.get_attribute("aria-label") or ""
+    parts = [" ".join(part.split()) for part in aria_label.split(";")]
+    scheduled_at = next(
+        (
+            parsed
+            for part in parts
+            if (parsed := _parse_fixture_datetime(part)) is not None
+        ),
+        None,
+    )
+    explicit_status = match.get_attribute("data-match-status")
+    status = (
+        explicit_status.upper()
+        if explicit_status
+        else (
+            "COMPLETED"
+            if len(totals) == 2 or "final score" in aria_label.casefold()
+            else "UNKNOWN"
+        )
+    )
+    return OfficialFixtureMetadata(
+        match_id=match_id,
+        provider_id=match.get_attribute("data-match-provider-id"),
+        round=round_label,
+        home_team=home_team,
+        away_team=away_team,
+        scheduled_at=scheduled_at,
+        venue=venue,
+        home_total=home_total,
+        away_total=away_total,
+        status=status,
+        source_url=urljoin(PATHS["MATCH"], href),
+    )
 
 
 def _save_raw_html(path: Path, content: str) -> None:
@@ -86,6 +200,7 @@ def discover_official_season(browser: BrowserContext, year: int) -> SeasonManife
             raise RuntimeError(f"No rounds found for AFL season {year}")
 
         rounds = []
+        fixtures = []
         for label in round_labels:
             navigate_to_round(page, label)
             matches = page.locator(f'{FIXTURE_CLASSNAMES["MATCHES"]}[data-match-id]')
@@ -98,13 +213,19 @@ def discover_official_season(browser: BrowserContext, year: int) -> SeasonManife
                     f"No matches found for round {label!r} in AFL season {year}"
                 )
             rounds.append(DiscoveredRound(label=label, match_ids=match_ids))
+            if all(hasattr(match, "locator") for match in matches.all()):
+                fixtures.extend(
+                    _fixture_metadata(match, label) for match in matches.all()
+                )
 
         return SeasonManifest(
+            schema_version=2 if fixtures else 1,
             year=year,
             season_id=official_season_id(year),
             fixture_url=get_fixture_url(year),
             discovered_at=datetime.now(timezone.utc),
             rounds=rounds,
+            fixtures=fixtures,
         )
     finally:
         page.close()
@@ -160,6 +281,8 @@ def save_raw_match_data(
     raw_data: RawMatchData,
     match_id: int | str,
     raw_root: Path = Path("data/raw/afl_official/match"),
+    *,
+    provenance: MatchDataProvenance | None = None,
 ) -> Path:
     """Atomically persist one fully validated raw match for safe reuse."""
     raw_match = RawMatchData.model_validate(raw_data)
@@ -168,10 +291,12 @@ def save_raw_match_data(
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = path.parent / f".match-{uuid4().hex}.tmp"
     cached_match = CachedRawMatch(
+        schema_version=2 if provenance is not None else 1,
         match_id=normalized_match_id,
         source_url=f"{PATHS['MATCH'].rstrip('/')}/{normalized_match_id}",
         scraped_at=datetime.now(timezone.utc),
         data=raw_match,
+        provenance=provenance,
     )
     try:
         temporary_path.write_text(
@@ -202,7 +327,13 @@ def load_raw_match_data(
     return cached_match.data
 
 
-def scrape_match(browser: BrowserContext, match_id: int | str):
+def scrape_match(
+    browser: BrowserContext,
+    match_id: int | str,
+    *,
+    expected_year: int | None = None,
+    fixture: OfficialFixtureMetadata | None = None,
+):
     match_id = _normalise_match_id(match_id)
     page = browser.new_page()
     url = f"{PATHS['MATCH'].rstrip('/')}/{match_id}"
@@ -212,14 +343,71 @@ def scrape_match(browser: BrowserContext, match_id: int | str):
 
         raw_dir = Path("data/raw/afl_official/match") / str(match_id)
 
-        select_team_stats(page, 1)
+        if expected_year is None:
+            select_team_stats(page, 1)
+        else:
+            select_team_stats(page, 1, expected_year)
         _save_raw_html(raw_dir / "home_player_stats.html", page.content())
 
-        select_team_stats(page, 2)
+        if expected_year is None:
+            select_team_stats(page, 2)
+        else:
+            select_team_stats(page, 2, expected_year)
         _save_raw_html(raw_dir / "away_player_stats.html", page.content())
 
-        raw_data = extract_table_data(page)
-        save_raw_match_data(raw_data, match_id)
+        provenance = None
+        try:
+            raw_data = (
+                extract_table_data(page)
+                if expected_year is None
+                else extract_table_data(page, expected_year=expected_year)
+            )
+        except OfficialMatchDetailsUnavailable as error:
+            if expected_year is None:
+                raise ValueError(
+                    f"AFL match {match_id} has no official header; provide its "
+                    "season year and a refreshed season manifest"
+                ) from error
+            from .match_metadata import get_match_metadata_catalog
+            from .metadata_fallback import resolve_fallback_match_details
+
+            catalog = get_match_metadata_catalog(browser, expected_year)
+            fallback_details, provenance = resolve_fallback_match_details(
+                fixture, catalog
+            )
+            raw_data = extract_table_data(
+                page,
+                expected_year=expected_year,
+                fallback_details=fallback_details,
+            )
+        if provenance is None:
+            if fixture is not None and expected_year is not None:
+                from .match_metadata import get_match_metadata_catalog
+                from .metadata_fallback import (
+                    cross_check_official_match_details,
+                    resolve_fallback_match_details,
+                )
+
+                catalog = get_match_metadata_catalog(browser, expected_year)
+                external_details, external_provenance = resolve_fallback_match_details(
+                    fixture, catalog
+                )
+                cross_check_official_match_details(raw_data.details, external_details)
+                provenance = MatchDataProvenance(
+                    player_stats_url=url,
+                    match_details_source="afl_official",
+                    match_details_url=url,
+                    official_fixture_url=fixture.source_url,
+                    cross_checked_fields=external_provenance.cross_checked_fields,
+                )
+            else:
+                provenance = MatchDataProvenance(
+                    player_stats_url=url,
+                    match_details_source="afl_official",
+                    match_details_url=url,
+                    official_fixture_url=fixture.source_url if fixture else None,
+                )
+        save_raw_match_data(raw_data, match_id, provenance=provenance)
         return raw_data
     except Exception as exc:
         raise RuntimeError(

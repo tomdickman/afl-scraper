@@ -8,6 +8,7 @@ import pytest
 
 from afl_scraper.scraper.constants import competition_rules_for_year
 from afl_scraper.scraper.parser.match import (
+    OfficialMatchDetailsUnavailable,
     _canonical_fields,
     _extract_player_identity,
     _parse_integer,
@@ -15,6 +16,7 @@ from afl_scraper.scraper.parser.match import (
     _player_id_from_href,
     _remove_non_participating_extra,
     _validate_team_stats,
+    _extract_match_details,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures/afl_match_8224_player_row.json"
@@ -102,6 +104,28 @@ def test_unknown_columns_are_preserved_for_analysis():
 def test_missing_required_column_fails_closed():
     with pytest.raises(ValueError, match="missing required fields"):
         _canonical_fields(["#", "Player", "K"])
+
+
+def test_completely_absent_official_header_has_typed_fallback_signal():
+    page = MagicMock()
+    page.locator.return_value.count.return_value = 0
+
+    with pytest.raises(OfficialMatchDetailsUnavailable):
+        _extract_match_details(page)
+
+
+def test_partially_rendered_official_header_refuses_fallback():
+    page = MagicMock()
+
+    def locator(selector):
+        result = MagicMock()
+        result.count.return_value = int(selector == ".mc-header__date-wrapper")
+        return result
+
+    page.locator.side_effect = locator
+
+    with pytest.raises(ValueError, match="partially rendered"):
+        _extract_match_details(page)
 
 
 def test_invalid_disposal_equation_is_rejected():
