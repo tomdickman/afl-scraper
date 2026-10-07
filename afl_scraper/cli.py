@@ -311,7 +311,7 @@ def players(year, headless):
 
 @scrape.command(
     "all",
-    help="Cache and validate every configured raw season without database writes",
+    help="Cache and validate every configured raw season without PostgreSQL access",
 )
 @click.option(
     "--from-year",

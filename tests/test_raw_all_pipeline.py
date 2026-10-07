@@ -4,7 +4,9 @@ from decimal import Decimal
 from unittest.mock import ANY, Mock
 
 import pytest
+from click.testing import CliRunner
 
+from afl_scraper.cli import cli
 from afl_scraper.models import PlayerInfo
 from afl_scraper.pipelines import raw_all
 from afl_scraper.pipelines.historical_players import HistoricalPlayerPreparationReport
@@ -212,7 +214,14 @@ def test_catalog_rejects_unmapped_venue(monkeypatch, tmp_path):
     assert not (tmp_path / "2012.json").exists()
 
 
-@pytest.mark.parametrize("years", [(2005, 2006), (2026, 2027), (2012, 2011)])
+@pytest.mark.parametrize(
+    "years",
+    [
+        (raw_all.MIN_HISTORY_YEAR - 1, raw_all.MIN_HISTORY_YEAR),
+        (raw_all.MAX_CONFIGURED_YEAR, raw_all.MAX_CONFIGURED_YEAR + 1),
+        (raw_all.MIN_HISTORY_YEAR + 1, raw_all.MIN_HISTORY_YEAR),
+    ],
+)
 def test_raw_range_is_bounded_before_browser_or_database(monkeypatch, years):
     browser = Mock()
     monkeypatch.setattr(raw_all, "sync_browser_context", browser)
@@ -221,3 +230,10 @@ def test_raw_range_is_bounded_before_browser_or_database(monkeypatch, years):
         raw_all.scrape_all_raw_data(*years)
 
     browser.assert_not_called()
+
+
+def test_scrape_all_help_promises_no_postgresql_access():
+    result = CliRunner().invoke(cli, ["scrape", "all", "--help"])
+
+    assert result.exit_code == 0
+    assert "without PostgreSQL access" in result.output
