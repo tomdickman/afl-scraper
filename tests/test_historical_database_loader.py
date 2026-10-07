@@ -90,6 +90,17 @@ def test_historical_transform_accepts_real_source_team_punctuation():
     assert game.away_team == "St Kilda"
 
 
+def test_historical_transform_supports_adelaide_oval_local_time():
+    game, _ = transform_australian_football_match(
+        _match(venue="Adelaide Oval"),
+        game_id=9000,
+        player_id_map={"14797": "Scott_Pendlebury", "200": "Alex_Example"},
+    )
+
+    assert game.venue == "Adelaide Oval"
+    assert game.start_date.utcoffset() == timedelta(hours=10, minutes=30)
+
+
 def test_historical_transform_fails_closed_on_unknown_venue_and_identity_alias():
     with pytest.raises(KeyError, match="No venue mapping"):
         transform_australian_football_match(

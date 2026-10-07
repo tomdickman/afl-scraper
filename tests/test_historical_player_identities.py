@@ -116,6 +116,31 @@ def test_match_identities_tolerate_middle_initial_and_suffix_presentation():
     assert identities["101"].display_name() == "Josh P. Kennedy Jr"
 
 
+def test_match_identities_accept_given_name_shortening_and_keep_formal_name():
+    identities = {}
+
+    season_identities.collect_match_identities(
+        identities, raw_match(home_name="Matt Shaw"), 100, 2012
+    )
+    season_identities.collect_match_identities(
+        identities, raw_match(home_name="Matthew Shaw"), 101, 2012
+    )
+
+    assert identities["101"].display_name() == "Matthew Shaw"
+
+
+def test_match_identity_given_name_shortening_still_requires_same_surname():
+    identities = {}
+    season_identities.collect_match_identities(
+        identities, raw_match(home_name="Matt Shaw"), 100, 2012
+    )
+
+    with pytest.raises(ValueError, match="Conflicting AFL official identity 101"):
+        season_identities.collect_match_identities(
+            identities, raw_match(home_name="Matthew Smith"), 101, 2012
+        )
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
     [

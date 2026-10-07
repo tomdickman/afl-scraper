@@ -124,6 +124,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `dbcheck` | Tests both the owner/write and app connections and reports the PostgreSQL version. | Yes |
 | `database reset` | Clears and rebuilds a disposable local PostgreSQL database. | Yes |
 | `scrape players YEAR` | Saves raw player records under `data/raw/`. | No |
+| `scrape all` | Resumably caches and validates every configured player and match source, plus team/venue audit catalogs. | No |
 | `scrape season YEAR` | Discovers every source round and match ID and writes a validated season manifest. | No |
 | `scrape historical-season YEAR` | Discovers AustralianFootball matches from 2006-2011 and optionally caches every validated match page. | No |
 | `scrape match ID` | Scrapes, transforms, and loads one match and its player statistics. | Yes |
@@ -142,6 +143,51 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 Run `uv run afl-scraper COMMAND --help` for the options accepted by any command or command group.
 
 ## Common workflows
+
+### Scrape every source without loading PostgreSQL
+
+Run the complete configured 2006-2026 raw extraction with one command:
+
+```sh
+uv run afl-scraper scrape all
+```
+
+This command never opens a database connection. It validates and reuses existing
+good caches, downloads only missing data, and can safely be rerun after an
+interruption. It covers AFL Tables player snapshots and profiles for every year,
+AustralianFootball matches for 2006-2011, and AFL Official matches for
+2012-2026. The browser is visible by default because AustralianFootball may
+reject a fresh headless session.
+
+The resulting files are grouped beneath `data/`:
+
+- `data/raw/afl_tables/player/` contains the deduplicated raw player profiles.
+- `data/mapping/<year>_afl_tables.json` contains each AFL Tables season roster.
+- `data/raw/australian_football/` contains 2006-2011 manifests, match HTML, and
+  validated match JSON.
+- `data/raw/afl_official/` contains 2012-2026 manifests, captured player-stat
+  HTML, and validated match JSON.
+- `data/mapping/<year>_<source>.json` contains the participating players derived
+  from the complete match cache.
+- `data/raw/catalog/<year>.json` lists every observed source team and venue next
+  to its canonical mapping. `data/raw/catalog/2006-2026-report.json` summarizes
+  the complete run.
+
+Every cached match is revalidated, including its scores and player rows. The
+catalog phase also exercises team aliases, venue aliases, match dates, and
+historical venue timezones. An unknown or invalid value stops the command with
+the affected source value, so no successful report is written for that year.
+
+Use a smaller inclusive range while diagnosing a failure:
+
+```sh
+uv run afl-scraper scrape all --from-year 2012 --to-year 2012
+```
+
+Normal reruns should not use `--refresh`. That flag deliberately reacquires and
+replaces every requested manifest, match, season snapshot, and player profile.
+Use `--headless` only when the requested range does not encounter the historical
+source restriction, or when an existing browser session is accepted upstream.
 
 ### Check the installation
 
