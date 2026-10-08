@@ -210,6 +210,81 @@ def test_season_identity_scrape_reuses_cache_and_fetches_only_missing_matches(
     assert progress == [(1, 2, 100, True), (2, 2, 101, False)]
 
 
+def test_missing_fallback_identity_is_retried_after_later_matches(monkeypatch):
+    calls = []
+    progress = []
+    ceglar_match = raw_match(
+        year=2012,
+        home_team="Hawthorn",
+        home_name="Jonathon Ceglar",
+        home_id="303",
+    )
+
+    monkeypatch.setattr(
+        season_identities,
+        "load_raw_match_data",
+        lambda _match_id: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+
+    def scrape_live(_browser, match_id, *, player_identities, **_kwargs):
+        calls.append((match_id, {player.id for player in player_identities}))
+        if match_id == 100 and "303" not in calls[-1][1]:
+            identity_error = ValueError(
+                "AFL Tables player 'Jonathon Ceglar' for Hawthorn resolved to "
+                "0 official identities; candidates=none"
+            )
+            raise RuntimeError("Failed to scrape AFL match 100") from identity_error
+        return ceglar_match
+
+    monkeypatch.setattr(season_identities, "scrape_match", scrape_live)
+
+    players = season_identities.scrape_season_player_ids(
+        object(),
+        manifest(),
+        progress=lambda *values: progress.append(values),
+    )
+
+    assert calls == [(100, set()), (101, set()), (100, {"202", "303"})]
+    assert [player.id for player in players] == ["202", "303"]
+    assert progress == [(2, 2, 101, False), (1, 2, 100, False)]
+
+
+def test_unresolved_fallback_identity_fails_after_full_retry_pass(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        season_identities,
+        "load_raw_match_data",
+        lambda _match_id: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+
+    def scrape_live(_browser, match_id, **_kwargs):
+        calls.append(match_id)
+        identity_error = ValueError(
+            "AFL Tables player 'Unknown Player' for Hawthorn resolved to "
+            "0 official identities; candidates=none"
+        )
+        raise RuntimeError(f"Failed to scrape AFL match {match_id}") from identity_error
+
+    monkeypatch.setattr(season_identities, "scrape_match", scrape_live)
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "Could not resolve AFL Official identities for deferred matches 100 "
+            "after scanning every match in 2012"
+        ),
+    ) as raised:
+        season_identities.scrape_season_player_ids(
+            object(), manifest((100,))
+        )
+
+    assert calls == [100, 100]
+    assert isinstance(raised.value.__cause__, RuntimeError)
+    assert "resolved to 0 official identities" in str(
+        raised.value.__cause__.__cause__
+    )
+
+
 def test_invalid_cache_fails_instead_of_silently_refreshing(monkeypatch):
     live_calls = []
     monkeypatch.setattr(

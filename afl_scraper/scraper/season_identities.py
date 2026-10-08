@@ -10,12 +10,21 @@ from ..utils.identity import normalize_person_name
 from .models import RawMatchData, RawPlayerStat, SeasonManifest
 from .scrape import load_raw_match_data, scrape_match
 
-
 ProgressCallback = Callable[[int, int, int, bool], None]
 
 _SAME_SOURCE_GIVEN_NAME_ALIASES = {
     frozenset(("paddy", "patrick")),
 }
+
+
+def _missing_fallback_identity(error: RuntimeError) -> bool:
+    """Return whether a wrapped AFL Tables fallback may succeed after seeding IDs."""
+    current: BaseException | None = error
+    while current is not None:
+        if "resolved to 0 official identities" in str(current):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def _player_info(
@@ -134,21 +143,27 @@ def scrape_season_player_ids(
     """
     identities: dict[str, PlayerInfo] = {}
     total = manifest.match_count
-    for index, match_id in enumerate(manifest.match_ids, start=1):
-        cached = False
-        if refresh:
-            raw_match = scrape_match(
-                browser,
-                match_id,
-                expected_year=manifest.year,
-                fixture=manifest.fixture_for(match_id),
-                player_identities=list(identities.values()),
-            )
-        else:
+    cached_matches: dict[int, RawMatchData] = {}
+    if not refresh:
+        for match_id in manifest.match_ids:
             try:
                 raw_match = load_raw_match_data(match_id)
-                cached = True
             except FileNotFoundError:
+                continue
+            collect_match_identities(
+                identities,
+                raw_match,
+                match_id,
+                manifest.year,
+            )
+            cached_matches[match_id] = raw_match
+
+    deferred: list[tuple[int, int, RuntimeError]] = []
+    for index, match_id in enumerate(manifest.match_ids, start=1):
+        raw_match = cached_matches.get(match_id)
+        cached = raw_match is not None
+        if raw_match is None:
+            try:
                 raw_match = scrape_match(
                     browser,
                     match_id,
@@ -156,6 +171,11 @@ def scrape_season_player_ids(
                     fixture=manifest.fixture_for(match_id),
                     player_identities=list(identities.values()),
                 )
+            except RuntimeError as error:
+                if not _missing_fallback_identity(error):
+                    raise
+                deferred.append((index, match_id, error))
+                continue
 
         collect_match_identities(
             identities,
@@ -165,6 +185,40 @@ def scrape_season_player_ids(
         )
         if progress is not None:
             progress(index, total, match_id, cached)
+
+    while deferred:
+        remaining = []
+        completed = 0
+        for index, match_id, _previous_error in deferred:
+            try:
+                raw_match = scrape_match(
+                    browser,
+                    match_id,
+                    expected_year=manifest.year,
+                    fixture=manifest.fixture_for(match_id),
+                    player_identities=list(identities.values()),
+                )
+            except RuntimeError as error:
+                if not _missing_fallback_identity(error):
+                    raise
+                remaining.append((index, match_id, error))
+                continue
+            collect_match_identities(
+                identities,
+                raw_match,
+                match_id,
+                manifest.year,
+            )
+            completed += 1
+            if progress is not None:
+                progress(index, total, match_id, False)
+        if not completed:
+            match_ids = ", ".join(str(item[1]) for item in remaining)
+            raise RuntimeError(
+                f"Could not resolve AFL Official identities for deferred matches "
+                f"{match_ids} after scanning every match in {manifest.year}"
+            ) from remaining[0][2]
+        deferred = remaining
 
     if not identities:
         raise ValueError(
