@@ -335,13 +335,46 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
             if left != right
         }
         if differences:
-            conflicts.append(
-                {
-                    "match_id": match_id,
-                    "afl_tables_match_id": record.source_match_id,
-                    "differences": differences,
+            conflict = {
+                "match_id": match_id,
+                "afl_tables_match_id": record.source_match_id,
+                "identity": {
+                    "home_team": key[0],
+                    "away_team": key[1],
+                    "date": key[2].isoformat(),
+                },
+                "differences": differences,
+            }
+            if any(
+                field in differences
+                for field in (
+                    "home_goals",
+                    "home_behinds",
+                    "home_total",
+                    "away_goals",
+                    "away_behinds",
+                    "away_total",
+                )
+            ):
+                conflict["score_validation"] = {
+                    "australian_football": _score_validation(
+                        details.home_team_goals,
+                        details.home_team_behinds,
+                        details.home_team_total,
+                        details.away_team_goals,
+                        details.away_team_behinds,
+                        details.away_team_total,
+                    ),
+                    "afl_tables": _score_validation(
+                        record.home_goals,
+                        record.home_behinds,
+                        record.home_total,
+                        record.away_goals,
+                        record.away_behinds,
+                        record.away_total,
+                    ),
                 }
-            )
+            conflicts.append(conflict)
     return {
         "sources": ["australian_football", "afl_tables"],
         "status": "passed" if not unresolved and not conflicts else "conflict",
@@ -352,6 +385,97 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
         "unresolved": unresolved,
         "conflicts": conflicts,
     }
+
+
+def _score_validation(
+    home_goals, home_behinds, home_total, away_goals, away_behinds, away_total
+) -> dict:
+    home_calculated = home_goals * 6 + home_behinds
+    away_calculated = away_goals * 6 + away_behinds
+    return {
+        "home": {
+            "goals": home_goals,
+            "behinds": home_behinds,
+            "published_total": home_total,
+            "calculated_total": home_calculated,
+            "valid": home_calculated == home_total,
+        },
+        "away": {
+            "goals": away_goals,
+            "behinds": away_behinds,
+            "published_total": away_total,
+            "calculated_total": away_calculated,
+            "valid": away_calculated == away_total,
+        },
+    }
+
+
+def _add_official_consensus(historical_audit: dict, official_manifest) -> None:
+    """Annotate score conflicts when AFL Official corroborates one source."""
+    fixtures = {}
+    for fixture in official_manifest.fixtures:
+        if fixture.scheduled_at is None:
+            continue
+        key = (
+            resolve_team(fixture.home_team),
+            resolve_team(fixture.away_team),
+            fixture.scheduled_at.date().isoformat(),
+        )
+        fixtures.setdefault(key, []).append(fixture)
+
+    for conflict in historical_audit["conflicts"]:
+        score_validation = conflict.get("score_validation")
+        if score_validation is None:
+            continue
+        identity = conflict["identity"]
+        key = (
+            identity["home_team"],
+            identity["away_team"],
+            identity["date"],
+        )
+        candidates = fixtures.get(key, [])
+        if len(candidates) != 1:
+            continue
+        fixture = candidates[0]
+        if fixture.home_total is None or fixture.away_total is None:
+            continue
+
+        official_totals = (fixture.home_total, fixture.away_total)
+        australian_totals = tuple(
+            score_validation["australian_football"][team]["published_total"]
+            for team in ("home", "away")
+        )
+        tables_totals = tuple(
+            score_validation["afl_tables"][team]["published_total"]
+            for team in ("home", "away")
+        )
+        agreeing_sources = [
+            source
+            for source, totals in (
+                ("australian_football", australian_totals),
+                ("afl_tables", tables_totals),
+            )
+            if totals == official_totals
+        ]
+        conflict["official_evidence"] = {
+            "match_id": fixture.match_id,
+            "home_total": fixture.home_total,
+            "away_total": fixture.away_total,
+            "source_url": fixture.source_url,
+        }
+        conflict["resolution"] = {
+            "status": (
+                "resolved_by_official_corroboration"
+                if len(agreeing_sources) == 1
+                else "unresolved"
+            ),
+            "agreeing_sources": ["afl_official", *agreeing_sources],
+            "outlier_sources": [
+                source
+                for source in ("australian_football", "afl_tables")
+                if source not in agreeing_sources
+            ],
+        }
 
 
 def _write_year_manifest(year: int, reports, validations) -> Path:
@@ -439,6 +563,7 @@ def scrape_all_raw_data(
             emit(f"[{year}] preparing complete raw season cache")
             year_reports = []
             validations = []
+            historical_audit = None
             afl_tables_players = load_player_snapshot(year)
             emit(f"[{year}] preparing AFL Tables match catalogue")
             afl_tables_catalog = get_match_metadata_catalog(
@@ -551,6 +676,8 @@ def scrape_all_raw_data(
                 official_audit = audit_match_metadata(
                     manifest, afl_tables_catalog
                 )
+                if historical_audit is not None:
+                    _add_official_consensus(historical_audit, manifest)
                 if official_audit["unresolved_count"]:
                     emit(
                         f"[{year}] warning: AFL Official/AFL Tables validation "
