@@ -1,11 +1,16 @@
-from datetime import date, time
+from datetime import UTC, date, datetime, time
+from types import SimpleNamespace
 
 import pytest
 
 from afl_scraper.models import PlayerInfo
-from afl_scraper.scraper.models import MatchMetadataRecord, RawMatchDetails
+from afl_scraper.scraper import player_stats_fallback
+from afl_scraper.scraper.models import (
+    MatchMetadataCatalog,
+    MatchMetadataRecord,
+    RawMatchDetails,
+)
 from afl_scraper.scraper.player_stats_fallback import parse_afl_tables_player_stats
-
 
 HEADERS = (
     "#",
@@ -210,3 +215,51 @@ def test_fallback_rejects_incomplete_source_headers():
             _identities(),
             expected_players=1,
         )
+
+
+def test_complete_season_cache_revalidates_cached_afl_tables_pages(
+    monkeypatch, tmp_path
+):
+    catalog = MatchMetadataCatalog(
+        year=2013,
+        source_url="https://afltables.com/afl/seas/2013.html",
+        fetched_at=datetime(2026, 1, 1, tzinfo=UTC),
+        matches=[_record()],
+    )
+    fetches = []
+    monkeypatch.setattr(
+        player_stats_fallback,
+        "competition_rules_for_year",
+        lambda _year: SimpleNamespace(participating_players_per_team=1),
+    )
+    monkeypatch.setattr(
+        player_stats_fallback,
+        "fetch_afl_tables_player_stats",
+        lambda _browser, record: fetches.append(record.source_match_id) or _html(),
+    )
+
+    first = player_stats_fallback.cache_afl_tables_season_matches(
+        object(), catalog, delay_ms=0, raw_root=tmp_path
+    )
+    second = player_stats_fallback.cache_afl_tables_season_matches(
+        object(), catalog, delay_ms=0, raw_root=tmp_path
+    )
+
+    expected_path = tmp_path / "041320130629" / "match.html"
+    assert first == second == [expected_path]
+    assert fetches == ["041320130629"]
+    assert expected_path.exists()
+
+
+def test_source_native_validation_accepts_heading_navigation_links():
+    html = _html().replace(
+        "Port Adelaide Match Statistics",
+        'Port Adelaide Match Statistics [<a href="../../2013.html">Season</a>]',
+    )
+
+    assert (
+        player_stats_fallback.validate_afl_tables_player_stats_html(
+            html, _record(), expected_players=1
+        )
+        == 2
+    )

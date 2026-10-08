@@ -1,6 +1,8 @@
 """Validated AFL Tables fallback for unavailable official player statistics."""
 
 import re
+import time as time_module
+from collections.abc import Callable
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,8 +12,9 @@ from playwright.sync_api import BrowserContext
 from ..models.player import PlayerInfo
 from ..transform.map_players import normalize_team
 from ..utils.identity import normalize_person_name
+from .constants import competition_rules_for_year
 from .models import MatchMetadataRecord, RawMatchData, RawMatchDetails, RawPlayerStat
-
+from .models.match_metadata import MatchMetadataCatalog
 
 _PLAYER_PATH_PATTERN = re.compile(r"/players/[A-Za-z]/[^/]+\.html$")
 _JUMPER_PATTERN = re.compile(r"^(?P<number>\d+)")
@@ -41,6 +44,21 @@ _STAT_FIELDS = {
     "%P": "time_on_ground_percent",
 }
 _REQUIRED_HEADERS = {"#", "PLAYER", *_STAT_FIELDS}
+_SOURCE_REQUIRED_HEADERS = {
+    "#",
+    "PLAYER",
+    "KI",
+    "MK",
+    "HB",
+    "DI",
+    "GL",
+    "BH",
+    "HO",
+    "TK",
+    "FF",
+    "FA",
+}
+ProgressCallback = Callable[[int, int, str, bool], None]
 
 
 def _normalize(value: str) -> str:
@@ -231,6 +249,105 @@ def parse_afl_tables_player_stats(
     )
 
 
+def validate_afl_tables_player_stats_html(
+    html: str, record: MatchMetadataRecord, *, expected_players: int
+) -> int:
+    """Validate source-native AFL Tables rows without requiring official IDs."""
+    if not html.strip():
+        raise ValueError("AFL Tables player-stat page is empty")
+    lowered = html.casefold()
+    signature = next((item for item in _OUTAGE_SIGNATURES if item in lowered), None)
+    if signature:
+        raise RuntimeError(
+            f"AFL Tables player-stat page contains outage signature {signature!r}"
+        )
+
+    soup = BeautifulSoup(html, "html.parser")
+    tables = {}
+    suffix = " Match Statistics"
+    for table in soup.find_all("table"):
+        heading = table.select_one("thead tr:first-child th")
+        if heading is None:
+            continue
+        heading_text = _normalize(heading.get_text(" ", strip=True))
+        if suffix not in heading_text:
+            continue
+        source_team = heading_text.partition(suffix)[0]
+        canonical_team = normalize_team(source_team)
+        if canonical_team in tables:
+            raise ValueError(
+                f"Duplicate AFL Tables player-stat table for {source_team}"
+            )
+        tables[canonical_team] = table
+
+    expected_teams = {
+        normalize_team(record.home_team),
+        normalize_team(record.away_team),
+    }
+    if set(tables) != expected_teams:
+        raise ValueError(
+            "AFL Tables player-stat teams do not match resolved metadata: "
+            f"observed={sorted(tables)}, expected={sorted(expected_teams)}"
+        )
+
+    ids_by_team = {}
+    for team in (record.home_team, record.away_team):
+        canonical_team = normalize_team(team)
+        table = tables[canonical_team]
+        header_rows = table.select("thead tr")
+        if len(header_rows) < 2:
+            raise ValueError("AFL Tables player-stat table has no column header row")
+        headers = [
+            _normalize(cell.get_text(" ", strip=True)).upper()
+            for cell in header_rows[-1].find_all(["th", "td"])
+        ]
+        missing = sorted(_SOURCE_REQUIRED_HEADERS - set(headers))
+        if missing:
+            raise ValueError(f"AFL Tables player-stat table is missing fields: {missing}")
+        if len(headers) != len(set(headers)):
+            raise ValueError("AFL Tables player-stat table has duplicate fields")
+
+        player_ids = []
+        for row in table.select("tbody tr"):
+            link = row.find("a", href=_PLAYER_PATH_PATTERN)
+            if link is None:
+                continue
+            cells = row.find_all(["th", "td"], recursive=False)
+            if len(cells) != len(headers):
+                raise ValueError(
+                    f"AFL Tables player row has {len(cells)} cells for "
+                    f"{len(headers)} headers"
+                )
+            values = {
+                header: _normalize(cell.get_text(" ", strip=True))
+                for header, cell in zip(headers, cells, strict=True)
+            }
+            _player_name(values["PLAYER"])
+            if _JUMPER_PATTERN.match(values["#"]) is None:
+                raise ValueError(f"Invalid AFL Tables jumper number {values['#']!r}")
+            stats = {
+                field: _integer(values[header], field)
+                for header, field in _STAT_FIELDS.items()
+                if header in values
+            }
+            if stats["kicks"] + stats["handballs"] != stats["disposals"]:
+                raise ValueError("AFL Tables disposals do not equal kicks + handballs")
+            player_ids.append(Path(link["href"]).stem)
+        if len(player_ids) != expected_players:
+            raise ValueError(
+                f"AFL Tables {team} table has {len(player_ids)} players; "
+                f"expected {expected_players}"
+            )
+        if len(player_ids) != len(set(player_ids)):
+            raise ValueError(f"AFL Tables {team} table contains duplicate player IDs")
+        ids_by_team[canonical_team] = set(player_ids)
+    if ids_by_team[normalize_team(record.home_team)] & ids_by_team[
+        normalize_team(record.away_team)
+    ]:
+        raise ValueError("AFL Tables player statistics contain cross-team identities")
+    return expected_players * 2
+
+
 def fetch_afl_tables_player_stats(
     browser: BrowserContext,
     record: MatchMetadataRecord,
@@ -266,3 +383,41 @@ def save_afl_tables_match_html(
     finally:
         temporary.unlink(missing_ok=True)
     return path
+
+
+def cache_afl_tables_season_matches(
+    browser: BrowserContext,
+    catalog: MatchMetadataCatalog,
+    *,
+    refresh: bool = False,
+    delay_ms: int = 500,
+    raw_root: Path = Path("data/raw/afl_tables/match"),
+    progress: ProgressCallback | None = None,
+) -> list[Path]:
+    """Cache and revalidate a season, returning each validated raw HTML path."""
+    if delay_ms < 0:
+        raise ValueError("AFL Tables request delay must not be negative")
+    expected_players = competition_rules_for_year(
+        catalog.year
+    ).participating_players_per_team
+    total = len(catalog.matches)
+    live_requests = 0
+    paths = []
+    for index, record in enumerate(catalog.matches, start=1):
+        path = raw_root / record.source_match_id / "match.html"
+        cached = path.exists() and not refresh
+        if cached:
+            html = path.read_text(encoding="utf-8")
+        else:
+            if live_requests:
+                time_module.sleep(delay_ms / 1000)
+            html = fetch_afl_tables_player_stats(browser, record)
+            save_afl_tables_match_html(html, record, raw_root)
+            live_requests += 1
+        validate_afl_tables_player_stats_html(
+            html, record, expected_players=expected_players
+        )
+        if progress is not None:
+            progress(index, total, record.source_match_id, cached)
+        paths.append(path)
+    return paths
