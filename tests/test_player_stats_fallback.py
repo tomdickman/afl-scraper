@@ -245,9 +245,10 @@ def test_complete_season_cache_revalidates_cached_afl_tables_pages(
         object(), catalog, delay_ms=0, raw_root=tmp_path
     )
 
-    assert first == second == 2
+    expected_path = tmp_path / "041320130629" / "match.html"
+    assert first == second == [expected_path]
     assert fetches == ["041320130629"]
-    assert (tmp_path / "041320130629" / "match.html").exists()
+    assert expected_path.exists()
 
 
 def test_source_native_validation_accepts_heading_navigation_links():

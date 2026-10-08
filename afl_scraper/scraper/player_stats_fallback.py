@@ -393,8 +393,8 @@ def cache_afl_tables_season_matches(
     delay_ms: int = 500,
     raw_root: Path = Path("data/raw/afl_tables/match"),
     progress: ProgressCallback | None = None,
-) -> int:
-    """Cache and revalidate every AFL Tables match-stat page in a season."""
+) -> list[Path]:
+    """Cache and revalidate a season, returning each validated raw HTML path."""
     if delay_ms < 0:
         raise ValueError("AFL Tables request delay must not be negative")
     expected_players = competition_rules_for_year(
@@ -402,6 +402,7 @@ def cache_afl_tables_season_matches(
     ).participating_players_per_team
     total = len(catalog.matches)
     live_requests = 0
+    paths = []
     for index, record in enumerate(catalog.matches, start=1):
         path = raw_root / record.source_match_id / "match.html"
         cached = path.exists() and not refresh
@@ -418,4 +419,5 @@ def cache_afl_tables_season_matches(
         )
         if progress is not None:
             progress(index, total, record.source_match_id, cached)
-    return total * expected_players * 2
+        paths.append(path)
+    return paths
