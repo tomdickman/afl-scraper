@@ -58,6 +58,7 @@ from .match_metadata import (
     parse_afl_tables_match_catalog,
 )
 from .metadata_audit import audit_match_metadata, save_match_metadata_audit
+from .player_stats_fallback import cache_afl_tables_season_matches
 
 __all__ = [
     # Browser context managers
@@ -99,6 +100,7 @@ __all__ = [
     "parse_afl_tables_match_catalog",
     "audit_match_metadata",
     "save_match_metadata_audit",
+    "cache_afl_tables_season_matches",
     # Player sources
     "PlayerSource",
     "PlayerSourceFactory",
