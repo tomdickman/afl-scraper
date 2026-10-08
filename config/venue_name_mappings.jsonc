@@ -78,6 +78,8 @@
     "Adelaide Oval": "Adelaide Oval",
     "ANZ Stadium": "Stadium Australia",
     "Aurora Stadium": "York Park",
+    "Bellerive Oval": "Bellerive Oval",
+    "Blacktown ISP": "Blacktown",
     "Cazaly's Stadium": "Cazaly's Stadium",
     "Carrara": "Carrara",
     "Carrara Stadium": "Carrara",
@@ -97,9 +99,11 @@
     "Stadium Australia": "Stadium Australia",
     "Subiaco": "Subiaco",
     "Subiaco Oval": "Subiaco",
+    "Sydney Showground": "Sydney Showground",
     "TIO Stadium": "Marrara Oval",
     "Telstra Dome": "Docklands",
     "Telstra Stadium": "Stadium Australia",
+    "Wellington Stadium": "Wellington",
     "York Park": "York Park"
   }
 }
