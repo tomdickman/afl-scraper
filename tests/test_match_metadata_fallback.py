@@ -153,6 +153,30 @@ def test_complete_official_details_are_cross_checked_field_by_field():
         cross_check_official_match_details(conflicting, external)
 
 
+@pytest.mark.parametrize(
+    ("official_round", "external_round"),
+    [
+        ("Finals Week 1", "FW1"),
+        ("Qualifying Finals", "QF"),
+        ("Elimination Finals", "EF"),
+        ("Semi Finals", "SF"),
+        ("Preliminary Finals", "PF"),
+        ("Grand Final", "GF"),
+    ],
+)
+def test_cross_check_accepts_equivalent_finals_round_names(
+    official_round, external_round
+):
+    external, _provenance = resolve_fallback_match_details(
+        _official_fixture(), _catalog()
+    )
+
+    cross_check_official_match_details(
+        external.model_copy(update={"round": official_round}),
+        external.model_copy(update={"round": external_round}),
+    )
+
+
 def test_cache_only_audit_reports_every_manifest_member():
     fixture = _official_fixture()
     manifest = SeasonManifest(
