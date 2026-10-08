@@ -392,6 +392,7 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
 def _score_validation(
     home_goals, home_behinds, home_total, away_goals, away_behinds, away_total
 ) -> dict:
+    """Serialize arithmetic evidence already enforced by the source models."""
     home_calculated = home_goals * 6 + home_behinds
     away_calculated = away_goals * 6 + away_behinds
     return {
