@@ -383,3 +383,45 @@ def test_historical_audit_records_source_score_conflicts(monkeypatch):
         "away_behinds": {"australian_football": 3, "afl_tables": 2},
         "away_total": {"australian_football": 9, "afl_tables": 8},
     }
+    assert report["conflicts"][0]["score_validation"] == {
+        "australian_football": {
+            "home": {
+                "goals": 1,
+                "behinds": 1,
+                "published_total": 7,
+                "calculated_total": 7,
+                "valid": True,
+            },
+            "away": {
+                "goals": 1,
+                "behinds": 3,
+                "published_total": 9,
+                "calculated_total": 9,
+                "valid": True,
+            },
+        },
+        "afl_tables": {
+            "home": {
+                "goals": 1,
+                "behinds": 1,
+                "published_total": 7,
+                "calculated_total": 7,
+                "valid": True,
+            },
+            "away": {
+                "goals": 1,
+                "behinds": 2,
+                "published_total": 8,
+                "calculated_total": 8,
+                "valid": True,
+            },
+        },
+    }
+
+    raw_all._add_official_consensus(report, _manifest())
+
+    assert report["conflicts"][0]["resolution"] == {
+        "status": "resolved_by_official_corroboration",
+        "agreeing_sources": ["afl_official", "afl_tables"],
+        "outlier_sources": ["australian_football"],
+    }
