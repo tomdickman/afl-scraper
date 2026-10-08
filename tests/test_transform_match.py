@@ -96,6 +96,7 @@ class TestResolveVenue:
             ("Carrara Stadium", "Carrara"),
             ("Marrara Stadium", "Marrara Oval"),
             ("Sydney Showground", "Sydney Showground"),
+            ("Wellington Stadium", "Wellington"),
         ],
     )
     def test_australian_football_historical_aliases(self, source_name, venue_id):
