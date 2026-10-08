@@ -65,7 +65,7 @@ class AustralianFootballSeasonManifest(BaseModel):
 
         labels = [round_.label for round_ in self.rounds]
         if len(labels) != len(set(labels)):
-            raise ValueError("Historical season contains duplicate round labels")
+            raise ValueError("Season contains duplicate round labels")
         expected_groups = _EXPECTED_GROUP_COUNTS.get(self.year)
         if expected_groups is not None and len(self.rounds) != expected_groups:
             raise ValueError(
@@ -76,7 +76,7 @@ class AustralianFootballSeasonManifest(BaseModel):
 
         match_ids = self.match_ids
         if len(match_ids) != len(set(match_ids)):
-            raise ValueError("A historical match appeared in more than one round")
+            raise ValueError("A match appeared in more than one round")
 
         expected = _EXPECTED_MATCH_COUNTS.get(self.year)
         if expected is not None and len(match_ids) != expected:

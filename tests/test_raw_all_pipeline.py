@@ -312,6 +312,21 @@ def test_year_manifest_records_complete_and_unavailable_sources(monkeypatch, tmp
     assert sources["australian_football"]["status"] == "complete"
     assert sources["afl_official"]["status"] == "unavailable"
     assert "starts in 2012" in sources["afl_official"]["reason"]
+    expected_keys = {
+        "source",
+        "status",
+        "data_types",
+        "matches",
+        "player_stats",
+        "participants",
+        "catalog_path",
+        "reason",
+    }
+    assert all(set(source) == expected_keys for source in sources.values())
+    assert sources["afl_official"]["player_stats"] == 0
+    assert sources["afl_official"]["participants"] == 0
+    assert sources["afl_official"]["catalog_path"] is None
+    assert sources["afl_tables"]["reason"] is None
 
 
 def test_report_counts_distinct_matches_instead_of_duplicate_sources():

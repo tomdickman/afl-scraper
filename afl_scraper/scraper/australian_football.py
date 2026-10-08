@@ -62,7 +62,7 @@ def _normalize_text(value: str) -> str:
 def _validate_year(year: int) -> None:
     if not MIN_SUPPORTED_YEAR <= year <= MAX_AVAILABLE_YEAR:
         raise ValueError(
-            "AustralianFootball historical source supports "
+            "AustralianFootball source supports "
             f"{MIN_SUPPORTED_YEAR}-{MAX_AVAILABLE_YEAR}; got {year}"
         )
     competition_rules_for_year(year)

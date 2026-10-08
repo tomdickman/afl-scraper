@@ -377,6 +377,7 @@ def _write_year_manifest(year: int, reports, validations) -> Path:
                 "player_stats": report.player_stats,
                 "participants": report.participants,
                 "catalog_path": report.catalog_path,
+                "reason": None,
             })
         else:
             sources.append({
@@ -384,6 +385,9 @@ def _write_year_manifest(year: int, reports, validations) -> Path:
                 "status": "unavailable" if not supported else "failed",
                 "data_types": data_types,
                 "matches": 0,
+                "player_stats": 0,
+                "participants": 0,
+                "catalog_path": None,
                 "reason": (
                     f"AFL Official fixture catalogue starts in {OFFICIAL_FIXTURE_MIN_YEAR}"
                     if source == "afl_official" else "source did not complete"
