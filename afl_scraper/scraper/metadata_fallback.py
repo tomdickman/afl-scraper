@@ -22,14 +22,19 @@ _CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
 _FINAL_ROUNDS = {
     "qf": "qf",
     "qualifying final": "qf",
+    "qualifying finals": "qf",
     "ef": "ef",
     "elimination final": "ef",
+    "elimination finals": "ef",
     "sf": "sf",
     "semi final": "sf",
+    "semi finals": "sf",
     "pf": "pf",
     "preliminary final": "pf",
+    "preliminary finals": "pf",
     "gf": "gf",
     "grand final": "gf",
+    "grand finals": "gf",
 }
 _OFFICIAL_FINALS_WEEKS = {
     "fw1": {"qf", "ef"},
@@ -58,7 +63,12 @@ def _round_key(value: str) -> str:
 def _rounds_match(official: str, external: str) -> bool:
     official_key = _round_key(official)
     external_key = _round_key(external)
+    if official_key == external_key:
+        return True
     allowed = _OFFICIAL_FINALS_WEEKS.get(official_key)
+    external_group = _OFFICIAL_FINALS_WEEKS.get(external_key)
+    if allowed is not None and external_group is not None:
+        return allowed == external_group
     return (
         external_key in allowed if allowed is not None else official_key == external_key
     )
