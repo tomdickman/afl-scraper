@@ -4,14 +4,13 @@ from types import SimpleNamespace
 import pytest
 
 from afl_scraper.models import PlayerInfo
+from afl_scraper.scraper import player_stats_fallback
 from afl_scraper.scraper.models import (
     MatchMetadataCatalog,
     MatchMetadataRecord,
     RawMatchDetails,
 )
-from afl_scraper.scraper import player_stats_fallback
 from afl_scraper.scraper.player_stats_fallback import parse_afl_tables_player_stats
-
 
 HEADERS = (
     "#",
@@ -249,3 +248,17 @@ def test_complete_season_cache_revalidates_cached_afl_tables_pages(
     assert first == second == 2
     assert fetches == ["041320130629"]
     assert (tmp_path / "041320130629" / "match.html").exists()
+
+
+def test_source_native_validation_accepts_heading_navigation_links():
+    html = _html().replace(
+        "Port Adelaide Match Statistics",
+        'Port Adelaide Match Statistics [<a href="../../2013.html">Season</a>]',
+    )
+
+    assert (
+        player_stats_fallback.validate_afl_tables_player_stats_html(
+            html, _record(), expected_players=1
+        )
+        == 2
+    )

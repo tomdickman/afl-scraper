@@ -263,20 +263,37 @@ def validate_afl_tables_player_stats_html(
         )
 
     soup = BeautifulSoup(html, "html.parser")
+    tables = {}
+    suffix = " Match Statistics"
+    for table in soup.find_all("table"):
+        heading = table.select_one("thead tr:first-child th")
+        if heading is None:
+            continue
+        heading_text = _normalize(heading.get_text(" ", strip=True))
+        if suffix not in heading_text:
+            continue
+        source_team = heading_text.partition(suffix)[0]
+        canonical_team = normalize_team(source_team)
+        if canonical_team in tables:
+            raise ValueError(
+                f"Duplicate AFL Tables player-stat table for {source_team}"
+            )
+        tables[canonical_team] = table
+
+    expected_teams = {
+        normalize_team(record.home_team),
+        normalize_team(record.away_team),
+    }
+    if set(tables) != expected_teams:
+        raise ValueError(
+            "AFL Tables player-stat teams do not match resolved metadata: "
+            f"observed={sorted(tables)}, expected={sorted(expected_teams)}"
+        )
+
     ids_by_team = {}
     for team in (record.home_team, record.away_team):
-        table = next(
-            (
-                item
-                for item in soup.find_all("table")
-                if (heading := item.select_one("thead tr:first-child th")) is not None
-                and _normalize(heading.get_text(" ", strip=True))
-                == f"{team} Match Statistics"
-            ),
-            None,
-        )
-        if table is None:
-            raise ValueError(f"AFL Tables player-stat page is missing {team!r}")
+        canonical_team = normalize_team(team)
+        table = tables[canonical_team]
         header_rows = table.select("thead tr")
         if len(header_rows) < 2:
             raise ValueError("AFL Tables player-stat table has no column header row")
@@ -323,8 +340,10 @@ def validate_afl_tables_player_stats_html(
             )
         if len(player_ids) != len(set(player_ids)):
             raise ValueError(f"AFL Tables {team} table contains duplicate player IDs")
-        ids_by_team[team] = set(player_ids)
-    if ids_by_team[record.home_team] & ids_by_team[record.away_team]:
+        ids_by_team[canonical_team] = set(player_ids)
+    if ids_by_team[normalize_team(record.home_team)] & ids_by_team[
+        normalize_team(record.away_team)
+    ]:
         raise ValueError("AFL Tables player statistics contain cross-team identities")
     return expected_players * 2
 
