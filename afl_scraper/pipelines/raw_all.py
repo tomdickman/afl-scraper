@@ -289,12 +289,11 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
             resolve_team(record.home_team),
             resolve_team(record.away_team),
             record.local_date,
-            record.home_total,
-            record.away_total,
         )
-        available.setdefault(key, []).append(record.source_match_id)
+        available.setdefault(key, []).append(record)
 
     unresolved = []
+    conflicts = []
     for match_id in manifest.match_ids:
         match = load_australian_football_match(match_id)
         details = match.details
@@ -302,18 +301,56 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
             resolve_team(details.home_team),
             resolve_team(details.away_team),
             details.date,
-            details.home_team_total,
-            details.away_team_total,
         )
         candidates = available.get(key, [])
         if len(candidates) != 1:
-            unresolved.append({"match_id": match_id, "candidate_ids": candidates})
+            unresolved.append(
+                {
+                    "match_id": match_id,
+                    "candidate_ids": [item.source_match_id for item in candidates],
+                }
+            )
+            continue
+
+        record = candidates[0]
+        compared = {
+            "local_time": (
+                details.local_time.isoformat(),
+                record.local_time.isoformat(),
+            ),
+            "venue": (
+                resolve_venue(details.venue, "australian_football"),
+                resolve_venue(record.venue, "afl_tables"),
+            ),
+            "home_goals": (details.home_team_goals, record.home_goals),
+            "home_behinds": (details.home_team_behinds, record.home_behinds),
+            "home_total": (details.home_team_total, record.home_total),
+            "away_goals": (details.away_team_goals, record.away_goals),
+            "away_behinds": (details.away_team_behinds, record.away_behinds),
+            "away_total": (details.away_team_total, record.away_total),
+        }
+        differences = {
+            field: {"australian_football": left, "afl_tables": right}
+            for field, (left, right) in compared.items()
+            if left != right
+        }
+        if differences:
+            conflicts.append(
+                {
+                    "match_id": match_id,
+                    "afl_tables_match_id": record.source_match_id,
+                    "differences": differences,
+                }
+            )
     return {
         "sources": ["australian_football", "afl_tables"],
+        "status": "passed" if not unresolved and not conflicts else "conflict",
         "match_count": manifest.match_count,
         "resolved_count": manifest.match_count - len(unresolved),
         "unresolved_count": len(unresolved),
+        "conflict_count": len(conflicts),
         "unresolved": unresolved,
+        "conflicts": conflicts,
     }
 
 
@@ -460,15 +497,21 @@ def scrape_all_raw_data(
                 historical_audit = _historical_metadata_audit(
                     year, manifest, afl_tables_catalog
                 )
-                if historical_audit["unresolved_count"]:
-                    raise ValueError(
-                        f"AustralianFootball and AFL Tables disagree for "
-                        f"{historical_audit['unresolved_count']} matches in {year}"
-                    )
-                if manifest.match_count != len(afl_tables_catalog.matches):
-                    raise ValueError(
-                        f"AustralianFootball has {manifest.match_count} matches and "
-                        f"AFL Tables has {len(afl_tables_catalog.matches)} in {year}"
+                historical_audit["source_match_counts"] = {
+                    "australian_football": manifest.match_count,
+                    "afl_tables": len(afl_tables_catalog.matches),
+                }
+                if (
+                    historical_audit["unresolved_count"]
+                    or historical_audit["conflict_count"]
+                    or manifest.match_count != len(afl_tables_catalog.matches)
+                ):
+                    historical_audit["status"] = "conflict"
+                    emit(
+                        f"[{year}] warning: AustralianFootball/AFL Tables "
+                        f"validation found {historical_audit['unresolved_count']} "
+                        f"unresolved and {historical_audit['conflict_count']} "
+                        "conflicting matches; recording details in the manifest"
                     )
                 validations.append(historical_audit)
 
@@ -509,15 +552,26 @@ def scrape_all_raw_data(
                     manifest, afl_tables_catalog
                 )
                 if official_audit["unresolved_count"]:
-                    raise ValueError(
-                        f"AFL Official and AFL Tables disagree for "
-                        f"{official_audit['unresolved_count']} matches in {year}"
+                    emit(
+                        f"[{year}] warning: AFL Official/AFL Tables validation "
+                        f"found {official_audit['unresolved_count']} unresolved "
+                        "matches; recording details in the manifest"
                     )
                 validations.append({
                     "sources": ["afl_official", "afl_tables"],
+                    "status": (
+                        "passed"
+                        if not official_audit["unresolved_count"]
+                        else "conflict"
+                    ),
                     "match_count": official_audit["match_count"],
                     "resolved_count": official_audit["resolved_count"],
                     "unresolved_count": official_audit["unresolved_count"],
+                    "unresolved": [
+                        item
+                        for item in official_audit.get("matches", ())
+                        if item["status"] == "unresolved"
+                    ],
                 })
 
             _write_year_manifest(year, year_reports, validations)

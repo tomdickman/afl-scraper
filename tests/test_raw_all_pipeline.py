@@ -2,6 +2,7 @@ import json
 from contextlib import contextmanager
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import ANY, Mock
 
 import pytest
@@ -330,3 +331,37 @@ def test_report_counts_distinct_matches_instead_of_duplicate_sources():
     assert report.sources == 3
     assert report.matches == 207
     assert report.player_stats == 9108
+
+
+def test_historical_audit_records_source_score_conflicts(monkeypatch):
+    details = SimpleNamespace(
+        home_team="Carlton",
+        away_team="Collingwood",
+        date=date(2012, 3, 24),
+        local_time=time(19, 30),
+        venue="M.C.G.",
+        home_team_goals=1,
+        home_team_behinds=1,
+        home_team_total=7,
+        away_team_goals=1,
+        away_team_behinds=3,
+        away_team_total=9,
+    )
+    monkeypatch.setattr(
+        raw_all,
+        "load_australian_football_match",
+        Mock(return_value=SimpleNamespace(details=details)),
+    )
+
+    report = raw_all._historical_metadata_audit(
+        2012, _manifest(), _tables_catalog()
+    )
+
+    assert report["status"] == "conflict"
+    assert report["resolved_count"] == 1
+    assert report["unresolved_count"] == 0
+    assert report["conflict_count"] == 1
+    assert report["conflicts"][0]["differences"] == {
+        "away_behinds": {"australian_football": 3, "afl_tables": 2},
+        "away_total": {"australian_football": 9, "afl_tables": 8},
+    }

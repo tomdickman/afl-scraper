@@ -182,6 +182,9 @@ Every cached match is revalidated, including its scores and player rows. The
 catalog phase also exercises team aliases, venue aliases, match dates, and
 historical venue timezones. An unknown or invalid value stops the command with
 the affected source value, so no successful report is written for that year.
+When two otherwise valid sources publish different metadata, the command emits
+a warning and preserves the field-level differences in the year's
+`cross_source_validations` manifest instead of discarding either source.
 
 Use a smaller inclusive range while diagnosing a failure:
 
