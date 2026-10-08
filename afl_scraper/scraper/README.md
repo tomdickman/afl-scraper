@@ -14,7 +14,7 @@ historical range.
 | --- | --- | --- |
 | AFL Tables player-season lists | 2006-2026 | Exact club set for the 16-, 17-, and 18-club competition eras, plausible per-club roster sizes, and unique player IDs |
 | AFL Tables match catalogues and stat pages | 2006-2026 | Every catalogue match page is cached; source player IDs, core headers, season-specific team sizes, scores, and disposal totals are revalidated on every run |
-| AustralianFootball season indexes | 2006-2026 | Reviewed complete match totals for 2006-2011; later seasons are accepted only when every match reconciles with the independently parsed AFL Tables catalogue; unique match IDs across home-and-away rounds and finals |
+| AustralianFootball season indexes | 2006-2026 | Reviewed complete match totals for 2006-2011; later-season reconciliation outcomes against the independently parsed AFL Tables catalogue are recorded in coverage manifests; unique match IDs across home-and-away rounds and finals |
 | AustralianFootball match pages | 2006-2026 (sampled fixtures) | Match metadata and score invariants, exact core-stat headers, season-specific player counts, stable source player IDs, and disposal totals |
 | AFL Official fixture catalogue | 2012-2026 | Explicit reviewed season IDs; discovered round labels and match IDs are written to a validated manifest |
 | AFL Official completed match pages | Sampled in 2012, 2020, and 2025 | Completed status, scores, required stat headers, source player IDs, and season-specific 22/23-player match-day teams |

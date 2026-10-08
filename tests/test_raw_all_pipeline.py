@@ -2,6 +2,7 @@ import json
 from contextlib import contextmanager
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import ANY, Mock
 
@@ -135,7 +136,9 @@ def _mock_secondary_sources(monkeypatch):
         raw_all, "get_match_metadata_catalog", Mock(return_value=_tables_catalog())
     )
     monkeypatch.setattr(
-        raw_all, "cache_afl_tables_season_matches", Mock(return_value=2)
+        raw_all,
+        "cache_afl_tables_season_matches",
+        Mock(return_value=[Path("data/raw/afl_tables/match/test-match/match.html")]),
     )
     monkeypatch.setattr(
         raw_all,
@@ -182,7 +185,7 @@ def test_cached_official_range_reuses_manifest_and_match(monkeypatch, tmp_path):
     report = raw_all.scrape_all_raw_data(2012, 2012, delay_ms=0)
 
     assert report.matches == 1
-    assert report.player_stats == 2
+    assert report.player_stats == 44
     discover.assert_not_called()
     scrape.assert_called_once_with(
         ANY,

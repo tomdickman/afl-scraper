@@ -18,6 +18,7 @@ from ..scraper import (
     load_australian_football_match,
     load_raw_match_data,
     load_season_manifest,
+    metadata_catalog_path,
     save_australian_football_manifest,
     save_player_ids_to_json,
     save_season_manifest,
@@ -28,6 +29,7 @@ from ..scraper.constants import (
     MAX_CONFIGURED_YEAR,
     MIN_HISTORY_YEAR,
     OFFICIAL_FIXTURE_MIN_YEAR,
+    competition_rules_for_year,
 )
 from ..scraper.models.australian_football import MAX_AVAILABLE_YEAR
 from ..transform.australian_football import historical_match_datetime
@@ -264,7 +266,7 @@ def _write_afl_tables_catalog(
                 "season_roster",
                 "player_profiles",
             ],
-            "metadata_path": str(Path("data/raw/afl_tables/season") / str(year) / "matches.json"),
+            "metadata_path": str(metadata_catalog_path(year)),
             "teams": [
                 {"source_name": raw, "canonical_id": canonical}
                 for raw, canonical in sorted(teams.items())
@@ -452,12 +454,17 @@ def scrape_all_raw_data(
                         f"({'cache' if cached else 'live'})"
                     )
 
-            tables_player_stats = cache_afl_tables_season_matches(
+            tables_paths = cache_afl_tables_season_matches(
                 browser,
                 afl_tables_catalog,
                 refresh=refresh,
                 delay_ms=delay_ms,
                 progress=tables_progress,
+            )
+            tables_player_stats = (
+                len(tables_paths)
+                * competition_rules_for_year(year).participating_players_per_team
+                * 2
             )
             tables_report = _write_afl_tables_catalog(
                 year,
