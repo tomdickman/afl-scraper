@@ -48,6 +48,10 @@ def _score_split(row: Tag) -> tuple[int, int, int]:
         raise ValueError("AFL Tables match score row is incomplete")
     progression = _normalize(cells[1].get_text(" ", strip=True))
     final_split = progression.split()[-1]
+    # Extra-time matches show the final score in parentheses after the
+    # regulation-time score, for example ``10.12 (10.14)``.
+    if final_split.startswith("(") and final_split.endswith(")"):
+        final_split = final_split[1:-1]
     parts = final_split.split(".")
     if len(parts) != 2 or not all(part.isdigit() for part in parts):
         raise ValueError(f"Invalid AFL Tables final score split {final_split!r}")

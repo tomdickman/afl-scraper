@@ -76,6 +76,18 @@ def test_parses_match_292_from_afl_tables_season_html():
     assert (match.away_goals, match.away_behinds, match.away_total) == (11, 13, 79)
 
 
+def test_parses_parenthesized_extra_time_final_scores():
+    html = FIXTURE.read_text(encoding="utf-8")
+    html = html.replace("6.6 9.9", "6.6 9.8 (9.9)")
+    html = html.replace("9.13 11.13", "9.13 11.12 (11.13)")
+
+    catalog = parse_afl_tables_match_catalog(html, 2013)
+
+    match = catalog.matches[0]
+    assert (match.home_goals, match.home_behinds, match.home_total) == (9, 9, 63)
+    assert (match.away_goals, match.away_behinds, match.away_total) == (11, 13, 79)
+
+
 def test_match_292_fallback_cross_checks_instant_and_preserves_local_time():
     details, provenance = resolve_fallback_match_details(
         _official_fixture(), _catalog()
