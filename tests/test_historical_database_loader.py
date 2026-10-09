@@ -23,11 +23,17 @@ from afl_scraper.transform.australian_football import (
 from afl_scraper.transform.source_mappings import validate_source_mapping_coverage
 
 
-def _stat(source_id: str, name: str, *, free_for: int = 1):
+def _stat(
+    source_id: str,
+    name: str,
+    *,
+    free_for: int = 1,
+    jumper_number: int | None = 10,
+):
     return AustralianFootballPlayerStat(
         source_player_id=source_id,
         player_name=name,
-        jumper_number=10,
+        jumper_number=jumper_number,
         kicks=8,
         marks=3,
         handballs=7,
@@ -78,6 +84,22 @@ def test_historical_transform_uses_date_aware_venue_timezone_and_sparse_stats():
     assert stats[0].goal_assists is None
     assert stats[0].time_on_ground_percent is None
     assert stats[0].fantasy_points is None
+
+
+def test_historical_transform_preserves_unavailable_jumper_number():
+    match = _match().model_copy(
+        update={
+            "home_team_stats": [_stat("14797", "Scott Pendlebury", jumper_number=None)]
+        }
+    )
+
+    _, stats = transform_australian_football_match(
+        match,
+        game_id=9000,
+        player_id_map={"14797": "Scott_Pendlebury", "200": "Alex_Example"},
+    )
+
+    assert stats[0].jumper_number is None
 
 
 def test_historical_transform_accepts_real_source_team_punctuation():

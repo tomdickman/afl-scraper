@@ -355,8 +355,10 @@ The default 500 ms delay applies only between live match requests. Use
 
 This extraction boundary deliberately retains AustralianFootball player IDs as
 source-specific IDs. Match pages publish jumper number, kicks, marks, handballs,
-disposals, goals, behinds, hitouts, tackles, and frees for/against. Statistics
-the source does not publish are absent rather than recorded as zero.
+disposals, goals, behinds, hitouts, tackles, and frees for/against. A jumper
+number is retained as unavailable when the source leaves that player's cell
+blank. Statistics the source does not publish are absent rather than recorded
+as zero.
 
 ### Prepare canonical players for 2006-2011
 

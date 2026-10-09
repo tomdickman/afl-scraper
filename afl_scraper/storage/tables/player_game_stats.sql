@@ -1,7 +1,7 @@
 CREATE TABLE player_game_stats (
   player_id                 VARCHAR(100) NOT NULL REFERENCES player(id),
   team                      VARCHAR(50) NOT NULL REFERENCES team(id),
-  jumper_number             INT NOT NULL,
+  jumper_number             INT,
   kicks                     INT NOT NULL,
   marks                     INT NOT NULL,
   handballs                 INT NOT NULL,

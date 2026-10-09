@@ -119,6 +119,10 @@ class TestBuildUpsertFromModel:
 
         assert '"kicks" = EXCLUDED."kicks"' in rendered
         assert (
+            '"jumper_number" = COALESCE(EXCLUDED."jumper_number", '
+            '"player_game_stats"."jumper_number")' in rendered
+        )
+        assert (
             '"rebound_50s" = COALESCE(EXCLUDED."rebound_50s", '
             '"player_game_stats"."rebound_50s")' in rendered
         )

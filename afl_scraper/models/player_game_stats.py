@@ -7,9 +7,10 @@ class PlayerGameStats(DBModel):
     __table_name__ = "player_game_stats"
     __conflict_cols__ = ["player_id", "game_id"]
     __exclude_updates_cols__ = []
-    # The current AFL table no longer publishes these fields. A non-null value
-    # can enrich a row, but replaying a sparse source must not erase one.
+    # Some sources omit these fields. A non-null value can enrich a row, but
+    # replaying a sparse source must not erase one.
     __preserve_existing_on_null_cols__ = [
+        "jumper_number",
         "rebound_50s",
         "inside_50s",
         "clearances",
@@ -29,7 +30,7 @@ class PlayerGameStats(DBModel):
 
     player_id: str
     team: str
-    jumper_number: int
+    jumper_number: int | None
     kicks: int
     marks: int
     handballs: int
