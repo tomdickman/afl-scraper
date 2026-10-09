@@ -383,3 +383,113 @@ def test_historical_audit_records_source_score_conflicts(monkeypatch):
         "away_behinds": {"australian_football": 3, "afl_tables": 2},
         "away_total": {"australian_football": 9, "afl_tables": 8},
     }
+    assert report["conflicts"][0]["score_validation"] == {
+        "australian_football": {
+            "home": {
+                "goals": 1,
+                "behinds": 1,
+                "published_total": 7,
+                "calculated_total": 7,
+                "valid": True,
+            },
+            "away": {
+                "goals": 1,
+                "behinds": 3,
+                "published_total": 9,
+                "calculated_total": 9,
+                "valid": True,
+            },
+        },
+        "afl_tables": {
+            "home": {
+                "goals": 1,
+                "behinds": 1,
+                "published_total": 7,
+                "calculated_total": 7,
+                "valid": True,
+            },
+            "away": {
+                "goals": 1,
+                "behinds": 2,
+                "published_total": 8,
+                "calculated_total": 8,
+                "valid": True,
+            },
+        },
+    }
+
+    raw_all._add_official_consensus(report, _manifest())
+
+    assert report["conflicts"][0]["resolution"] == {
+        "status": "resolved_by_official_corroboration",
+        "agreeing_sources": ["afl_official", "afl_tables"],
+        "outlier_sources": ["australian_football"],
+    }
+
+
+@pytest.mark.parametrize(
+    (
+        "official_totals",
+        "australian_totals",
+        "tables_totals",
+        "agreeing_sources",
+        "outlier_sources",
+    ),
+    [
+        (
+            (7, 10),
+            (7, 9),
+            (7, 8),
+            ["afl_official"],
+            ["australian_football", "afl_tables"],
+        ),
+        (
+            (7, 8),
+            (7, 8),
+            (7, 8),
+            ["afl_official", "australian_football", "afl_tables"],
+            [],
+        ),
+    ],
+)
+def test_official_consensus_keeps_ambiguous_evidence_unresolved(
+    official_totals,
+    australian_totals,
+    tables_totals,
+    agreeing_sources,
+    outlier_sources,
+):
+    fixture = _manifest().fixtures[0].model_copy(
+        update={"home_total": official_totals[0], "away_total": official_totals[1]}
+    )
+    report = {
+        "conflicts": [
+            {
+                "identity": {
+                    "home_team": "Carlton",
+                    "away_team": "Collingwood",
+                    "date": "2012-03-24",
+                },
+                "score_validation": {
+                    "australian_football": {
+                        "home": {"published_total": australian_totals[0]},
+                        "away": {"published_total": australian_totals[1]},
+                    },
+                    "afl_tables": {
+                        "home": {"published_total": tables_totals[0]},
+                        "away": {"published_total": tables_totals[1]},
+                    },
+                },
+            }
+        ]
+    }
+
+    raw_all._add_official_consensus(
+        report, SimpleNamespace(fixtures=[fixture])
+    )
+
+    assert report["conflicts"][0]["resolution"] == {
+        "status": "unresolved",
+        "agreeing_sources": agreeing_sources,
+        "outlier_sources": outlier_sources,
+    }
