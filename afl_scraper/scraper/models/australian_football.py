@@ -17,7 +17,10 @@ from .season import DiscoveredRound
 
 SOURCE_NAME = "australian_football"
 MIN_SUPPORTED_YEAR = 2006
+# The historical load pipeline remains deliberately bounded to its reviewed
+# canonical-ID mapping era. Raw source acquisition can cover later seasons.
 MAX_SUPPORTED_YEAR = 2011
+MAX_AVAILABLE_YEAR = 2026
 
 _EXPECTED_MATCH_COUNTS = {
     2006: 185,
@@ -54,17 +57,17 @@ class AustralianFootballSeasonManifest(BaseModel):
 
     @model_validator(mode="after")
     def validate_source_contract(self):
-        if self.year not in _EXPECTED_MATCH_COUNTS:
+        if not MIN_SUPPORTED_YEAR <= self.year <= MAX_AVAILABLE_YEAR:
             raise ValueError(
-                "AustralianFootball historical validation supports "
-                f"{MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}; got {self.year}"
+                "AustralianFootball validation supports "
+                f"{MIN_SUPPORTED_YEAR}-{MAX_AVAILABLE_YEAR}; got {self.year}"
             )
 
         labels = [round_.label for round_ in self.rounds]
         if len(labels) != len(set(labels)):
-            raise ValueError("Historical season contains duplicate round labels")
-        expected_groups = _EXPECTED_GROUP_COUNTS[self.year]
-        if len(self.rounds) != expected_groups:
+            raise ValueError("Season contains duplicate round labels")
+        expected_groups = _EXPECTED_GROUP_COUNTS.get(self.year)
+        if expected_groups is not None and len(self.rounds) != expected_groups:
             raise ValueError(
                 f"AustralianFootball season {self.year} contains "
                 f"{len(self.rounds)} round/finals groups; expected reviewed "
@@ -73,10 +76,10 @@ class AustralianFootballSeasonManifest(BaseModel):
 
         match_ids = self.match_ids
         if len(match_ids) != len(set(match_ids)):
-            raise ValueError("A historical match appeared in more than one round")
+            raise ValueError("A match appeared in more than one round")
 
-        expected = _EXPECTED_MATCH_COUNTS[self.year]
-        if len(match_ids) != expected:
+        expected = _EXPECTED_MATCH_COUNTS.get(self.year)
+        if expected is not None and len(match_ids) != expected:
             raise ValueError(
                 f"AustralianFootball season {self.year} contains {len(match_ids)} "
                 f"matches; expected reviewed total {expected}"

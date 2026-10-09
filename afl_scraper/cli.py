@@ -357,7 +357,8 @@ def scrape_all(start_year, end_year, refresh, headless, delay_ms):
         progress=click.echo,
     )
     click.echo(
-        f"Validated {len(report.seasons)} seasons, {report.matches} matches, "
+        f"Validated {report.sources} source-seasons across {report.years} years, "
+        f"{report.matches} distinct matches, "
         f"{report.player_stats} player-stat rows, and "
         f"{report.afl_tables_players} AFL Tables player profiles"
     )

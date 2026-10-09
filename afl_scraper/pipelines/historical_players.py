@@ -85,6 +85,11 @@ def _load_snapshot(year: int) -> list[PlayerInfo]:
     return players
 
 
+def load_player_snapshot(year: int) -> list[PlayerInfo]:
+    """Load and revalidate one cached AFL Tables season roster."""
+    return _load_snapshot(year)
+
+
 def _load_or_find_missing_snapshots(
     years: range, *, refresh: bool, offline: bool
 ) -> tuple[dict[int, list[PlayerInfo]], list[int]]:

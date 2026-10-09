@@ -19,7 +19,7 @@ from .models import (
     CachedAustralianFootballMatch,
     DiscoveredRound,
 )
-from .models.australian_football import MAX_SUPPORTED_YEAR, MIN_SUPPORTED_YEAR
+from .models.australian_football import MAX_AVAILABLE_YEAR, MIN_SUPPORTED_YEAR
 
 
 BASE_URL = "https://australianfootball.com"
@@ -60,10 +60,10 @@ def _normalize_text(value: str) -> str:
 
 
 def _validate_year(year: int) -> None:
-    if not MIN_SUPPORTED_YEAR <= year <= MAX_SUPPORTED_YEAR:
+    if not MIN_SUPPORTED_YEAR <= year <= MAX_AVAILABLE_YEAR:
         raise ValueError(
-            "AustralianFootball historical source supports "
-            f"{MIN_SUPPORTED_YEAR}-{MAX_SUPPORTED_YEAR}; got {year}"
+            "AustralianFootball source supports "
+            f"{MIN_SUPPORTED_YEAR}-{MAX_AVAILABLE_YEAR}; got {year}"
         )
     competition_rules_for_year(year)
 
@@ -417,7 +417,7 @@ def _validate_navigation(
 def discover_australian_football_season(
     browser: BrowserContext, year: int
 ) -> AustralianFootballSeasonManifest:
-    """Navigate to and validate a 2006-2011 season index."""
+    """Navigate to and validate a configured season index."""
     url = australian_football_season_url(year)
     page = browser.new_page()
     try:

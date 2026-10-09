@@ -176,13 +176,12 @@ def scrape_season_player_ids(
                     raise
                 deferred.append((index, match_id, error))
                 continue
-
-        collect_match_identities(
-            identities,
-            raw_match,
-            match_id,
-            manifest.year,
-        )
+            collect_match_identities(
+                identities,
+                raw_match,
+                match_id,
+                manifest.year,
+            )
         if progress is not None:
             progress(index, total, match_id, cached)
 

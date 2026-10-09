@@ -182,10 +182,10 @@ def test_expansion_and_grand_final_replay_seasons_have_reviewed_totals(
 
 
 def test_source_year_boundary_is_explicit():
-    with pytest.raises(ValueError, match="supports 2006-2011"):
+    with pytest.raises(ValueError, match="supports 2006-2026"):
         source.australian_football_season_url(2005)
-    with pytest.raises(ValueError, match="supports 2006-2011"):
-        source.australian_football_season_url(2012)
+    with pytest.raises(ValueError, match="supports 2006-2026"):
+        source.australian_football_season_url(2027)
 
 
 def test_access_refusal_suggests_visible_browser_retry():
