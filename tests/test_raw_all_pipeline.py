@@ -425,3 +425,71 @@ def test_historical_audit_records_source_score_conflicts(monkeypatch):
         "agreeing_sources": ["afl_official", "afl_tables"],
         "outlier_sources": ["australian_football"],
     }
+
+
+@pytest.mark.parametrize(
+    (
+        "official_totals",
+        "australian_totals",
+        "tables_totals",
+        "agreeing_sources",
+        "outlier_sources",
+    ),
+    [
+        (
+            (7, 10),
+            (7, 9),
+            (7, 8),
+            ["afl_official"],
+            ["australian_football", "afl_tables"],
+        ),
+        (
+            (7, 8),
+            (7, 8),
+            (7, 8),
+            ["afl_official", "australian_football", "afl_tables"],
+            [],
+        ),
+    ],
+)
+def test_official_consensus_keeps_ambiguous_evidence_unresolved(
+    official_totals,
+    australian_totals,
+    tables_totals,
+    agreeing_sources,
+    outlier_sources,
+):
+    fixture = _manifest().fixtures[0].model_copy(
+        update={"home_total": official_totals[0], "away_total": official_totals[1]}
+    )
+    report = {
+        "conflicts": [
+            {
+                "identity": {
+                    "home_team": "Carlton",
+                    "away_team": "Collingwood",
+                    "date": "2012-03-24",
+                },
+                "score_validation": {
+                    "australian_football": {
+                        "home": {"published_total": australian_totals[0]},
+                        "away": {"published_total": australian_totals[1]},
+                    },
+                    "afl_tables": {
+                        "home": {"published_total": tables_totals[0]},
+                        "away": {"published_total": tables_totals[1]},
+                    },
+                },
+            }
+        ]
+    }
+
+    raw_all._add_official_consensus(
+        report, SimpleNamespace(fixtures=[fixture])
+    )
+
+    assert report["conflicts"][0]["resolution"] == {
+        "status": "unresolved",
+        "agreeing_sources": agreeing_sources,
+        "outlier_sources": outlier_sources,
+    }
