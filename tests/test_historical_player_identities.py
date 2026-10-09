@@ -185,7 +185,9 @@ def test_season_identity_scrape_reuses_cache_and_fetches_only_missing_matches(
     cached_match = raw_match(home_name="Alex Smith", home_id="101")
     live_match = raw_match(home_name="Chris Smith", home_id="303")
     live_calls = []
+    collected_match_ids = []
     progress = []
+    collect = season_identities.collect_match_identities
 
     def load(match_id):
         if match_id == 100:
@@ -196,8 +198,13 @@ def test_season_identity_scrape_reuses_cache_and_fetches_only_missing_matches(
         live_calls.append(match_id)
         return live_match
 
+    def collect_once(identities, match, match_id, year):
+        collected_match_ids.append(match_id)
+        return collect(identities, match, match_id, year)
+
     monkeypatch.setattr(season_identities, "load_raw_match_data", load)
     monkeypatch.setattr(season_identities, "scrape_match", scrape_live)
+    monkeypatch.setattr(season_identities, "collect_match_identities", collect_once)
 
     players = season_identities.scrape_season_player_ids(
         object(),
@@ -207,6 +214,7 @@ def test_season_identity_scrape_reuses_cache_and_fetches_only_missing_matches(
 
     assert [player.id for player in players] == ["101", "202", "303"]
     assert live_calls == [101]
+    assert collected_match_ids == [100, 101]
     assert progress == [(1, 2, 100, True), (2, 2, 101, False)]
 
 
