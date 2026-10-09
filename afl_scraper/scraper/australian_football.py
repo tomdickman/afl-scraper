@@ -166,6 +166,12 @@ def _parse_non_negative_integer(value: str, field: str) -> int:
     return result
 
 
+def _parse_optional_non_negative_integer(value: str, field: str) -> int | None:
+    if not _normalize_text(value):
+        return None
+    return _parse_non_negative_integer(value, field)
+
+
 def _parse_match_details(table: Tag) -> AustralianFootballMatchDetails:
     rows = table.find_all("tr")
     if len(rows) != 4:
@@ -289,7 +295,9 @@ def _parse_player_table(
             AustralianFootballPlayerStat(
                 source_player_id=player_match.group("player_id"),
                 player_name=_player_name(cells[1]),
-                jumper_number=_parse_non_negative_integer(cells[0], "jumper number"),
+                jumper_number=_parse_optional_non_negative_integer(
+                    cells[0], "jumper number"
+                ),
                 kicks=values[0],
                 marks=values[1],
                 handballs=values[2],

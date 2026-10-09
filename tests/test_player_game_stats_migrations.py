@@ -30,6 +30,8 @@ def test_current_schema_represents_post_migration_identity():
     assert "primary key (player_id, game_id)" in current_schema
     assert "rebound_50s int," in current_schema
     assert "rebound_50s int not null" not in current_schema
+    assert "jumper_number int," in current_schema
+    assert "jumper_number int not null" not in current_schema
 
 
 def test_identity_migration_follows_and_transforms_legacy_schema():
@@ -84,3 +86,14 @@ def test_hands_oval_venue_migration_follows_current_head_and_updates_seed():
     assert 'down_revision: str | Sequence[str] | None = "b6df0c4a1e92"' in migration
     assert "hands oval" in migration.lower()
     assert "'hands oval', 'hands oval', 'bunbury', 'western australia'" in venue_seed
+
+
+def test_unavailable_jumper_number_migration_follows_current_head():
+    migration = (
+        MIGRATIONS / "c8d4f6a2b901_allow_unavailable_jumper_numbers.py"
+    ).read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "a4d9c2e71b30"' in migration
+    assert '"jumper_number"' in migration
+    assert "nullable=True" in migration
+    assert "nullable=False" in migration

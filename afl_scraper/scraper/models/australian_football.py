@@ -133,7 +133,7 @@ class AustralianFootballPlayerStat(BaseModel):
 
     source_player_id: str = Field(pattern=r"^\d+$")
     player_name: str = Field(min_length=1)
-    jumper_number: int = Field(ge=0)
+    jumper_number: int | None = Field(default=None, ge=0)
     kicks: int = Field(ge=0)
     marks: int = Field(ge=0)
     handballs: int = Field(ge=0)

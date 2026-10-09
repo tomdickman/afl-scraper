@@ -227,6 +227,25 @@ def test_match_contract_parses_stable_ids_and_only_published_statistics():
     assert "fantasy_points" not in first.model_dump()
 
 
+def test_match_contract_retains_blank_jumper_number_as_unavailable():
+    soup = BeautifulSoup(match_html(), "html.parser")
+    first_player_cells = soup.select("table.stats tbody tr")[0].find_all("td")
+    first_player_cells[0].clear()
+
+    match = source.parse_australian_football_match(str(soup), 2006)
+
+    assert match.home_team_stats[0].jumper_number is None
+
+
+def test_match_contract_rejects_invalid_nonblank_jumper_number():
+    soup = BeautifulSoup(match_html(), "html.parser")
+    first_player_cells = soup.select("table.stats tbody tr")[0].find_all("td")
+    first_player_cells[0].string = "unknown"
+
+    with pytest.raises(ValueError, match="Invalid AustralianFootball jumper number"):
+        source.parse_australian_football_match(str(soup), 2006)
+
+
 def test_match_contract_accepts_source_spacing_inside_score_totals():
     spaced_scores = (
         match_html().replace("16.13.109", "16.13. 109").replace("12.11.83", "12.11. 83")
