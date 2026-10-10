@@ -96,6 +96,7 @@ class TestResolveVenue:
             ("Carrara Stadium", "Carrara"),
             ("Marrara Stadium", "Marrara Oval"),
             ("Sydney Showground", "Sydney Showground"),
+            ("Traeger Park", "Traeger Park"),
             ("Wellington Stadium", "Wellington"),
         ],
     )
