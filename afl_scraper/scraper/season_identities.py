@@ -15,13 +15,20 @@ ProgressCallback = Callable[[int, int, int, bool], None]
 _SAME_SOURCE_GIVEN_NAME_ALIASES = {
     frozenset(("paddy", "patrick")),
 }
+_RETRYABLE_FALLBACK_IDENTITY_ERRORS = (
+    "no prior official season identities are available",
+    "resolved to 0 official identities",
+)
 
 
 def _missing_fallback_identity(error: RuntimeError) -> bool:
     """Return whether a wrapped AFL Tables fallback may succeed after seeding IDs."""
     current: BaseException | None = error
     while current is not None:
-        if "resolved to 0 official identities" in str(current):
+        if any(
+            message in str(current)
+            for message in _RETRYABLE_FALLBACK_IDENTITY_ERRORS
+        ):
             return True
         current = current.__cause__ or current.__context__
     return False
