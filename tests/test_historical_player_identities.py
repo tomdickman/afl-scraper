@@ -218,7 +218,22 @@ def test_season_identity_scrape_reuses_cache_and_fetches_only_missing_matches(
     assert progress == [(1, 2, 100, True), (2, 2, 101, False)]
 
 
-def test_missing_fallback_identity_is_retried_after_later_matches(monkeypatch):
+@pytest.mark.parametrize(
+    "missing_identity_message",
+    [
+        (
+            "AFL match 100 has no official player statistics and no prior "
+            "official season identities are available"
+        ),
+        (
+            "AFL Tables player 'Jonathon Ceglar' for Hawthorn resolved to "
+            "0 official identities; candidates=none"
+        ),
+    ],
+)
+def test_missing_fallback_identity_is_retried_after_later_matches(
+    monkeypatch, missing_identity_message
+):
     calls = []
     progress = []
     ceglar_match = raw_match(
@@ -237,10 +252,7 @@ def test_missing_fallback_identity_is_retried_after_later_matches(monkeypatch):
     def scrape_live(_browser, match_id, *, player_identities, **_kwargs):
         calls.append((match_id, {player.id for player in player_identities}))
         if match_id == 100 and "303" not in calls[-1][1]:
-            identity_error = ValueError(
-                "AFL Tables player 'Jonathon Ceglar' for Hawthorn resolved to "
-                "0 official identities; candidates=none"
-            )
+            identity_error = ValueError(missing_identity_message)
             raise RuntimeError("Failed to scrape AFL match 100") from identity_error
         return ceglar_match
 
