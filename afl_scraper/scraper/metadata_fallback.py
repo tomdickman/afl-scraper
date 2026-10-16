@@ -2,7 +2,7 @@
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import cache
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -46,6 +46,9 @@ _OFFICIAL_FINALS_WEEKS = {
     "fw4": {"gf"},
     "finals week 4": {"gf"},
 }
+# AFL Official exposes the scheduled start, while AFL Tables can record the
+# actual bounce time after a short delay (for example, match 721 in 2014).
+_MAX_SCHEDULED_TIME_DRIFT = timedelta(minutes=15)
 
 
 @cache
@@ -97,6 +100,12 @@ def _external_datetime(record: MatchMetadataRecord) -> datetime:
     return value
 
 
+def _scheduled_times_match(left: datetime, right: datetime) -> bool:
+    return abs(left.astimezone(timezone.utc) - right.astimezone(timezone.utc)) <= (
+        _MAX_SCHEDULED_TIME_DRIFT
+    )
+
+
 def _candidate_matches(
     fixture: OfficialFixtureMetadata, record: MatchMetadataRecord
 ) -> bool:
@@ -112,9 +121,7 @@ def _candidate_matches(
         record.venue, "afl_tables"
     ):
         return False
-    if fixture.scheduled_at.astimezone(timezone.utc) != _external_datetime(
-        record
-    ).astimezone(timezone.utc):
+    if not _scheduled_times_match(fixture.scheduled_at, _external_datetime(record)):
         return False
     if fixture.home_total is not None and fixture.home_total != record.home_total:
         return False
@@ -127,7 +134,7 @@ def resolve_fallback_match_record(
     fixture: OfficialFixtureMetadata | None,
     catalog: MatchMetadataCatalog,
 ) -> MatchMetadataRecord:
-    """Resolve one external record only after every fixture field agrees."""
+    """Resolve one record after fixture fields agree within source tolerances."""
     if fixture is None:
         raise ValueError(
             "Match metadata fallback requires a schema-version-2 official season "
@@ -221,6 +228,8 @@ def cross_check_official_match_details(
     external: RawMatchDetails,
 ) -> None:
     """Fail with a field-level diagnostic when complete sources disagree."""
+    official_scheduled_at = parse_match_datetime(official.date, official.time)
+    external_scheduled_at = parse_match_datetime(external.date, external.time)
     comparisons = {
         "home_team": (
             transform_team_name(official.home_team),
@@ -229,10 +238,6 @@ def cross_check_official_match_details(
         "away_team": (
             transform_team_name(official.away_team),
             transform_team_name(external.away_team),
-        ),
-        "scheduled_at": (
-            parse_match_datetime(official.date, official.time).astimezone(timezone.utc),
-            parse_match_datetime(external.date, external.time).astimezone(timezone.utc),
         ),
         "venue": (
             resolve_venue(official.venue, "afl_official"),
@@ -250,6 +255,11 @@ def cross_check_official_match_details(
         for field, values in comparisons.items()
         if values[0] != values[1]
     }
+    if not _scheduled_times_match(official_scheduled_at, external_scheduled_at):
+        conflicts["scheduled_at"] = {
+            "afl_official": official_scheduled_at.astimezone(timezone.utc),
+            "afl_tables": external_scheduled_at.astimezone(timezone.utc),
+        }
     if not _rounds_match(official.round, external.round):
         conflicts["round"] = {
             "afl_official": official.round,

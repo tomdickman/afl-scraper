@@ -112,6 +112,25 @@ def test_conflicting_fixture_score_fails_without_selecting_fallback():
         resolve_fallback_match_details(_official_fixture(home_total=64), _catalog())
 
 
+def test_scheduled_time_allows_fifteen_minute_actual_bounce_drift():
+    fixture = _official_fixture(
+        scheduled_at=datetime.fromisoformat("2013-04-25T18:05:00+10:00")
+    )
+
+    details, _provenance = resolve_fallback_match_details(fixture, _catalog())
+
+    assert details.time == "7:50 PM (GMT+12:00)"
+
+
+def test_scheduled_time_rejects_drift_over_fifteen_minutes():
+    fixture = _official_fixture(
+        scheduled_at=datetime.fromisoformat("2013-04-25T18:06:00+10:00")
+    )
+
+    with pytest.raises(ValueError, match="resolved to 0"):
+        resolve_fallback_match_details(fixture, _catalog())
+
+
 def test_ambiguous_external_candidates_fail_closed():
     catalog = _catalog()
     duplicate = catalog.matches[0].model_copy(
@@ -163,6 +182,25 @@ def test_complete_official_details_are_cross_checked_field_by_field():
     conflicting = external.model_copy(update={"away_team_total": 80})
     with pytest.raises(ValueError, match="away_total=80 vs 79"):
         cross_check_official_match_details(conflicting, external)
+
+
+def test_cross_check_accepts_fifteen_minute_actual_bounce_drift():
+    external, _provenance = resolve_fallback_match_details(
+        _official_fixture(), _catalog()
+    )
+    official = external.model_copy(update={"time": "8:05 PM (GMT+12:00)"})
+
+    cross_check_official_match_details(official, external)
+
+
+def test_cross_check_rejects_time_drift_over_fifteen_minutes():
+    external, _provenance = resolve_fallback_match_details(
+        _official_fixture(), _catalog()
+    )
+    official = external.model_copy(update={"time": "8:06 PM (GMT+12:00)"})
+
+    with pytest.raises(ValueError, match="scheduled_at="):
+        cross_check_official_match_details(official, external)
 
 
 @pytest.mark.parametrize(
