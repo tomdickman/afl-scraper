@@ -1,9 +1,11 @@
 """Fail-closed extraction for AustralianFootball historical match pages."""
 
+import json
 import re
 import time as time_module
 from collections.abc import Callable
 from datetime import datetime, timezone
+from functools import cache
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,10 +18,12 @@ from playwright.sync_api import (
 
 from .constants import competition_rules_for_year
 from .models import (
+    AustralianFootballCancelledFixture,
     AustralianFootballMatchData,
     AustralianFootballMatchDetails,
     AustralianFootballPlayerStat,
     AustralianFootballSeasonManifest,
+    CachedAustralianFootballCancellation,
     CachedAustralianFootballMatch,
     DiscoveredRound,
 )
@@ -27,6 +31,11 @@ from .models.australian_football import MAX_AVAILABLE_YEAR, MIN_SUPPORTED_YEAR
 
 
 BASE_URL = "https://australianfootball.com"
+_CONFIG_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "config"
+    / "australian_football_match_exceptions.jsonc"
+)
 MATCH_PATH_PATTERN = re.compile(r"^/game/view/(?P<match_id>\d+)$")
 PLAYER_PATH_PATTERN = re.compile(
     r"^/players/player/[^/]+/(?P<player_id>\d+)$", re.IGNORECASE
@@ -63,6 +72,36 @@ ProgressCallback = Callable[[int, int, int, bool], None]
 
 class _IncompleteMatchPageError(ValueError):
     """The source returned a match shell before its summary was available."""
+
+
+@cache
+def _reviewed_cancelled_fixtures() -> dict[int, AustralianFootballCancelledFixture]:
+    content = _CONFIG_PATH.read_text(encoding="utf-8")
+    raw = json.loads(re.sub(r"(?m)(^|\s)//.*$", r"\1", content))
+    fixtures = {
+        int(match_id): AustralianFootballCancelledFixture.model_validate(value)
+        for match_id, value in raw.items()
+    }
+    for match_id, fixture in fixtures.items():
+        if fixture.match_id != match_id:
+            raise ValueError(
+                f"Cancelled fixture key {match_id} contains match {fixture.match_id}"
+            )
+    return fixtures
+
+
+def australian_football_cancelled_fixture(
+    match_id: int | str, year: int
+) -> AustralianFootballCancelledFixture | None:
+    """Return reviewed cancellation metadata for one source fixture, if any."""
+    normalized_match_id = _normalize_match_id(match_id)
+    fixture = _reviewed_cancelled_fixtures().get(normalized_match_id)
+    if fixture is not None and fixture.year != year:
+        raise ValueError(
+            f"Cancelled fixture {normalized_match_id} belongs to {fixture.year}, "
+            f"expected {year}"
+        )
+    return fixture
 
 
 def _normalize_text(value: str) -> str:
@@ -512,6 +551,13 @@ def australian_football_match_cache_path(
     return raw_root / "match" / str(_normalize_match_id(match_id)) / "match.json"
 
 
+def australian_football_cancellation_cache_path(
+    match_id: int | str,
+    raw_root: Path = Path("data/raw/australian_football"),
+) -> Path:
+    return raw_root / "match" / str(_normalize_match_id(match_id)) / "cancellation.json"
+
+
 def save_australian_football_match(
     data: AustralianFootballMatchData,
     match_id: int | str,
@@ -546,6 +592,41 @@ def load_australian_football_match(
         raise ValueError(
             f"Historical cache at {path} contains match {envelope.match_id}, "
             f"expected {normalized_match_id}"
+        )
+    return envelope.data
+
+
+def save_australian_football_cancellation(
+    fixture: AustralianFootballCancelledFixture,
+    raw_root: Path = Path("data/raw/australian_football"),
+) -> Path:
+    """Cache reviewed evidence for a fixture that was never played."""
+    path = australian_football_cancellation_cache_path(fixture.match_id, raw_root)
+    envelope = CachedAustralianFootballCancellation(
+        match_id=fixture.match_id,
+        source_url=australian_football_match_url(fixture.match_id),
+        recorded_at=datetime.now(timezone.utc),
+        data=fixture,
+    )
+    _atomic_write_text(path, envelope.model_dump_json(indent=2) + "\n", "cancellation")
+    return path
+
+
+def load_australian_football_cancellation(
+    match_id: int | str,
+    raw_root: Path = Path("data/raw/australian_football"),
+) -> AustralianFootballCancelledFixture:
+    normalized_match_id = _normalize_match_id(match_id)
+    path = australian_football_cancellation_cache_path(normalized_match_id, raw_root)
+    if not path.exists():
+        raise FileNotFoundError(f"Historical cancellation cache not found: {path}")
+    envelope = CachedAustralianFootballCancellation.model_validate_json(
+        path.read_text(encoding="utf-8")
+    )
+    if envelope.match_id != normalized_match_id:
+        raise ValueError(
+            f"Historical cancellation cache at {path} contains match "
+            f"{envelope.match_id}, expected {normalized_match_id}"
         )
     return envelope.data
 
@@ -606,6 +687,33 @@ def cache_australian_football_season_matches(
     total = manifest.match_count
     made_live_request = False
     for index, match_id in enumerate(manifest.match_ids, start=1):
+        cancellation = australian_football_cancelled_fixture(match_id, manifest.year)
+        if cancellation is not None:
+            cached = False
+            if not refresh:
+                try:
+                    cached_cancellation = load_australian_football_cancellation(
+                        match_id, raw_root
+                    )
+                except FileNotFoundError:
+                    pass
+                else:
+                    if cached_cancellation != cancellation:
+                        raise ValueError(
+                            f"Historical cancellation cache for match {match_id} "
+                            "does not match its reviewed configuration"
+                        )
+                    cached = True
+            path = (
+                australian_football_cancellation_cache_path(match_id, raw_root)
+                if cached
+                else save_australian_football_cancellation(cancellation, raw_root)
+            )
+            paths.append(path)
+            if progress is not None:
+                progress(index, total, match_id, cached)
+            continue
+
         cached = False
         if not refresh:
             try:

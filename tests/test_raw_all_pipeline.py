@@ -427,6 +427,61 @@ def test_historical_audit_records_source_score_conflicts(monkeypatch):
     }
 
 
+def test_historical_audit_classifies_cancelled_fixture_as_expected_absence():
+    manifest = SimpleNamespace(match_ids=[43084], match_count=1)
+    catalog = SimpleNamespace(matches=[])
+
+    report = raw_all._historical_metadata_audit(2015, manifest, catalog)
+
+    assert report["status"] == "passed"
+    assert report["completed_match_count"] == 0
+    assert report["cancelled_fixture_count"] == 1
+    assert report["resolved_count"] == 0
+    assert report["unresolved_count"] == 0
+    assert report["expected_absence_count"] == 1
+    assert report["expected_absences"] == [
+        {
+            "match_id": 43084,
+            "status": "CANCELLED",
+            "reason": "Cancelled following the death of Adelaide coach Phil Walsh",
+            "result_type": "ADMINISTRATIVE_POINTS_SPLIT",
+            "home_ladder_points": 2,
+            "away_ladder_points": 2,
+            "evidence_urls": [
+                "https://www.afl.com.au/news/197577/"
+                "crows-clash-with-geelong-abandoned-remainder-of-round-14-to-go-ahead",
+                "https://afltables.com/afl/notes.html",
+            ],
+        }
+    ]
+
+
+def test_historical_catalog_counts_cancelled_fixture_without_player_stats(
+    monkeypatch, tmp_path
+):
+    fixture = raw_all.australian_football_cancelled_fixture(43084, 2015)
+    manifest = SimpleNamespace(match_ids=[43084], match_count=1)
+    monkeypatch.setattr(raw_all, "CATALOG_ROOT", tmp_path)
+    monkeypatch.setattr(
+        raw_all, "load_australian_football_cancellation", Mock(return_value=fixture)
+    )
+    save_players = Mock()
+    monkeypatch.setattr(raw_all, "save_player_ids_to_json", save_players)
+
+    report = raw_all._write_historical_catalog(2015, manifest)
+
+    catalog = json.loads(Path(report.catalog_path).read_text())
+    assert report.matches == 1
+    assert report.player_stats == 0
+    assert catalog["scheduled_fixtures"] == 1
+    assert catalog["completed_matches"] == 0
+    assert catalog["cancelled_fixtures"] == 1
+    assert catalog["cancellations"][0]["match_id"] == 43084
+    assert catalog["cancellations"][0]["status"] == "CANCELLED"
+    assert "score" not in catalog["cancellations"][0]
+    save_players.assert_called_once_with([], "australian_football", 2015)
+
+
 @pytest.mark.parametrize(
     (
         "official_totals",
