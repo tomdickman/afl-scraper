@@ -8,7 +8,11 @@ from pathlib import Path
 from uuid import uuid4
 
 from bs4 import BeautifulSoup, NavigableString, Tag
-from playwright.sync_api import BrowserContext, Page
+from playwright.sync_api import (
+    BrowserContext,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 from .constants import competition_rules_for_year
 from .models import (
@@ -51,8 +55,14 @@ _PLAYER_HEADERS = (
     "GAMES",
     "G",
 )
+_MATCH_FETCH_ATTEMPTS = 3
+_MATCH_SUMMARY_WAIT_MS = 10_000
 
 ProgressCallback = Callable[[int, int, int, bool], None]
+
+
+class _IncompleteMatchPageError(ValueError):
+    """The source returned a match shell before its summary was available."""
 
 
 def _normalize_text(value: str) -> str:
@@ -348,6 +358,10 @@ def parse_australian_football_match(
         table_text = _normalize_text(table.get_text(" ", strip=True))
         if all(marker in table_text for marker in ("Venue:", "Date:", "Crowd:")):
             summary_tables.append(table)
+    if not summary_tables:
+        raise _IncompleteMatchPageError(
+            "Expected one AustralianFootball match summary, found 0"
+        )
     if len(summary_tables) != 1:
         raise ValueError(
             f"Expected one AustralianFootball match summary, found {len(summary_tables)}"
@@ -420,6 +434,12 @@ def _validate_navigation(
             f"AustralianFootball {page_type} page navigated to unexpected URL "
             f"{page.url!r}"
         )
+
+
+def _wait_for_match_summary(page: Page) -> None:
+    page.locator("table").filter(has_text="Venue:").first.wait_for(
+        state="attached", timeout=_MATCH_SUMMARY_WAIT_MS
+    )
 
 
 def discover_australian_football_season(
@@ -544,8 +564,24 @@ def scrape_australian_football_match(
     try:
         response = page.goto(url)
         _validate_navigation(page, response, url, "match")
-        html = page.content()
-        data = parse_australian_football_match(html, year)
+        for attempt in range(1, _MATCH_FETCH_ATTEMPTS + 1):
+            html = page.content()
+            try:
+                data = parse_australian_football_match(html, year)
+            except _IncompleteMatchPageError as error:
+                if attempt == _MATCH_FETCH_ATTEMPTS:
+                    raise _IncompleteMatchPageError(
+                        f"AustralianFootball match {normalized_match_id} ({url}) "
+                        f"still has no match summary after "
+                        f"{_MATCH_FETCH_ATTEMPTS} attempts"
+                    ) from error
+                try:
+                    _wait_for_match_summary(page)
+                except PlaywrightTimeoutError:
+                    response = page.goto(url)
+                    _validate_navigation(page, response, url, "match")
+                continue
+            break
         path = australian_football_match_cache_path(normalized_match_id, raw_root)
         html_path = path.with_name("match.html")
         _atomic_write_text(html_path, html, "match-html")

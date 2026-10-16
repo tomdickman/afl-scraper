@@ -306,6 +306,139 @@ def test_match_contract_rejects_header_and_identity_drift():
         source.parse_australian_football_match(duplicate_player, 2006)
 
 
+def test_match_scrape_retries_transient_page_without_summary(monkeypatch, tmp_path):
+    soup = BeautifulSoup(match_html(), "html.parser")
+    soup.select_one("table.details_table").decompose()
+
+    class Response:
+        ok = True
+        status = 200
+
+    class Page:
+        url = source.australian_football_match_url(13127)
+        closed = False
+        requests = 0
+        summary_ready = False
+
+        def goto(self, _url):
+            self.requests += 1
+            return Response()
+
+        def content(self):
+            return match_html() if self.summary_ready else str(soup)
+
+        def close(self):
+            self.closed = True
+
+    class Browser:
+        def __init__(self, page):
+            self.page = page
+
+        def new_page(self):
+            return self.page
+
+    page = Page()
+    waits = []
+
+    def wait_for_summary(current_page):
+        waits.append(current_page)
+        current_page.summary_ready = True
+
+    monkeypatch.setattr(source, "_wait_for_match_summary", wait_for_summary)
+
+    path = source.scrape_australian_football_match(Browser(page), 13127, 2006, tmp_path)
+
+    assert path.exists()
+    assert page.requests == 1
+    assert waits == [page]
+    assert page.closed is True
+    assert source.load_australian_football_match(13127, tmp_path).details.round == "10"
+
+
+def test_match_scrape_does_not_retry_structural_conflicts(monkeypatch, tmp_path):
+    soup = BeautifulSoup(match_html(), "html.parser")
+    summary = soup.select_one("table.details_table")
+    summary.insert_after(BeautifulSoup(str(summary), "html.parser").table)
+    duplicate_summary = str(soup)
+
+    class Response:
+        ok = True
+        status = 200
+
+    class Page:
+        url = source.australian_football_match_url(13127)
+        requests = 0
+
+        def goto(self, _url):
+            self.requests += 1
+            return Response()
+
+        def content(self):
+            return duplicate_summary
+
+        def close(self):
+            pass
+
+    page = Page()
+    monkeypatch.setattr(
+        source,
+        "_wait_for_match_summary",
+        lambda _page: pytest.fail("structural conflicts must not be retried"),
+    )
+
+    with pytest.raises(ValueError, match="match summary, found 2"):
+        source.scrape_australian_football_match(
+            type("Browser", (), {"new_page": lambda self: page})(),
+            13127,
+            2006,
+            tmp_path,
+        )
+
+    assert page.requests == 1
+
+
+def test_match_scrape_reloads_after_summary_wait_times_out(monkeypatch, tmp_path):
+    soup = BeautifulSoup(match_html(), "html.parser")
+    soup.select_one("table.details_table").decompose()
+
+    class Response:
+        ok = True
+        status = 200
+
+    class Page:
+        url = source.australian_football_match_url(13127)
+        requests = 0
+
+        def goto(self, _url):
+            self.requests += 1
+            return Response()
+
+        def content(self):
+            return str(soup) if self.requests == 1 else match_html()
+
+        def close(self):
+            pass
+
+    page = Page()
+    monkeypatch.setattr(
+        source,
+        "_wait_for_match_summary",
+        lambda _page: (_ for _ in ()).throw(
+            source.PlaywrightTimeoutError("summary timed out")
+        ),
+    )
+
+    path = source.scrape_australian_football_match(
+        type("Browser", (), {"new_page": lambda self: page})(),
+        13127,
+        2006,
+        tmp_path,
+    )
+
+    assert path.exists()
+    assert page.requests == 2
+
+
 def test_versioned_match_cache_round_trips_and_rejects_wrong_path(tmp_path):
     match = source.parse_australian_football_match(match_html(), 2006)
     source_path = source.save_australian_football_match(match, 13127, tmp_path)
