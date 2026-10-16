@@ -9,11 +9,13 @@ from uuid import uuid4
 from ..models import PlayerInfo
 from ..scraper import (
     audit_match_metadata,
+    australian_football_cancelled_fixture,
     cache_afl_tables_season_matches,
     cache_australian_football_season_matches,
     discover_australian_football_season,
     discover_official_season,
     get_match_metadata_catalog,
+    load_australian_football_cancellation,
     load_australian_football_manifest,
     load_australian_football_match,
     load_raw_match_data,
@@ -137,10 +139,20 @@ def _historical_players(year: int, matches) -> list[PlayerInfo]:
 
 
 def _write_historical_catalog(year: int, manifest) -> RawSeasonReport:
-    matches = [
-        (match_id, load_australian_football_match(match_id))
-        for match_id in manifest.match_ids
-    ]
+    matches = []
+    cancellations = []
+    for match_id in manifest.match_ids:
+        reviewed_cancellation = australian_football_cancelled_fixture(match_id, year)
+        if reviewed_cancellation is None:
+            matches.append((match_id, load_australian_football_match(match_id)))
+            continue
+        cached_cancellation = load_australian_football_cancellation(match_id)
+        if cached_cancellation != reviewed_cancellation:
+            raise ValueError(
+                f"Historical cancellation cache for match {match_id} does not "
+                "match its reviewed configuration"
+            )
+        cancellations.append(cached_cancellation)
     teams = {}
     venues = {}
     player_stats = 0
@@ -158,6 +170,11 @@ def _write_historical_catalog(year: int, manifest) -> RawSeasonReport:
         venues[raw_venue] = canonical_venue
         player_stats += len(match.home_team_stats) + len(match.away_team_stats)
 
+    for fixture in cancellations:
+        for raw_team in (fixture.home_team, fixture.away_team):
+            teams[raw_team] = resolve_team(raw_team)
+        venues[fixture.venue] = resolve_venue(fixture.venue, "australian_football")
+
     players = _historical_players(year, matches)
     save_player_ids_to_json(players, "australian_football", year)
     path = _source_catalog_path(year, "australian_football")
@@ -167,6 +184,12 @@ def _write_historical_catalog(year: int, manifest) -> RawSeasonReport:
             "year": year,
             "source": "australian_football",
             "matches": manifest.match_count,
+            "scheduled_fixtures": manifest.match_count,
+            "completed_matches": len(matches),
+            "cancelled_fixtures": len(cancellations),
+            "cancellations": [
+                fixture.model_dump(mode="json") for fixture in cancellations
+            ],
             "player_stats": player_stats,
             "participants": len(players),
             "teams": [
@@ -296,7 +319,22 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
 
     unresolved = []
     conflicts = []
+    expected_absences = []
     for match_id in manifest.match_ids:
+        cancellation = australian_football_cancelled_fixture(match_id, year)
+        if cancellation is not None:
+            expected_absences.append(
+                {
+                    "match_id": match_id,
+                    "status": cancellation.status,
+                    "reason": cancellation.reason,
+                    "result_type": cancellation.result_type,
+                    "home_ladder_points": cancellation.home_ladder_points,
+                    "away_ladder_points": cancellation.away_ladder_points,
+                    "evidence_urls": cancellation.evidence_urls,
+                }
+            )
+            continue
         match = load_australian_football_match(match_id)
         details = match.details
         key = (
@@ -381,11 +419,17 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
         "sources": ["australian_football", "afl_tables"],
         "status": "passed" if not unresolved and not conflicts else "conflict",
         "match_count": manifest.match_count,
-        "resolved_count": manifest.match_count - len(unresolved),
+        "completed_match_count": manifest.match_count - len(expected_absences),
+        "cancelled_fixture_count": len(expected_absences),
+        "resolved_count": (
+            manifest.match_count - len(expected_absences) - len(unresolved)
+        ),
         "unresolved_count": len(unresolved),
         "conflict_count": len(conflicts),
         "unresolved": unresolved,
         "conflicts": conflicts,
+        "expected_absence_count": len(expected_absences),
+        "expected_absences": expected_absences,
     }
 
 
@@ -635,13 +679,17 @@ def scrape_all_raw_data(
                     year, manifest, afl_tables_catalog
                 )
                 historical_audit["source_match_counts"] = {
-                    "australian_football": manifest.match_count,
+                    "australian_football_scheduled": manifest.match_count,
+                    "australian_football_completed": historical_audit[
+                        "completed_match_count"
+                    ],
                     "afl_tables": len(afl_tables_catalog.matches),
                 }
                 if (
                     historical_audit["unresolved_count"]
                     or historical_audit["conflict_count"]
-                    or manifest.match_count != len(afl_tables_catalog.matches)
+                    or historical_audit["completed_match_count"]
+                    != len(afl_tables_catalog.matches)
                 ):
                     historical_audit["status"] = "conflict"
                     emit(

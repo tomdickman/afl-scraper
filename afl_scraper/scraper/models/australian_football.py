@@ -183,6 +183,36 @@ class AustralianFootballMatchData(BaseModel):
         return self
 
 
+class AustralianFootballCancelledFixture(BaseModel):
+    """Reviewed metadata for a scheduled fixture that was never played."""
+
+    model_config = ConfigDict(frozen=True)
+
+    match_id: int = Field(gt=0)
+    year: int
+    round: str = Field(min_length=1)
+    home_team: str = Field(min_length=1)
+    away_team: str = Field(min_length=1)
+    scheduled_date: date
+    local_time: time
+    venue: str = Field(min_length=1)
+    status: Literal["CANCELLED"] = "CANCELLED"
+    result_type: Literal["ADMINISTRATIVE_POINTS_SPLIT"] = "ADMINISTRATIVE_POINTS_SPLIT"
+    home_ladder_points: int = Field(ge=0)
+    away_ladder_points: int = Field(ge=0)
+    player_stats_available: Literal[False] = False
+    reason: str = Field(min_length=1)
+    evidence_urls: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_fixture(self):
+        if self.home_team == self.away_team:
+            raise ValueError("Cancelled fixture teams must differ")
+        if self.scheduled_date.year != self.year:
+            raise ValueError("Cancelled fixture date does not belong to its season")
+        return self
+
+
 class CachedAustralianFootballMatch(BaseModel):
     """Versioned cache envelope binding data to its source match identity."""
 
@@ -194,3 +224,16 @@ class CachedAustralianFootballMatch(BaseModel):
     source_url: str = Field(min_length=1)
     scraped_at: AwareDatetime
     data: AustralianFootballMatchData
+
+
+class CachedAustralianFootballCancellation(BaseModel):
+    """Versioned cache envelope for one reviewed cancelled fixture."""
+
+    model_config = ConfigDict(frozen=True)
+
+    schema_version: Literal[1] = 1
+    source: Literal["australian_football"] = SOURCE_NAME
+    match_id: int = Field(gt=0)
+    source_url: str = Field(min_length=1)
+    recorded_at: AwareDatetime
+    data: AustralianFootballCancelledFixture

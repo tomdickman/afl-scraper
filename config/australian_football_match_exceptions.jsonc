@@ -1,0 +1,24 @@
+{
+  // Reviewed scheduled fixtures that were not played and therefore have no
+  // match summary, score, crowd, player appearances, or player statistics.
+  "43084": {
+    "match_id": 43084,
+    "year": 2015,
+    "round": "Round 14",
+    "home_team": "Adelaide",
+    "away_team": "Geelong",
+    "scheduled_date": "2015-07-05",
+    "local_time": "14:50:00",
+    "venue": "Adelaide Oval",
+    "status": "CANCELLED",
+    "result_type": "ADMINISTRATIVE_POINTS_SPLIT",
+    "home_ladder_points": 2,
+    "away_ladder_points": 2,
+    "player_stats_available": false,
+    "reason": "Cancelled following the death of Adelaide coach Phil Walsh",
+    "evidence_urls": [
+      "https://www.afl.com.au/news/197577/crows-clash-with-geelong-abandoned-remainder-of-round-14-to-go-ahead",
+      "https://afltables.com/afl/notes.html"
+    ]
+  }
+}

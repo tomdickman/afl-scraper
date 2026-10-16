@@ -451,6 +451,51 @@ def test_versioned_match_cache_round_trips_and_rejects_wrong_path(tmp_path):
         source.load_australian_football_match(13128, tmp_path)
 
 
+def test_reviewed_cancelled_fixture_is_cached_without_scraping(monkeypatch, tmp_path):
+    fixture = source.australian_football_cancelled_fixture(43084, 2015)
+    assert fixture is not None
+    assert fixture.status == "CANCELLED"
+    assert fixture.result_type == "ADMINISTRATIVE_POINTS_SPLIT"
+    assert fixture.home_ladder_points == fixture.away_ladder_points == 2
+    assert fixture.player_stats_available is False
+    assert not any("score" in field for field in type(fixture).model_fields)
+
+    manifest = source.AustralianFootballSeasonManifest(
+        year=2015,
+        season_url=source.australian_football_season_url(2015),
+        discovered_at=datetime(2026, 10, 16, tzinfo=timezone.utc),
+        rounds=[source.DiscoveredRound(label="Round 14", match_ids=[43084])],
+    )
+
+    class Browser:
+        def new_page(self):
+            pytest.fail("cancelled fixtures must not be scraped")
+
+    progress = []
+    paths = source.cache_australian_football_season_matches(
+        Browser(),
+        manifest,
+        delay_ms=0,
+        progress=lambda *values: progress.append(values),
+        raw_root=tmp_path,
+    )
+
+    assert paths == [tmp_path / "match/43084/cancellation.json"]
+    assert progress == [(1, 1, 43084, False)]
+    assert source.load_australian_football_cancellation(43084, tmp_path) == fixture
+    assert not (tmp_path / "match/43084/match.json").exists()
+
+    progress.clear()
+    source.cache_australian_football_season_matches(
+        Browser(),
+        manifest,
+        delay_ms=0,
+        progress=lambda *values: progress.append(values),
+        raw_root=tmp_path,
+    )
+    assert progress == [(1, 1, 43084, True)]
+
+
 def test_season_cache_resumes_missing_matches_and_fails_on_invalid_cache(
     monkeypatch, tmp_path
 ):

@@ -1,8 +1,10 @@
 from .australian_football import (
+    AustralianFootballCancelledFixture,
     AustralianFootballMatchData,
     AustralianFootballMatchDetails,
     AustralianFootballPlayerStat,
     AustralianFootballSeasonManifest,
+    CachedAustralianFootballCancellation,
     CachedAustralianFootballMatch,
 )
 from .match_cache import CachedRawMatch
@@ -15,10 +17,12 @@ from .raw_match import RawMatchData, RawMatchDetails, RawPlayerStat
 from .season import DiscoveredRound, OfficialFixtureMetadata, SeasonManifest
 
 __all__ = [
+    "AustralianFootballCancelledFixture",
     "AustralianFootballMatchData",
     "AustralianFootballMatchDetails",
     "AustralianFootballPlayerStat",
     "AustralianFootballSeasonManifest",
+    "CachedAustralianFootballCancellation",
     "CachedAustralianFootballMatch",
     "DiscoveredRound",
     "CachedRawMatch",
