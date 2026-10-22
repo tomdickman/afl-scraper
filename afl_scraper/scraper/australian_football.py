@@ -23,8 +23,10 @@ from .models import (
     AustralianFootballMatchDetails,
     AustralianFootballPlayerStat,
     AustralianFootballSeasonManifest,
+    AustralianFootballSourceOmission,
     CachedAustralianFootballCancellation,
     CachedAustralianFootballMatch,
+    CachedAustralianFootballSourceOmission,
     DiscoveredRound,
 )
 from .models.australian_football import MAX_AVAILABLE_YEAR, MIN_SUPPORTED_YEAR
@@ -35,6 +37,11 @@ _CONFIG_PATH = (
     Path(__file__).resolve().parents[2]
     / "config"
     / "australian_football_match_exceptions.jsonc"
+)
+_SOURCE_OMISSIONS_CONFIG_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "config"
+    / "australian_football_source_omissions.jsonc"
 )
 MATCH_PATH_PATTERN = re.compile(r"^/game/view/(?P<match_id>\d+)$")
 PLAYER_PATH_PATTERN = re.compile(
@@ -110,6 +117,63 @@ def australian_football_cancelled_fixture(
             f"expected {year}"
         )
     return fixture
+
+
+@cache
+def _reviewed_source_omissions() -> dict[int, AustralianFootballSourceOmission]:
+    content = _SOURCE_OMISSIONS_CONFIG_PATH.read_text(encoding="utf-8")
+    raw = json.loads(re.sub(r"(?m)(^|\s)//.*$", r"\1", content))
+    omissions = {}
+    for year_key, season in raw.items():
+        year = int(year_key)
+        if season.get("year") != year:
+            raise ValueError(
+                f"Source omission key {year} contains season {season.get('year')}"
+            )
+        reason = season.get("reason")
+        for match in season.get("matches", []):
+            match_id = match.get("match_id")
+            omission = AustralianFootballSourceOmission.model_validate(
+                {
+                    **match,
+                    "year": year,
+                    "reason": reason,
+                    "evidence_urls": [
+                        australian_football_match_url(match_id),
+                        f"https://www.afl.com.au/afl/matches/"
+                        f"{match.get('afl_official_match_id')}",
+                        f"https://afltables.com/afl/stats/games/{year}/"
+                        f"{match.get('afl_tables_match_id')}.html",
+                    ],
+                }
+            )
+            if omission.match_id in omissions:
+                raise ValueError(
+                    f"Duplicate AustralianFootball source omission "
+                    f"{omission.match_id}"
+                )
+            omissions[omission.match_id] = omission
+    official_ids = [item.afl_official_match_id for item in omissions.values()]
+    tables_ids = [item.afl_tables_match_id for item in omissions.values()]
+    if len(official_ids) != len(set(official_ids)):
+        raise ValueError("Source omissions contain duplicate AFL Official match IDs")
+    if len(tables_ids) != len(set(tables_ids)):
+        raise ValueError("Source omissions contain duplicate AFL Tables match IDs")
+    return omissions
+
+
+def australian_football_source_omission(
+    match_id: int | str, year: int
+) -> AustralianFootballSourceOmission | None:
+    """Return reviewed evidence for a played match missing source data."""
+    normalized_match_id = _normalize_match_id(match_id)
+    omission = _reviewed_source_omissions().get(normalized_match_id)
+    if omission is not None and omission.year != year:
+        raise ValueError(
+            f"Source omission {normalized_match_id} belongs to {omission.year}, "
+            f"expected {year}"
+        )
+    return omission
 
 
 def afl_official_cancelled_fixture(
@@ -602,6 +666,13 @@ def australian_football_cancellation_cache_path(
     return raw_root / "match" / str(_normalize_match_id(match_id)) / "cancellation.json"
 
 
+def australian_football_source_omission_cache_path(
+    match_id: int | str,
+    raw_root: Path = Path("data/raw/australian_football"),
+) -> Path:
+    return raw_root / "match" / str(_normalize_match_id(match_id)) / "omission.json"
+
+
 def save_australian_football_match(
     data: AustralianFootballMatchData,
     match_id: int | str,
@@ -675,6 +746,41 @@ def load_australian_football_cancellation(
     return envelope.data
 
 
+def save_australian_football_source_omission(
+    omission: AustralianFootballSourceOmission,
+    raw_root: Path = Path("data/raw/australian_football"),
+) -> Path:
+    """Cache reviewed evidence for a played match missing source data."""
+    path = australian_football_source_omission_cache_path(omission.match_id, raw_root)
+    envelope = CachedAustralianFootballSourceOmission(
+        match_id=omission.match_id,
+        source_url=australian_football_match_url(omission.match_id),
+        recorded_at=datetime.now(timezone.utc),
+        data=omission,
+    )
+    _atomic_write_text(path, envelope.model_dump_json(indent=2) + "\n", "omission")
+    return path
+
+
+def load_australian_football_source_omission(
+    match_id: int | str,
+    raw_root: Path = Path("data/raw/australian_football"),
+) -> AustralianFootballSourceOmission:
+    normalized_match_id = _normalize_match_id(match_id)
+    path = australian_football_source_omission_cache_path(normalized_match_id, raw_root)
+    if not path.exists():
+        raise FileNotFoundError(f"Historical source omission cache not found: {path}")
+    envelope = CachedAustralianFootballSourceOmission.model_validate_json(
+        path.read_text(encoding="utf-8")
+    )
+    if envelope.match_id != normalized_match_id:
+        raise ValueError(
+            f"Historical source omission cache at {path} contains match "
+            f"{envelope.match_id}, expected {normalized_match_id}"
+        )
+    return envelope.data
+
+
 def scrape_australian_football_match(
     browser: BrowserContext,
     match_id: int | str,
@@ -731,6 +837,33 @@ def cache_australian_football_season_matches(
     total = manifest.match_count
     made_live_request = False
     for index, match_id in enumerate(manifest.match_ids, start=1):
+        omission = australian_football_source_omission(match_id, manifest.year)
+        if omission is not None:
+            cached = False
+            if not refresh:
+                try:
+                    cached_omission = load_australian_football_source_omission(
+                        match_id, raw_root
+                    )
+                except FileNotFoundError:
+                    pass
+                else:
+                    if cached_omission != omission:
+                        raise ValueError(
+                            f"Historical source omission cache for match {match_id} "
+                            "does not match its reviewed configuration"
+                        )
+                    cached = True
+            path = (
+                australian_football_source_omission_cache_path(match_id, raw_root)
+                if cached
+                else save_australian_football_source_omission(omission, raw_root)
+            )
+            paths.append(path)
+            if progress is not None:
+                progress(index, total, match_id, cached)
+            continue
+
         cancellation = australian_football_cancelled_fixture(match_id, manifest.year)
         if cancellation is not None:
             cached = False

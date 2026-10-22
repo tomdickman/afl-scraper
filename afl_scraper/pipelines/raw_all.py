@@ -11,6 +11,7 @@ from ..scraper import (
     afl_official_cancelled_fixture,
     audit_match_metadata,
     australian_football_cancelled_fixture,
+    australian_football_source_omission,
     cache_afl_tables_season_matches,
     cache_australian_football_season_matches,
     cancellation_cache_matches_review,
@@ -20,6 +21,7 @@ from ..scraper import (
     load_australian_football_cancellation,
     load_australian_football_manifest,
     load_australian_football_match,
+    load_australian_football_source_omission,
     load_raw_match_data,
     load_season_manifest,
     metadata_catalog_path,
@@ -143,7 +145,18 @@ def _historical_players(year: int, matches) -> list[PlayerInfo]:
 def _write_historical_catalog(year: int, manifest) -> RawSeasonReport:
     matches = []
     cancellations = []
+    source_omissions = []
     for match_id in manifest.match_ids:
+        reviewed_omission = australian_football_source_omission(match_id, year)
+        if reviewed_omission is not None:
+            cached_omission = load_australian_football_source_omission(match_id)
+            if cached_omission != reviewed_omission:
+                raise ValueError(
+                    f"Historical source omission cache for match {match_id} does "
+                    "not match its reviewed configuration"
+                )
+            source_omissions.append(reviewed_omission)
+            continue
         reviewed_cancellation = australian_football_cancelled_fixture(match_id, year)
         if reviewed_cancellation is None:
             matches.append((match_id, load_australian_football_match(match_id)))
@@ -191,6 +204,10 @@ def _write_historical_catalog(year: int, manifest) -> RawSeasonReport:
             "scheduled_fixtures": manifest.match_count,
             "completed_matches": len(matches),
             "cancelled_fixtures": len(cancellations),
+            "source_omissions": [
+                omission.model_dump(mode="json") for omission in source_omissions
+            ],
+            "source_omission_count": len(source_omissions),
             "cancellations": [
                 fixture.model_dump(mode="json") for fixture in cancellations
             ],
@@ -340,9 +357,43 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
     unresolved = []
     conflicts = []
     expected_absences = []
+    cancelled_fixture_count = 0
+    source_omission_count = 0
     for match_id in manifest.match_ids:
+        omission = australian_football_source_omission(match_id, year)
+        if omission is not None:
+            omission_candidates = [
+                record
+                for record in catalog.matches
+                if str(record.source_match_id) == omission.afl_tables_match_id
+            ]
+            if len(omission_candidates) != 1:
+                unresolved.append(
+                    {
+                        "match_id": match_id,
+                        "expected_afl_tables_match_id": omission.afl_tables_match_id,
+                        "candidate_ids": [
+                            item.source_match_id for item in omission_candidates
+                        ],
+                    }
+                )
+                continue
+            source_omission_count += 1
+            expected_absences.append(
+                {
+                    "match_id": match_id,
+                    "status": omission.status,
+                    "reason": omission.reason,
+                    "match_was_played": omission.match_was_played,
+                    "afl_official_match_id": omission.afl_official_match_id,
+                    "afl_tables_match_id": omission.afl_tables_match_id,
+                    "evidence_urls": omission.evidence_urls,
+                }
+            )
+            continue
         cancellation = australian_football_cancelled_fixture(match_id, year)
         if cancellation is not None:
+            cancelled_fixture_count += 1
             expected_absences.append(
                 {
                     "match_id": match_id,
@@ -440,7 +491,8 @@ def _historical_metadata_audit(year: int, manifest, catalog) -> dict:
         "status": "passed" if not unresolved and not conflicts else "conflict",
         "match_count": manifest.match_count,
         "completed_match_count": manifest.match_count - len(expected_absences),
-        "cancelled_fixture_count": len(expected_absences),
+        "cancelled_fixture_count": cancelled_fixture_count,
+        "source_omission_count": source_omission_count,
         "resolved_count": (
             manifest.match_count - len(expected_absences) - len(unresolved)
         ),
@@ -703,12 +755,18 @@ def scrape_all_raw_data(
                     "australian_football_completed": historical_audit[
                         "completed_match_count"
                     ],
+                    "australian_football_source_omissions": historical_audit[
+                        "source_omission_count"
+                    ],
                     "afl_tables": len(afl_tables_catalog.matches),
                 }
                 if (
                     historical_audit["unresolved_count"]
                     or historical_audit["conflict_count"]
-                    or historical_audit["completed_match_count"]
+                    or (
+                        historical_audit["completed_match_count"]
+                        + historical_audit["source_omission_count"]
+                    )
                     != len(afl_tables_catalog.matches)
                 ):
                     historical_audit["status"] = "conflict"

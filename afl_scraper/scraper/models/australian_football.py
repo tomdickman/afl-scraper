@@ -214,6 +214,22 @@ class AustralianFootballCancelledFixture(BaseModel):
         return self
 
 
+class AustralianFootballSourceOmission(BaseModel):
+    """Reviewed evidence for a played match missing from one source page."""
+
+    model_config = ConfigDict(frozen=True)
+
+    match_id: int = Field(gt=0)
+    afl_official_match_id: int = Field(gt=0)
+    afl_tables_match_id: str = Field(pattern=r"^\d+$")
+    year: int
+    status: Literal["SOURCE_DATA_MISSING"] = "SOURCE_DATA_MISSING"
+    match_was_played: Literal[True] = True
+    player_stats_available: Literal[False] = False
+    reason: str = Field(min_length=1)
+    evidence_urls: list[str] = Field(min_length=1)
+
+
 class CachedAustralianFootballMatch(BaseModel):
     """Versioned cache envelope binding data to its source match identity."""
 
@@ -238,3 +254,16 @@ class CachedAustralianFootballCancellation(BaseModel):
     source_url: str = Field(min_length=1)
     recorded_at: AwareDatetime
     data: AustralianFootballCancelledFixture
+
+
+class CachedAustralianFootballSourceOmission(BaseModel):
+    """Versioned cache envelope for one reviewed source omission."""
+
+    model_config = ConfigDict(frozen=True)
+
+    schema_version: Literal[1] = 1
+    source: Literal["australian_football"] = SOURCE_NAME
+    match_id: int = Field(gt=0)
+    source_url: str = Field(min_length=1)
+    recorded_at: AwareDatetime
+    data: AustralianFootballSourceOmission
