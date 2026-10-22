@@ -152,6 +152,28 @@ def test_match_identity_given_name_shortening_still_requires_same_surname():
 
 
 @pytest.mark.parametrize(
+    ("first_name", "second_name"),
+    [
+        ("Rueben William", "Reuben William"),
+        ("Reuben William", "Rueben William"),
+    ],
+)
+def test_match_identities_use_reviewed_spelling_for_same_source_alias(
+    first_name, second_name
+):
+    identities = {}
+
+    season_identities.collect_match_identities(
+        identities, raw_match(home_name=first_name, home_id="847"), 100, 2012
+    )
+    season_identities.collect_match_identities(
+        identities, raw_match(home_name=second_name, home_id="847"), 101, 2012
+    )
+
+    assert identities["847"].display_name() == "Reuben William"
+
+
+@pytest.mark.parametrize(
     ("change", "message"),
     [
         ({"home_name": "Another Person"}, "Conflicting AFL official identity 101"),
