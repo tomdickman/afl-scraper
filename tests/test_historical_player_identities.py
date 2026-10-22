@@ -152,14 +152,16 @@ def test_match_identity_given_name_shortening_still_requires_same_surname():
 
 
 @pytest.mark.parametrize(
-    ("first_name", "second_name"),
+    ("first_name", "second_name", "canonical_name"),
     [
-        ("Rueben William", "Reuben William"),
-        ("Reuben William", "Rueben William"),
+        ("Rueben William", "Reuben William", "Reuben William"),
+        ("Reuben William", "Rueben William", "Reuben William"),
+        ("William Rioli", "Willie Rioli", "Willie Rioli"),
+        ("Willie Rioli", "William Rioli", "Willie Rioli"),
     ],
 )
 def test_match_identities_use_reviewed_spelling_for_same_source_alias(
-    first_name, second_name
+    first_name, second_name, canonical_name
 ):
     identities = {}
 
@@ -170,7 +172,7 @@ def test_match_identities_use_reviewed_spelling_for_same_source_alias(
         identities, raw_match(home_name=second_name, home_id="847"), 101, 2012
     )
 
-    assert identities["847"].display_name() == "Reuben William"
+    assert identities["847"].display_name() == canonical_name
 
 
 @pytest.mark.parametrize(
