@@ -3,6 +3,7 @@
   // match summary, score, crowd, player appearances, or player statistics.
   "43084": {
     "match_id": 43084,
+    "afl_official_match_id": 847,
     "year": 2015,
     "round": "Round 14",
     "home_team": "Adelaide",

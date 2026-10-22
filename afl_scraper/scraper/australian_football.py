@@ -87,6 +87,13 @@ def _reviewed_cancelled_fixtures() -> dict[int, AustralianFootballCancelledFixtu
             raise ValueError(
                 f"Cancelled fixture key {match_id} contains match {fixture.match_id}"
             )
+    official_ids = [
+        fixture.afl_official_match_id
+        for fixture in fixtures.values()
+        if fixture.afl_official_match_id is not None
+    ]
+    if len(official_ids) != len(set(official_ids)):
+        raise ValueError("Cancelled fixtures contain duplicate AFL Official match IDs")
     return fixtures
 
 
@@ -102,6 +109,42 @@ def australian_football_cancelled_fixture(
             f"expected {year}"
         )
     return fixture
+
+
+def afl_official_cancelled_fixture(
+    match_id: int | str, year: int
+) -> AustralianFootballCancelledFixture | None:
+    """Return reviewed cancellation metadata for one AFL Official fixture."""
+    try:
+        normalized_match_id = int(match_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid AFL Official match ID: {match_id!r}") from exc
+    if normalized_match_id <= 0 or str(match_id).strip() != str(normalized_match_id):
+        raise ValueError(f"Invalid AFL Official match ID: {match_id!r}")
+
+    fixture = next(
+        (
+            item
+            for item in _reviewed_cancelled_fixtures().values()
+            if item.afl_official_match_id == normalized_match_id
+        ),
+        None,
+    )
+    if fixture is not None and fixture.year != year:
+        raise ValueError(
+            f"Cancelled AFL Official fixture {normalized_match_id} belongs to "
+            f"{fixture.year}, expected {year}"
+        )
+    return fixture
+
+
+def cancellation_cache_matches_review(
+    cached: AustralianFootballCancelledFixture,
+    reviewed: AustralianFootballCancelledFixture,
+) -> bool:
+    """Compare AustralianFootball facts while ignoring cross-source identity."""
+    excluded = {"afl_official_match_id"}
+    return cached.model_dump(exclude=excluded) == reviewed.model_dump(exclude=excluded)
 
 
 def _normalize_text(value: str) -> str:
@@ -690,6 +733,7 @@ def cache_australian_football_season_matches(
         cancellation = australian_football_cancelled_fixture(match_id, manifest.year)
         if cancellation is not None:
             cached = False
+            cache_needs_upgrade = False
             if not refresh:
                 try:
                     cached_cancellation = load_australian_football_cancellation(
@@ -698,14 +742,19 @@ def cache_australian_football_season_matches(
                 except FileNotFoundError:
                     pass
                 else:
-                    if cached_cancellation != cancellation:
+                    if not cancellation_cache_matches_review(
+                        cached_cancellation, cancellation
+                    ):
                         raise ValueError(
                             f"Historical cancellation cache for match {match_id} "
                             "does not match its reviewed configuration"
                         )
                     cached = True
+                    cache_needs_upgrade = cached_cancellation != cancellation
             path = (
-                australian_football_cancellation_cache_path(match_id, raw_root)
+                save_australian_football_cancellation(cancellation, raw_root)
+                if cache_needs_upgrade
+                else australian_football_cancellation_cache_path(match_id, raw_root)
                 if cached
                 else save_australian_football_cancellation(cancellation, raw_root)
             )

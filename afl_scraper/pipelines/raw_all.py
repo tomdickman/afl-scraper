@@ -8,10 +8,12 @@ from uuid import uuid4
 
 from ..models import PlayerInfo
 from ..scraper import (
+    afl_official_cancelled_fixture,
     audit_match_metadata,
     australian_football_cancelled_fixture,
     cache_afl_tables_season_matches,
     cache_australian_football_season_matches,
+    cancellation_cache_matches_review,
     discover_australian_football_season,
     discover_official_season,
     get_match_metadata_catalog,
@@ -147,12 +149,14 @@ def _write_historical_catalog(year: int, manifest) -> RawSeasonReport:
             matches.append((match_id, load_australian_football_match(match_id)))
             continue
         cached_cancellation = load_australian_football_cancellation(match_id)
-        if cached_cancellation != reviewed_cancellation:
+        if not cancellation_cache_matches_review(
+            cached_cancellation, reviewed_cancellation
+        ):
             raise ValueError(
                 f"Historical cancellation cache for match {match_id} does not "
                 "match its reviewed configuration"
             )
-        cancellations.append(cached_cancellation)
+        cancellations.append(reviewed_cancellation)
     teams = {}
     venues = {}
     player_stats = 0
@@ -218,7 +222,17 @@ def _write_official_catalog(year: int, manifest, players) -> RawSeasonReport:
     teams = {}
     venues = {}
     player_stats = 0
+    cancellations = []
     for match_id in manifest.match_ids:
+        cancellation = afl_official_cancelled_fixture(match_id, year)
+        if cancellation is not None:
+            cancellations.append(cancellation)
+            for raw_team in (cancellation.home_team, cancellation.away_team):
+                teams[raw_team] = resolve_team(raw_team)
+            venues[cancellation.venue] = resolve_venue(
+                cancellation.venue, "afl_official"
+            )
+            continue
         match = load_raw_match_data(match_id)
         for raw_team in (match.details.home_team, match.details.away_team):
             teams[raw_team] = resolve_team(raw_team)
@@ -241,6 +255,12 @@ def _write_official_catalog(year: int, manifest, players) -> RawSeasonReport:
             "year": year,
             "source": "afl_official",
             "matches": manifest.match_count,
+            "scheduled_fixtures": manifest.match_count,
+            "completed_matches": manifest.match_count - len(cancellations),
+            "cancelled_fixtures": len(cancellations),
+            "cancellations": [
+                fixture.model_dump(mode="json") for fixture in cancellations
+            ],
             "player_stats": player_stats,
             "participants": len(players),
             "teams": [
@@ -754,6 +774,12 @@ def scrape_all_raw_data(
                     "match_count": official_audit["match_count"],
                     "resolved_count": official_audit["resolved_count"],
                     "unresolved_count": official_audit["unresolved_count"],
+                    "expected_absence_count": official_audit.get(
+                        "expected_absence_count", 0
+                    ),
+                    "expected_absences": official_audit.get(
+                        "expected_absences", []
+                    ),
                     "unresolved": [
                         item
                         for item in official_audit.get("matches", ())

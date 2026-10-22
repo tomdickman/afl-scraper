@@ -7,6 +7,7 @@ from playwright.sync_api import BrowserContext
 
 from ..models.player import PlayerInfo
 from ..utils.identity import normalize_person_name
+from .australian_football import afl_official_cancelled_fixture
 from .models import RawMatchData, RawPlayerStat, SeasonManifest
 from .scrape import load_raw_match_data, scrape_match
 
@@ -150,9 +151,16 @@ def scrape_season_player_ids(
     """
     identities: dict[str, PlayerInfo] = {}
     total = manifest.match_count
+    cancelled_match_ids = {
+        match_id
+        for match_id in manifest.match_ids
+        if afl_official_cancelled_fixture(match_id, manifest.year) is not None
+    }
     cached_matches: dict[int, RawMatchData] = {}
     if not refresh:
         for match_id in manifest.match_ids:
+            if match_id in cancelled_match_ids:
+                continue
             try:
                 raw_match = load_raw_match_data(match_id)
             except FileNotFoundError:
@@ -167,6 +175,10 @@ def scrape_season_player_ids(
 
     deferred: list[tuple[int, int, RuntimeError]] = []
     for index, match_id in enumerate(manifest.match_ids, start=1):
+        if match_id in cancelled_match_ids:
+            if progress is not None:
+                progress(index, total, match_id, True)
+            continue
         raw_match = cached_matches.get(match_id)
         cached = raw_match is not None
         if raw_match is None:
@@ -226,7 +238,7 @@ def scrape_season_player_ids(
             ) from remaining[0][2]
         deferred = remaining
 
-    if not identities:
+    if not identities and len(cancelled_match_ids) != manifest.match_count:
         raise ValueError(
             f"No participating player identities found for {manifest.year}"
         )

@@ -1,9 +1,10 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 
 import pytest
 
 import afl_scraper.scraper.metadata_fallback as metadata_fallback
+from afl_scraper.scraper.constants import official_season_id
 from afl_scraper.scraper.match_metadata import parse_afl_tables_match_catalog
 from afl_scraper.scraper.metadata_fallback import (
     cross_check_official_match_details,
@@ -13,6 +14,7 @@ from afl_scraper.scraper.metadata_audit import audit_match_metadata
 from afl_scraper.scraper.models import (
     DiscoveredRound,
     MatchMetadataCatalog,
+    MatchMetadataRecord,
     OfficialFixtureMetadata,
     SeasonManifest,
 )
@@ -245,3 +247,60 @@ def test_cache_only_audit_reports_every_manifest_member():
     assert report["resolved_count"] == 1
     assert report["unresolved_count"] == 0
     assert report["matches"][0]["external_url"].endswith("151620130425.html")
+
+
+def test_cache_only_audit_classifies_cancelled_official_fixture_as_expected_absence():
+    fixture = OfficialFixtureMetadata(
+        match_id=847,
+        provider_id="CD_M20150141408",
+        round="14",
+        home_team="Adelaide Crows",
+        away_team="Geelong Cats",
+        scheduled_at=datetime.fromisoformat("2015-07-05T16:20:00+11:00"),
+        venue="Adelaide Oval, Adelaide • Kaurna",
+        home_total=0,
+        away_total=0,
+        status="COMPLETED",
+        source_url="https://www.afl.com.au/afl/matches/847",
+    )
+    manifest = SeasonManifest(
+        schema_version=2,
+        year=2015,
+        season_id=official_season_id(2015),
+        fixture_url="https://www.afl.com.au/fixture",
+        discovered_at=datetime(2026, 10, 18, tzinfo=timezone.utc),
+        rounds=[DiscoveredRound(label="14", match_ids=[847])],
+        fixtures=[fixture],
+    )
+    catalog = MatchMetadataCatalog(
+        year=2015,
+        source_url="https://afltables.com/afl/seas/2015.html",
+        fetched_at=datetime(2026, 10, 18, tzinfo=timezone.utc),
+        matches=[
+            MatchMetadataRecord(
+                source_match_id="irrelevant",
+                source_url="https://afltables.com/afl/stats/games/2015/irrelevant.html",
+                year=2015,
+                round="Round 1",
+                home_team="Carlton",
+                away_team="Richmond",
+                local_date=date(2015, 4, 2),
+                local_time=time(19, 20),
+                venue="M.C.G.",
+                home_goals=11,
+                home_behinds=12,
+                home_total=78,
+                away_goals=15,
+                away_behinds=15,
+                away_total=105,
+            )
+        ],
+    )
+
+    report = audit_match_metadata(manifest, catalog)
+
+    assert report["resolved_count"] == 0
+    assert report["unresolved_count"] == 0
+    assert report["expected_absence_count"] == 1
+    assert report["matches"][0]["status"] == "expected_absence"
+    assert report["matches"][0]["australian_football_match_id"] == 43084

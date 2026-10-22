@@ -189,6 +189,7 @@ class AustralianFootballCancelledFixture(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     match_id: int = Field(gt=0)
+    afl_official_match_id: int | None = Field(default=None, gt=0)
     year: int
     round: str = Field(min_length=1)
     home_team: str = Field(min_length=1)

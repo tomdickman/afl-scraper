@@ -1,5 +1,6 @@
 from .browser import sync_browser_context, async_browser_context, get_team_page
 from .australian_football import (
+    afl_official_cancelled_fixture,
     australian_football_cancellation_cache_path,
     australian_football_cancelled_fixture,
     australian_football_manifest_path,
@@ -7,6 +8,7 @@ from .australian_football import (
     australian_football_match_url,
     australian_football_season_url,
     cache_australian_football_season_matches,
+    cancellation_cache_matches_review,
     discover_australian_football_season,
     load_australian_football_cancellation,
     load_australian_football_manifest,
@@ -72,6 +74,7 @@ __all__ = [
     "async_browser_context",
     "get_team_page",
     # Scraping functions
+    "afl_official_cancelled_fixture",
     "australian_football_cancellation_cache_path",
     "australian_football_cancelled_fixture",
     "australian_football_manifest_path",
@@ -79,6 +82,7 @@ __all__ = [
     "australian_football_match_url",
     "australian_football_season_url",
     "cache_australian_football_season_matches",
+    "cancellation_cache_matches_review",
     "discover_australian_football_season",
     "load_australian_football_cancellation",
     "load_australian_football_manifest",
