@@ -8,7 +8,11 @@ from typing import List
 from urllib.parse import urljoin
 from uuid import uuid4
 
-from playwright.sync_api import BrowserContext, Locator
+from playwright.sync_api import (
+    BrowserContext,
+    Locator,
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 from ..models.player import PlayerInfo
 from .constants import FIXTURE_CLASSNAMES, PATHS, official_season_id
@@ -38,6 +42,8 @@ from .sources import PlayerSourceFactory
 
 
 logger = logging.getLogger(__name__)
+
+_OFFICIAL_MATCH_NAVIGATION_ATTEMPTS = 3
 
 _FIXTURE_TIMEZONES = {
     "AEST": timezone(timedelta(hours=10)),
@@ -75,6 +81,18 @@ def _normalise_match_id(match_id: int | str) -> int:
         raise ValueError(f"Invalid AFL match ID: {match_id!r}")
 
     return normalised
+
+
+def _navigate_to_official_match(page, url: str) -> None:
+    """Retry transient navigation timeouts without masking other failures."""
+    for attempt in range(1, _OFFICIAL_MATCH_NAVIGATION_ATTEMPTS + 1):
+        try:
+            page.goto(url)
+        except PlaywrightTimeoutError:
+            if attempt == _OFFICIAL_MATCH_NAVIGATION_ATTEMPTS:
+                raise
+        else:
+            return
 
 
 def _parse_fixture_datetime(value: str) -> datetime | None:
@@ -424,7 +442,7 @@ def scrape_match(
     page = browser.new_page()
     url = f"{PATHS['MATCH'].rstrip('/')}/{match_id}"
     try:
-        page.goto(url)
+        _navigate_to_official_match(page, url)
         try:
             display_player_stats(page)
         except OfficialPlayerStatsUnavailable as error:
