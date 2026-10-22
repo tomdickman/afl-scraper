@@ -223,13 +223,26 @@ def parse_afl_tables_player_stats(
             raise ValueError(f"Duplicate AFL Tables player-stat table for {team}")
         tables[canonical] = table
 
-    home_key = normalize_team(record.home_team)
-    away_key = normalize_team(record.away_team)
-    if set(tables) != {home_key, away_key}:
+    record_teams = {
+        normalize_team(record.home_team),
+        normalize_team(record.away_team),
+    }
+    detail_teams = {
+        normalize_team(details.home_team),
+        normalize_team(details.away_team),
+    }
+    if detail_teams != record_teams:
+        raise ValueError(
+            "AFL Tables record teams do not match oriented match details: "
+            f"record={sorted(record_teams)}, details={sorted(detail_teams)}"
+        )
+    if set(tables) != record_teams:
         raise ValueError(
             "AFL Tables player-stat teams do not match resolved metadata: "
-            f"observed={sorted(tables)}, expected={sorted((home_key, away_key))}"
+            f"observed={sorted(tables)}, expected={sorted(record_teams)}"
         )
+    home_key = normalize_team(details.home_team)
+    away_key = normalize_team(details.away_team)
     home_stats = _parse_player_table(
         tables[home_key], details.home_team, identities, expected_players
     )

@@ -109,6 +109,31 @@ def test_match_292_fallback_cross_checks_instant_and_preserves_local_time():
     assert "scheduled_at" in provenance.cross_checked_fields
 
 
+def test_fallback_orients_reversed_external_team_order_to_official_fixture():
+    catalog = _catalog()
+    record = catalog.matches[0]
+    reversed_record = record.model_copy(
+        update={
+            "home_team": record.away_team,
+            "away_team": record.home_team,
+            "home_goals": record.away_goals,
+            "home_behinds": record.away_behinds,
+            "home_total": record.away_total,
+            "away_goals": record.home_goals,
+            "away_behinds": record.home_behinds,
+            "away_total": record.home_total,
+        }
+    )
+    reversed_catalog = catalog.model_copy(update={"matches": [reversed_record]})
+
+    details, _provenance = resolve_fallback_match_details(
+        _official_fixture(), reversed_catalog
+    )
+
+    assert (details.home_team, details.home_team_total) == ("St Kilda", 63)
+    assert (details.away_team, details.away_team_total) == ("Sydney Swans", 79)
+
+
 def test_conflicting_fixture_score_fails_without_selecting_fallback():
     with pytest.raises(ValueError, match="resolved to 0"):
         resolve_fallback_match_details(_official_fixture(home_total=64), _catalog())

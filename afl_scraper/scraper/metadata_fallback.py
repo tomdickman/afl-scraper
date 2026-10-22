@@ -106,12 +106,25 @@ def _scheduled_times_match(left: datetime, right: datetime) -> bool:
     )
 
 
+def _team_orientation(
+    fixture: OfficialFixtureMetadata, record: MatchMetadataRecord
+) -> str | None:
+    fixture_home = transform_team_name(fixture.home_team)
+    fixture_away = transform_team_name(fixture.away_team)
+    record_home = transform_team_name(record.home_team)
+    record_away = transform_team_name(record.away_team)
+    if (fixture_home, fixture_away) == (record_home, record_away):
+        return "same"
+    if (fixture_home, fixture_away) == (record_away, record_home):
+        return "reversed"
+    return None
+
+
 def _candidate_matches(
     fixture: OfficialFixtureMetadata, record: MatchMetadataRecord
 ) -> bool:
-    if transform_team_name(fixture.home_team) != transform_team_name(record.home_team):
-        return False
-    if transform_team_name(fixture.away_team) != transform_team_name(record.away_team):
+    orientation = _team_orientation(fixture, record)
+    if orientation is None:
         return False
     if not _rounds_match(fixture.round, record.round):
         return False
@@ -123,9 +136,15 @@ def _candidate_matches(
         return False
     if not _scheduled_times_match(fixture.scheduled_at, _external_datetime(record)):
         return False
-    if fixture.home_total is not None and fixture.home_total != record.home_total:
+    record_home_total = (
+        record.home_total if orientation == "same" else record.away_total
+    )
+    record_away_total = (
+        record.away_total if orientation == "same" else record.home_total
+    )
+    if fixture.home_total is not None and fixture.home_total != record_home_total:
         return False
-    if fixture.away_total is not None and fixture.away_total != record.away_total:
+    if fixture.away_total is not None and fixture.away_total != record_away_total:
         return False
     return True
 
@@ -177,6 +196,22 @@ def match_details_from_record(
     hours, minutes = divmod(abs(total_minutes), 60)
     clock = local_datetime.strftime("%I:%M %p").lstrip("0")
     time_text = f"{clock} (GMT{sign}{hours:02d}:{minutes:02d})"
+    orientation = _team_orientation(fixture, record)
+    if orientation is None:
+        raise ValueError(
+            f"Official fixture {fixture.match_id} teams do not match resolved "
+            f"AFL Tables record {record.source_match_id}"
+        )
+    home_scores = (
+        (record.home_goals, record.home_behinds, record.home_total)
+        if orientation == "same"
+        else (record.away_goals, record.away_behinds, record.away_total)
+    )
+    away_scores = (
+        (record.away_goals, record.away_behinds, record.away_total)
+        if orientation == "same"
+        else (record.home_goals, record.home_behinds, record.home_total)
+    )
     details = RawMatchDetails(
         home_team=fixture.home_team,
         away_team=fixture.away_team,
@@ -185,12 +220,12 @@ def match_details_from_record(
         time=time_text,
         venue=fixture.venue,
         status="FULL TIME",
-        home_team_goals=record.home_goals,
-        home_team_behinds=record.home_behinds,
-        home_team_total=record.home_total,
-        away_team_goals=record.away_goals,
-        away_team_behinds=record.away_behinds,
-        away_team_total=record.away_total,
+        home_team_goals=home_scores[0],
+        home_team_behinds=home_scores[1],
+        home_team_total=home_scores[2],
+        away_team_goals=away_scores[0],
+        away_team_behinds=away_scores[1],
+        away_team_total=away_scores[2],
     )
     return details
 
