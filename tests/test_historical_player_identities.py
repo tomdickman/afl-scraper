@@ -158,6 +158,8 @@ def test_match_identity_given_name_shortening_still_requires_same_surname():
         ("Reuben William", "Rueben William", "Reuben William"),
         ("William Rioli", "Willie Rioli", "Willie Rioli"),
         ("Willie Rioli", "William Rioli", "Willie Rioli"),
+        ("Willie Rioli", "Junior Rioli", "Junior Rioli"),
+        ("Junior Rioli", "Willie Rioli", "Junior Rioli"),
     ],
 )
 def test_match_identities_use_reviewed_spelling_for_same_source_alias(
