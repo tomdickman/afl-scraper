@@ -17,11 +17,18 @@ _SAME_SOURCE_GIVEN_NAME_ALIASES = {
     frozenset(("paddy", "patrick")): "patrick",
     frozenset(("reuben", "rueben")): "reuben",
     frozenset(("william", "willie")): "willie",
+    frozenset(("willie", "junior")): "junior",
 }
 _RETRYABLE_FALLBACK_IDENTITY_ERRORS = (
     "no prior official season identities are available",
     "resolved to 0 official identities",
 )
+
+
+def _normalize_given_name(name: str) -> str:
+    """Normalize a given name without treating Junior as a terminal suffix."""
+    without_apostrophes = re.sub(r"['’]", "", name.casefold())
+    return " ".join(without_apostrophes.replace("-", " ").split())
 
 
 def _missing_fallback_identity(error: RuntimeError) -> bool:
@@ -107,14 +114,14 @@ def _add_identity(
         )
     alias = frozenset(
         (
-            normalize_person_name(previous.first_name),
-            normalize_person_name(player.first_name),
+            _normalize_given_name(previous.first_name),
+            _normalize_given_name(player.first_name),
         )
     )
     preferred_given_name = _SAME_SOURCE_GIVEN_NAME_ALIASES.get(alias)
     if preferred_given_name is not None:
         for candidate in (previous, player):
-            if normalize_person_name(candidate.first_name) == preferred_given_name:
+            if _normalize_given_name(candidate.first_name) == preferred_given_name:
                 identities[player.id] = candidate
                 return
     if len(normalize_person_name(player.display_name())) > len(
