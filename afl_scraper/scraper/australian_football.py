@@ -237,7 +237,43 @@ def _normalize_match_id(match_id: int | str) -> int:
 
 def australian_football_season_url(year: int) -> str:
     _validate_year(year)
-    return f"{BASE_URL}/seasons/season/afl/138/" f"premiership%2Bseason/1/1/{year}"
+    # The final path component is an opaque source record ID. It matched the
+    # calendar year until AustralianFootball inserted a second 2022 season.
+    reviewed_season_id = year + 1 if year >= 2023 else year
+    return _australian_football_season_url_for_id(reviewed_season_id)
+
+
+def _australian_football_season_url_for_id(season_id: int | str) -> str:
+    normalized_season_id = str(season_id).strip()
+    if not normalized_season_id.isdigit():
+        raise ValueError(
+            f"Invalid AustralianFootball season ID {normalized_season_id!r}"
+        )
+    return (
+        f"{BASE_URL}/seasons/season/afl/138/"
+        f"premiership%2Bseason/1/1/{normalized_season_id}"
+    )
+
+
+def _resolve_australian_football_season_url(html: str, year: int) -> str:
+    """Resolve a calendar year through the source's opaque season selector."""
+    _validate_year(year)
+    soup = BeautifulSoup(html, "html.parser")
+    selector = soup.select_one("select#season_select")
+    if selector is None:
+        raise ValueError("AustralianFootball page has no season selector")
+    options = [
+        option
+        for option in selector.find_all("option")
+        if _normalize_text(option.get_text()) == str(year)
+    ]
+    if len(options) != 1:
+        raise ValueError(
+            f"Expected one AustralianFootball season selector for {year}, "
+            f"found {len(options)}"
+        )
+    season_id = options[0].get("value", "")
+    return _australian_football_season_url_for_id(season_id)
 
 
 def australian_football_match_url(match_id: int | str) -> str:
@@ -598,7 +634,14 @@ def discover_australian_football_season(
     try:
         response = page.goto(url)
         _validate_navigation(page, response, url, "season")
-        return parse_australian_football_season(page.content(), year, source_url=url)
+        html = page.content()
+        resolved_url = _resolve_australian_football_season_url(html, year)
+        if resolved_url != url:
+            url = resolved_url
+            response = page.goto(url)
+            _validate_navigation(page, response, url, "season")
+            html = page.content()
+        return parse_australian_football_season(html, year, source_url=url)
     finally:
         page.close()
 

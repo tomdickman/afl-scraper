@@ -201,6 +201,26 @@ def test_source_year_boundary_is_explicit():
         source.australian_football_season_url(2027)
 
 
+def test_season_url_accounts_for_inserted_2022b_source_record():
+    assert source.australian_football_season_url(2022).endswith("/2022")
+    assert source.australian_football_season_url(2023).endswith("/2024")
+
+
+def test_season_url_is_resolved_from_calendar_year_selector():
+    html = """
+    <select id="season_select">
+      <option value="2025">2024</option>
+      <option value="2024">2023</option>
+      <option value="2023">2022B</option>
+      <option value="2022">2022</option>
+    </select>
+    """
+
+    assert source._resolve_australian_football_season_url(html, 2023).endswith(
+        "/2024"
+    )
+
+
 def test_access_refusal_suggests_visible_browser_retry():
     class Page:
         url = source.australian_football_season_url(2006)
