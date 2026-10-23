@@ -559,6 +559,19 @@ def test_reviewed_source_omission_is_cached_without_scraping(tmp_path):
     assert progress == [(1, 1, 126186, True)]
 
 
+def test_reviewed_2021_source_omission_has_exact_cross_source_ids():
+    omission = source.australian_football_source_omission(136507, 2021)
+
+    assert omission is not None
+    assert omission.afl_official_match_id == 3021
+    assert omission.afl_tables_match_id == "081220210424"
+    assert omission.evidence_urls == [
+        "https://australianfootball.com/game/view/136507",
+        "https://www.afl.com.au/afl/matches/3021",
+        "https://afltables.com/afl/stats/games/2021/081220210424.html",
+    ]
+
+
 def test_reviewed_cancellation_migrates_cache_missing_cross_source_id(
     monkeypatch, tmp_path
 ):
