@@ -199,6 +199,28 @@ def test_official_finals_week_matches_specific_external_final():
     assert details.round == "FW1"
 
 
+@pytest.mark.parametrize(
+    ("official_round", "external_round"),
+    [
+        ("Opening Round", "OR"),
+        ("OR", "Round 1"),
+        ("Opening Round", "1"),
+        ("1", "Round 2"),
+        ("24", "25"),
+    ],
+)
+def test_opening_round_seasons_accept_afl_tables_round_offset(
+    official_round, external_round
+):
+    assert metadata_fallback._rounds_match(official_round, external_round, 2024)
+    assert metadata_fallback._rounds_match(official_round, external_round, 2025)
+    assert metadata_fallback._rounds_match(official_round, external_round, 2026)
+
+
+def test_pre_opening_round_seasons_reject_round_offset():
+    assert not metadata_fallback._rounds_match("1", "Round 2", 2023)
+
+
 def test_complete_official_details_are_cross_checked_field_by_field():
     external, _provenance = resolve_fallback_match_details(
         _official_fixture(), _catalog()
