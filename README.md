@@ -12,11 +12,13 @@ A Python CLI for collecting Australian Football League data, normalising it, and
 - Run browser, fixture-selector, and database connection checks to detect local setup or upstream source changes.
 - Manage the SQL-first PostgreSQL schema with Alembic migrations. The schema includes teams, venues, players, games, player game statistics, and player ID mappings.
 
-The reviewed AFL Official fixture catalogue covers 2012 through 2026. AFL Tables
-player-season validation covers the required career-history range from 2006,
-including the 16-club, 17-club, and 18-club competition eras. The AFL Official
-catalogue does not expose 2006-2011, so those matches require a historical source
-adapter before they can be backfilled.
+The complete raw-data workflow covers 2006 through 2026. AFL Tables provides
+player seasons, profiles, match metadata, and statistics across that range;
+AustralianFootball provides an independent match source across the same range;
+and the reviewed AFL Official fixture catalogue covers 2012 through 2026. The
+database historical-backfill workflow is deliberately bounded to 2006-2011,
+where AFL Official fixtures are unavailable. AFL Tables validation covers the
+16-club, 17-club, and 18-club competition eras.
 
 ## Requirements
 
@@ -126,7 +128,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `scrape players YEAR` | Saves raw player records under `data/raw/`. | No |
 | `scrape all` | Resumably caches and validates every configured player and match source, plus team/venue audit catalogs. | No |
 | `scrape season YEAR` | Discovers every source round and match ID and writes a validated season manifest. | No |
-| `scrape historical-season YEAR` | Discovers AustralianFootball matches from 2006-2011 and optionally caches every validated match page. | No |
+| `scrape historical-season YEAR` | Discovers an AustralianFootball season from 2006-2026 and optionally caches every available validated match page. | No |
 | `scrape match ID` | Scrapes, transforms, and loads one match and its player statistics. | Yes |
 | `audit match-metadata --year YEAR` | Verifies every official fixture resolves to one AFL Tables metadata record and writes an atomic report. | No |
 | `scrape round ROUND` | Processes every match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
@@ -156,17 +158,20 @@ This command never opens a database connection. It validates and reuses existing
 good caches, downloads only missing data, and can safely be rerun after an
 interruption. It covers AFL Tables player snapshots, profiles, complete match
 catalogues, and match-stat pages for every year; AustralianFootball season
-indexes and matches for every year; and AFL Official fixtures and matches for
-2012-2026. The browser is visible by default because AustralianFootball may
-reject a fresh headless session.
+indexes and all available match pages for every year; and AFL Official fixtures
+and matches for 2012-2026. Reviewed AustralianFootball source omissions and the
+cancelled 2015 Adelaide-Geelong fixture remain explicit records rather than
+being represented by invented match or player data. The browser is visible by
+default because AustralianFootball may reject a fresh headless session.
 
 The resulting files are grouped beneath `data/`:
 
 - `data/raw/afl_tables/player/` contains the deduplicated raw player profiles.
 - `data/raw/afl_tables/match/` contains every validated match-stat page.
 - `data/mapping/<year>_afl_tables.json` contains each AFL Tables season roster.
-- `data/raw/australian_football/` contains source manifests, match HTML, and
-  validated match JSON.
+- `data/raw/australian_football/` contains source manifests, available match
+  HTML, validated match JSON, and reviewed cancellation or source-omission
+  records.
 - `data/raw/afl_official/` contains 2012-2026 manifests, captured player-stat
   HTML, and validated match JSON.
 - `data/mapping/<year>_<source>.json` contains the participating players derived
@@ -178,10 +183,13 @@ The resulting files are grouped beneath `data/`:
   cross-source validation result. `data/raw/catalog/2006-2026-report.json`
   summarizes the complete run.
 
-Every cached match is revalidated, including its scores and player rows. The
-catalog phase also exercises team aliases, venue aliases, match dates, and
-historical venue timezones. An unknown or invalid value stops the command with
-the affected source value, so no successful report is written for that year.
+Every available cached match is revalidated, including its scores and player
+rows. Reviewed cancellations are retained as scheduled fixtures with no player
+statistics, while reviewed source omissions are cross-checked against their
+exact AFL Official and AFL Tables identities. The catalog phase also exercises
+team aliases, venue aliases, match dates, and historical venue timezones. An
+unreviewed omission or unknown or invalid value stops the command with the
+affected source value, so no successful report is written for that year.
 When two otherwise valid sources publish different metadata, the command emits
 a warning and preserves the field-level differences in the year's
 `cross_source_validations` manifest instead of discarding either source. Score
@@ -197,8 +205,18 @@ uv run afl-scraper scrape all --from-year 2012 --to-year 2012
 
 Normal reruns should not use `--refresh`. That flag deliberately reacquires and
 replaces every requested manifest, match, season snapshot, and player profile.
-Use `--headless` only when the requested range does not encounter the historical
-source restriction, or when an existing browser session is accepted upstream.
+To force a complete 2006-2026 reacquisition and validation, run:
+
+```sh
+uv run afl-scraper scrape all \
+  --from-year 2006 \
+  --to-year 2026 \
+  --refresh \
+  --no-headless
+```
+
+Use `--headless` only when AustralianFootball accepts a fresh headless session;
+that source is consulted throughout the configured range and may reject one.
 
 ### Check the installation
 
@@ -281,7 +299,10 @@ matched AFL Tables record. Source URLs and compared fields are stored in the
 versioned raw match cache, and the alternate HTML is retained under
 `data/raw/afl_tables/match`. A partial source, unknown or ambiguous player,
 ambiguous match identity, or source conflict fails without promoting a cache.
-Complete official data is retained and cross-checked.
+Complete official data is retained and cross-checked. Season scraping retains
+the accumulated identities from every available completed earlier AFL Official
+season, allowing a returning player to be resolved after one or more seasons
+without a match appearance while still rejecting ambiguous identities.
 
 Before scraping a season, validate all cross-source fixture identities without
 opening PostgreSQL:
@@ -301,7 +322,8 @@ Process a complete home-and-away round:
 uv run afl-scraper scrape round 1 --year 2026
 ```
 
-Round identifiers are strings, so special rounds and finals can use fixture labels such as `OR`, `QF`, `SF`, `PF`, or `GF`:
+Round identifiers are strings, so special rounds and finals can use fixture
+labels such as `OR`, `WF`, `QE`, `QF`, `EF`, `SF`, `PF`, or `GF`:
 
 ```sh
 uv run afl-scraper scrape round OR --year 2026
@@ -329,10 +351,13 @@ player-stat totals. It uses the app connection for these read-only checks,
 fails immediately when required database environment variables are missing,
 and never allocates game identities or writes database rows.
 
-### Cache the 2006-2011 historical source
+### Cache an AustralianFootball season
 
-AustralianFootball is the independent historical match source for 2006-2011.
-Discover and validate a season without requesting every match page:
+AustralianFootball is the match source for the 2006-2011 historical backfill
+and an independent validation source through 2026. Raw acquisition accepts any
+configured 2006-2026 season; the database historical-load workflows remain
+deliberately bounded to 2006-2011. Discover and validate a season without
+requesting every match page:
 
 ```sh
 uv run afl-scraper scrape historical-season 2006
