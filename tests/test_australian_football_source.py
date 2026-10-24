@@ -132,6 +132,19 @@ def match_html(year=2006):
     """
 
 
+def test_match_parser_accepts_published_crowd_average_annotation():
+    html = match_html(2017).replace(
+        "Round: 10 Venue: M.C.G. Date: Sat, 03-06-2017 7:10 pm Crowd: 54,820",
+        "1EF Venue: Adelaide Oval Date: Sat, 09-09-2017 7:20 pm "
+        "Crowd: 9,029 ( Avg 4,515)",
+    )
+
+    match = source.parse_australian_football_match(html, 2017)
+
+    assert match.details.round == "1EF"
+    assert match.details.crowd == 9029
+
+
 def test_2006_season_contract_discovers_all_matches_and_deduplicates_links(monkeypatch):
     original = source._round_match_ids
     parsed_headings = []

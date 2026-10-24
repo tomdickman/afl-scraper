@@ -43,7 +43,8 @@ PLAYER_PATH_PATTERN = re.compile(
 _MATCH_METADATA_PATTERN = re.compile(
     r"^(?:Round:\s*)?(?P<round>.+?)\s+Venue:\s*(?P<venue>.+?)\s+"
     r"Date:\s*(?P<date>[A-Za-z]{3},\s*\d{1,2}-\d{1,2}-\d{4})\s+"
-    r"(?P<time>\d{1,2}:\d{2}\s*[ap]m)\s+Crowd:\s*(?P<crowd>[\d,]+|N/A|-)$",
+    r"(?P<time>\d{1,2}:\d{2}\s*[ap]m)\s+Crowd:\s*(?P<crowd>[\d,]+|N/A|-)"
+    r"(?:\s*\(\s*Avg\s+(?P<average_crowd>[\d,]+)\s*\))?$",
     re.IGNORECASE,
 )
 _SCORE_PATTERN = re.compile(r"^(?P<goals>\d+)\.\s*(?P<behinds>\d+)\.\s*(?P<total>\d+)$")
