@@ -12,6 +12,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Local secrets
+.env
+
 # Local data lake (raw scraped data files)
 data/
 
