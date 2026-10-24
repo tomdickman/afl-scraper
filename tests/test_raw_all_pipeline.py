@@ -456,6 +456,61 @@ def test_historical_audit_classifies_cancelled_fixture_as_expected_absence():
     ]
 
 
+def test_historical_audit_classifies_reviewed_source_omission():
+    manifest = SimpleNamespace(match_ids=[126186], match_count=1)
+    catalog = MatchMetadataCatalog(
+        year=2020,
+        source_url="https://afltables.com/afl/seas/2020.html",
+        fetched_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        matches=[
+            MatchMetadataRecord(
+                source_match_id="031420200319",
+                source_url=(
+                    "https://afltables.com/afl/stats/games/2020/"
+                    "031420200319.html"
+                ),
+                year=2020,
+                round="Round 1",
+                home_team="Richmond",
+                away_team="Carlton",
+                local_date=date(2020, 3, 19),
+                local_time=time(19, 40),
+                venue="M.C.G.",
+                home_goals=16,
+                home_behinds=9,
+                home_total=105,
+                away_goals=12,
+                away_behinds=9,
+                away_total=81,
+            )
+        ],
+    )
+
+    report = raw_all._historical_metadata_audit(2020, manifest, catalog)
+
+    assert report["status"] == "passed"
+    assert report["completed_match_count"] == 0
+    assert report["cancelled_fixture_count"] == 0
+    assert report["source_omission_count"] == 1
+    assert report["unresolved_count"] == 0
+    assert report["conflict_count"] == 0
+    assert report["expected_absences"][0] == {
+        "match_id": 126186,
+        "status": "SOURCE_DATA_MISSING",
+        "reason": (
+            "AustralianFootball page has no match summary after repeated retrieval"
+        ),
+        "match_was_played": True,
+        "afl_official_match_id": 2214,
+        "afl_tables_match_id": "031420200319",
+        "evidence_urls": [
+            "https://australianfootball.com/game/view/126186",
+            "https://www.afl.com.au/afl/matches/2214",
+            "https://afltables.com/afl/stats/games/2020/031420200319.html",
+        ],
+    }
+
+
 def test_historical_catalog_counts_cancelled_fixture_without_player_stats(
     monkeypatch, tmp_path
 ):

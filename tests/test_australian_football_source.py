@@ -511,6 +511,54 @@ def test_reviewed_cancelled_fixture_is_cached_without_scraping(monkeypatch, tmp_
     assert progress == [(1, 1, 43084, True)]
 
 
+def test_reviewed_source_omission_is_cached_without_scraping(tmp_path):
+    omission = source.australian_football_source_omission(126186, 2020)
+    assert omission is not None
+    assert omission.afl_official_match_id == 2214
+    assert omission.afl_tables_match_id == "031420200319"
+    assert omission.status == "SOURCE_DATA_MISSING"
+    assert omission.match_was_played is True
+    assert omission.player_stats_available is False
+
+    manifest = source.AustralianFootballSeasonManifest(
+        year=2020,
+        season_url=source.australian_football_season_url(2020),
+        discovered_at=datetime(2026, 10, 23, tzinfo=timezone.utc),
+        rounds=[source.DiscoveredRound(label="Round 1", match_ids=[126186])],
+    )
+
+    class Browser:
+        def new_page(self):
+            pytest.fail("reviewed source omissions must not be scraped")
+
+    progress = []
+    paths = source.cache_australian_football_season_matches(
+        Browser(),
+        manifest,
+        delay_ms=0,
+        progress=lambda *values: progress.append(values),
+        raw_root=tmp_path,
+    )
+
+    assert paths == [tmp_path / "match/126186/omission.json"]
+    assert progress == [(1, 1, 126186, False)]
+    assert (
+        source.load_australian_football_source_omission(126186, tmp_path)
+        == omission
+    )
+    assert not (tmp_path / "match/126186/match.json").exists()
+
+    progress.clear()
+    source.cache_australian_football_season_matches(
+        Browser(),
+        manifest,
+        delay_ms=0,
+        progress=lambda *values: progress.append(values),
+        raw_root=tmp_path,
+    )
+    assert progress == [(1, 1, 126186, True)]
+
+
 def test_reviewed_cancellation_migrates_cache_missing_cross_source_id(
     monkeypatch, tmp_path
 ):
