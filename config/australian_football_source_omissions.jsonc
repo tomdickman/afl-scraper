@@ -2,7 +2,7 @@
   // Reviewed matches that were played, but whose AustralianFootball page does
   // not publish a match summary or player statistics. Exact cross-source IDs
   // keep every omission auditable without attributing fallback data to this
-  // source. The 2020 set was exhaustively checked in non-headless mode.
+  // source. Each configured season was exhaustively checked in non-headless mode.
   "2020": {
     "year": 2020,
     "reason": "AustralianFootball page has no match summary after repeated retrieval",
@@ -36,6 +36,49 @@
       {"match_id": 133534, "afl_official_match_id": 2784, "afl_tables_match_id": "092020200704"},
       {"match_id": 133535, "afl_official_match_id": 2780, "afl_tables_match_id": "071220200704"},
       {"match_id": 133538, "afl_official_match_id": 2785, "afl_tables_match_id": "111420200705"}
+    ]
+  },
+  "2021": {
+    "year": 2021,
+    "reason": "AustralianFootball page has no match summary after repeated retrieval",
+    "matches": [
+      {"match_id": 136507, "afl_official_match_id": 3021, "afl_tables_match_id": "081220210424"},
+      {"match_id": 136520, "afl_official_match_id": 3062, "afl_tables_match_id": "081820210502"},
+      {"match_id": 136556, "afl_official_match_id": 3063, "afl_tables_match_id": "071120210528"},
+      {"match_id": 136549, "afl_official_match_id": 3057, "afl_tables_match_id": "040920210529"},
+      {"match_id": 136553, "afl_official_match_id": 3065, "afl_tables_match_id": "121520210529"},
+      {"match_id": 136583, "afl_official_match_id": 3099, "afl_tables_match_id": "071820210627"},
+      {"match_id": 136610, "afl_official_match_id": 3109, "afl_tables_match_id": "131520210717"},
+      {"match_id": 136607, "afl_official_match_id": 3123, "afl_tables_match_id": "101120210717"},
+      {"match_id": 136603, "afl_official_match_id": 3161, "afl_tables_match_id": "030420210718"},
+      {"match_id": 136616, "afl_official_match_id": 3131, "afl_tables_match_id": "041320210723"},
+      {"match_id": 136611, "afl_official_match_id": 3134, "afl_tables_match_id": "031220210724"},
+      {"match_id": 136614, "afl_official_match_id": 3159, "afl_tables_match_id": "071120210724"},
+      {"match_id": 136619, "afl_official_match_id": 3121, "afl_tables_match_id": "011020210724"},
+      {"match_id": 136613, "afl_official_match_id": 3162, "afl_tables_match_id": "091420210725"},
+      {"match_id": 136628, "afl_official_match_id": 3153, "afl_tables_match_id": "031520210730"},
+      {"match_id": 136620, "afl_official_match_id": 3172, "afl_tables_match_id": "010720210731"},
+      {"match_id": 136622, "afl_official_match_id": 3136, "afl_tables_match_id": "041820210731"},
+      {"match_id": 136626, "afl_official_match_id": 3166, "afl_tables_match_id": "112020210801"},
+      {"match_id": 136623, "afl_official_match_id": 3146, "afl_tables_match_id": "051620210801"},
+      {"match_id": 136625, "afl_official_match_id": 3145, "afl_tables_match_id": "132120210801"},
+      {"match_id": 136632, "afl_official_match_id": 3179, "afl_tables_match_id": "092120210806"},
+      {"match_id": 136631, "afl_official_match_id": 3148, "afl_tables_match_id": "032020210807"},
+      {"match_id": 136634, "afl_official_match_id": 3147, "afl_tables_match_id": "121420210807"},
+      {"match_id": 136635, "afl_official_match_id": 3142, "afl_tables_match_id": "151620210807"},
+      {"match_id": 136633, "afl_official_match_id": 3138, "afl_tables_match_id": "041020210808"},
+      {"match_id": 136637, "afl_official_match_id": 3143, "afl_tables_match_id": "050720210808"},
+      {"match_id": 136642, "afl_official_match_id": 3141, "afl_tables_match_id": "142120210813"},
+      {"match_id": 136640, "afl_official_match_id": 3177, "afl_tables_match_id": "091520210814"},
+      {"match_id": 136645, "afl_official_match_id": 3149, "afl_tables_match_id": "121620210814"},
+      {"match_id": 136644, "afl_official_match_id": 3176, "afl_tables_match_id": "011120210815"},
+      {"match_id": 136641, "afl_official_match_id": 3151, "afl_tables_match_id": "052020210815"},
+      {"match_id": 136655, "afl_official_match_id": 3181, "afl_tables_match_id": "071320210820"},
+      {"match_id": 136652, "afl_official_match_id": 3178, "afl_tables_match_id": "101420210821"},
+      {"match_id": 136654, "afl_official_match_id": 3173, "afl_tables_match_id": "162020210821"},
+      {"match_id": 136651, "afl_official_match_id": 3157, "afl_tables_match_id": "091120210821"},
+      {"match_id": 136649, "afl_official_match_id": 3156, "afl_tables_match_id": "032120210821"},
+      {"match_id": 136650, "afl_official_match_id": 3169, "afl_tables_match_id": "040520210822"}
     ]
   }
 }
