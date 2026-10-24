@@ -52,6 +52,10 @@ _OPENING_ROUND_YEARS = frozenset({2024, 2025, 2026})
 _OPENING_ROUND_KEYS = frozenset({"or", "opening round"})
 _WILDCARD_ROUND_YEARS = frozenset({2026})
 _WILDCARD_ROUND_KEYS = frozenset({"wf", "wildcard final", "wildcard finals"})
+_REVIEWED_POSTPONED_ROUNDS = {
+    (2025, 7753): ("3", "1"),
+    (2025, 7754): ("24", "1"),
+}
 # AFL Official exposes the scheduled start, while AFL Tables can record the
 # actual bounce time after a short delay (for example, match 721 in 2014).
 _MAX_SCHEDULED_TIME_DRIFT = timedelta(minutes=15)
@@ -149,7 +153,13 @@ def _candidate_matches(
     orientation = _team_orientation(fixture, record)
     if orientation is None:
         return False
-    if not _rounds_match(fixture.round, record.round, record.year):
+    observed_rounds = (_round_key(fixture.round), _round_key(record.round))
+    reviewed_rounds = _REVIEWED_POSTPONED_ROUNDS.get(
+        (record.year, fixture.match_id)
+    )
+    if not _rounds_match(fixture.round, record.round, record.year) and (
+        reviewed_rounds is None or observed_rounds != reviewed_rounds
+    ):
         return False
     if fixture.venue is None or fixture.scheduled_at is None:
         return False
