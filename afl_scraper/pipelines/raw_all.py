@@ -59,6 +59,17 @@ class RawSeasonReport:
     catalog_path: str
 
 
+def _load_official_player_history(before_year: int) -> list[PlayerInfo]:
+    """Load every available, completed official snapshot before one season."""
+    players = []
+    for year in range(OFFICIAL_FIXTURE_MIN_YEAR, before_year):
+        try:
+            players.extend(load_player_ids_from_json("afl_official", year))
+        except FileNotFoundError:
+            continue
+    return players
+
+
 @dataclass(frozen=True)
 class RawScrapeReport:
     start_year: int
@@ -682,12 +693,7 @@ def scrape_all_raw_data(
     )
 
     season_reports = []
-    try:
-        previous_official_players = load_player_ids_from_json(
-            "afl_official", start_year - 1
-        )
-    except FileNotFoundError:
-        previous_official_players = []
+    official_player_history = _load_official_player_history(start_year)
     with sync_browser_context(headless) as browser:
         for year in range(start_year, end_year + 1):
             emit(f"[{year}] preparing complete raw season cache")
@@ -813,9 +819,9 @@ def scrape_all_raw_data(
                     manifest,
                     refresh=refresh,
                     progress=official_progress,
-                    fallback_player_identities=previous_official_players,
+                    fallback_player_identities=list(official_player_history),
                 )
-                previous_official_players = players
+                official_player_history.extend(players)
                 official_report = _write_official_catalog(
                     year, manifest, players
                 )
