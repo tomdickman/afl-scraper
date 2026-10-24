@@ -235,6 +235,30 @@ def test_combined_qe_round_matches_first_week_final(external_round):
     assert metadata_fallback._rounds_match("QE", external_round, 2026)
 
 
+@pytest.mark.parametrize(
+    ("match_id", "official_round"),
+    [(7753, "3"), (7754, "24")],
+)
+def test_reviewed_2025_postponements_keep_original_afl_tables_round(
+    match_id, official_round
+):
+    fixture = _official_fixture(match_id=match_id, round=official_round)
+    record = _catalog().matches[0].model_copy(
+        update={"year": 2025, "round": "Round 1"}
+    )
+
+    assert metadata_fallback._candidate_matches(fixture, record)
+
+
+def test_unreviewed_postponed_round_pair_still_fails_closed():
+    fixture = _official_fixture(match_id=7755, round="24")
+    record = _catalog().matches[0].model_copy(
+        update={"year": 2025, "round": "Round 1"}
+    )
+
+    assert not metadata_fallback._candidate_matches(fixture, record)
+
+
 def test_complete_official_details_are_cross_checked_field_by_field():
     external, _provenance = resolve_fallback_match_details(
         _official_fixture(), _catalog()
