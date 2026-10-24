@@ -87,16 +87,20 @@ class TestResolveVenue:
     def test_afl_tables_source(self):
         assert resolve_venue("M.C.G.", "afl_tables") == "M.C.G."
         assert resolve_venue("Eureka Stadium", "afl_tables") == "Eureka Stadium"
+        assert resolve_venue("Barossa Park", "afl_tables") == "Barossa Oval"
+        assert resolve_venue("Hands Oval", "afl_tables") == "Hands Oval"
 
     @pytest.mark.parametrize(
         ("source_name", "venue_id"),
         [
             ("Adelaide Oval", "Adelaide Oval"),
+            ("Barossa Park", "Barossa Oval"),
             ("Bellerive Oval", "Bellerive Oval"),
             ("Blacktown ISP", "Blacktown"),
             ("Carrara Stadium", "Carrara"),
             ("Eureka Stadium", "Eureka Stadium"),
             ("Jiangwan Stadium", "Jiangwan Stadium"),
+            ("Hands Oval", "Hands Oval"),
             ("Marrara Stadium", "Marrara Oval"),
             ("Norwood Oval", "Norwood Oval"),
             ("Perth Stadium", "Perth Stadium"),
