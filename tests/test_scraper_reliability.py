@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 import afl_scraper.cli as cli_module
 from afl_scraper.scraper import browser as browser_helpers
@@ -220,6 +221,33 @@ def test_scrape_match_uses_consistent_raw_path_and_closes_page(monkeypatch, tmp_
     assert (raw_dir / "home_player_stats.html").read_text() == page.html
     assert (raw_dir / "away_player_stats.html").read_text() == page.html
     assert not (tmp_path / "afl_scraper/data").exists()
+
+
+def test_scrape_match_retries_transient_navigation_timeout(monkeypatch, tmp_path):
+    class RetryPage(FakePage):
+        def goto(self, url):
+            self.gotos.append(url)
+            if len(self.gotos) < 3:
+                raise PlaywrightTimeoutError("navigation timed out")
+
+    page = RetryPage()
+    browser = FakeBrowser(page)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        scrape, "display_player_stats", lambda current_page: current_page
+    )
+    monkeypatch.setattr(scrape, "select_team_stats", lambda *_args: None)
+    monkeypatch.setattr(scrape, "extract_table_data", lambda _page: {"ok": True})
+    monkeypatch.setattr(scrape, "save_raw_match_data", lambda *_args, **_kwargs: None)
+
+    assert scrape.scrape_match(browser, 920) == {"ok": True}
+
+    assert page.gotos == [
+        "https://www.afl.com.au/afl/matches/920",
+        "https://www.afl.com.au/afl/matches/920",
+        "https://www.afl.com.au/afl/matches/920",
+    ]
+    assert page.closed is True
 
 
 def test_scrape_players_deduplicates_and_uses_source_urls(monkeypatch, capsys):
