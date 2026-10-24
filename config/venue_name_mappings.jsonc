@@ -45,6 +45,7 @@
 
   "afl_tables": {
     "Adelaide Oval": "Adelaide Oval",
+    "Barossa Park": "Barossa Oval",
     "Barossa Oval": "Barossa Oval",
     "Bellerive Oval": "Bellerive Oval",
     "Blacktown": "Blacktown",
@@ -56,6 +57,7 @@
     "AAMI Stadium": "Football Park",
     "Football Park": "Football Park",
     "Gabba": "Gabba",
+    "Hands Oval": "Hands Oval",
     "Jiangwan Stadium": "Jiangwan Stadium",
     "Kardinia Park": "Kardinia Park",
     "M.C.G.": "M.C.G.",
@@ -79,6 +81,7 @@
     "Adelaide Oval": "Adelaide Oval",
     "ANZ Stadium": "Stadium Australia",
     "Aurora Stadium": "York Park",
+    "Barossa Park": "Barossa Oval",
     "Bellerive Oval": "Bellerive Oval",
     "Blacktown ISP": "Blacktown",
     "Cazaly's Stadium": "Cazaly's Stadium",
@@ -89,6 +92,7 @@
     "Eureka Stadium": "Eureka Stadium",
     "Football Park": "Football Park",
     "Gabba": "Gabba",
+    "Hands Oval": "Hands Oval",
     "Jiangwan Stadium": "Jiangwan Stadium",
     "Kardinia Park": "Kardinia Park",
     "M.C.G.": "M.C.G.",
