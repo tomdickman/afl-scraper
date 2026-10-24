@@ -87,7 +87,7 @@ def _navigate_to_official_match(page, url: str) -> None:
     """Retry transient navigation timeouts without masking other failures."""
     for attempt in range(1, _OFFICIAL_MATCH_NAVIGATION_ATTEMPTS + 1):
         try:
-            page.goto(url)
+            page.goto(url, wait_until="domcontentloaded")
         except PlaywrightTimeoutError:
             if attempt == _OFFICIAL_MATCH_NAVIGATION_ATTEMPTS:
                 raise
