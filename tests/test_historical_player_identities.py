@@ -218,6 +218,39 @@ def test_season_identity_scrape_reuses_cache_and_fetches_only_missing_matches(
     assert progress == [(1, 2, 100, True), (2, 2, 101, False)]
 
 
+def test_season_identity_scrape_skips_reviewed_cancelled_official_fixture(
+    monkeypatch,
+):
+    completed_match = raw_match(year=2015)
+    loaded = []
+    progress = []
+
+    def load(match_id):
+        loaded.append(match_id)
+        if match_id == 848:
+            return completed_match
+        pytest.fail("cancelled official fixture must not load a match cache")
+
+    monkeypatch.setattr(season_identities, "load_raw_match_data", load)
+    monkeypatch.setattr(
+        season_identities,
+        "scrape_match",
+        lambda *_args, **_kwargs: pytest.fail(
+            "cancelled official fixture must not be scraped"
+        ),
+    )
+
+    players = season_identities.scrape_season_player_ids(
+        object(),
+        manifest((847, 848), year=2015),
+        progress=lambda *values: progress.append(values),
+    )
+
+    assert loaded == [848]
+    assert [player.id for player in players] == ["101", "202"]
+    assert progress == [(1, 2, 847, True), (2, 2, 848, True)]
+
+
 @pytest.mark.parametrize(
     "missing_identity_message",
     [

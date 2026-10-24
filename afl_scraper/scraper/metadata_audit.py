@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from .australian_football import afl_official_cancelled_fixture
 from .metadata_fallback import resolve_fallback_match_details
 from .models import MatchMetadataCatalog, SeasonManifest
 
@@ -20,6 +21,19 @@ def audit_match_metadata(
 
     results = []
     for match_id in manifest.match_ids:
+        cancellation = afl_official_cancelled_fixture(match_id, manifest.year)
+        if cancellation is not None:
+            results.append(
+                {
+                    "match_id": match_id,
+                    "status": "expected_absence",
+                    "reason": cancellation.reason,
+                    "result_type": cancellation.result_type,
+                    "australian_football_match_id": cancellation.match_id,
+                    "evidence_urls": cancellation.evidence_urls,
+                }
+            )
+            continue
         fixture = manifest.fixture_for(match_id)
         try:
             _details, provenance = resolve_fallback_match_details(fixture, catalog)
@@ -41,14 +55,21 @@ def audit_match_metadata(
                 }
             )
 
+    resolved = sum(item["status"] == "resolved" for item in results)
     unresolved = sum(item["status"] == "unresolved" for item in results)
+    expected_absences = [
+        item for item in results if item["status"] == "expected_absence"
+    ]
     return {
         "schema_version": 1,
         "year": manifest.year,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "match_count": len(results),
-        "resolved_count": len(results) - unresolved,
+        "completed_match_count": len(results) - len(expected_absences),
+        "resolved_count": resolved,
         "unresolved_count": unresolved,
+        "expected_absence_count": len(expected_absences),
+        "expected_absences": expected_absences,
         "matches": results,
     }
 

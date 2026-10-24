@@ -482,6 +482,30 @@ def test_historical_catalog_counts_cancelled_fixture_without_player_stats(
     save_players.assert_called_once_with([], "australian_football", 2015)
 
 
+def test_official_catalog_counts_cancelled_fixture_without_loading_match(
+    monkeypatch, tmp_path
+):
+    manifest = SimpleNamespace(match_ids=[847], match_count=1)
+    monkeypatch.setattr(raw_all, "CATALOG_ROOT", tmp_path)
+    load_match = Mock()
+    monkeypatch.setattr(raw_all, "load_raw_match_data", load_match)
+    save_players = Mock()
+    monkeypatch.setattr(raw_all, "save_player_ids_to_json", save_players)
+
+    report = raw_all._write_official_catalog(2015, manifest, [])
+
+    catalog = json.loads(Path(report.catalog_path).read_text())
+    assert report.matches == 1
+    assert report.player_stats == 0
+    assert catalog["scheduled_fixtures"] == 1
+    assert catalog["completed_matches"] == 0
+    assert catalog["cancelled_fixtures"] == 1
+    assert catalog["cancellations"][0]["match_id"] == 43084
+    assert catalog["cancellations"][0]["afl_official_match_id"] == 847
+    load_match.assert_not_called()
+    save_players.assert_called_once_with([], "afl_official", 2015)
+
+
 @pytest.mark.parametrize(
     (
         "official_totals",
