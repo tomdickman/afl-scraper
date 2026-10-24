@@ -46,6 +46,8 @@ _OFFICIAL_FINALS_WEEKS = {
     "fw4": {"gf"},
     "finals week 4": {"gf"},
 }
+_OPENING_ROUND_YEARS = frozenset({2024, 2025, 2026})
+_OPENING_ROUND_KEYS = frozenset({"or", "opening round"})
 # AFL Official exposes the scheduled start, while AFL Tables can record the
 # actual bounce time after a short delay (for example, match 721 in 2014).
 _MAX_SCHEDULED_TIME_DRIFT = timedelta(minutes=15)
@@ -63,11 +65,22 @@ def _round_key(value: str) -> str:
     return _FINAL_ROUNDS.get(normalized, normalized)
 
 
-def _rounds_match(official: str, external: str) -> bool:
+def _rounds_match(official: str, external: str, year: int) -> bool:
     official_key = _round_key(official)
     external_key = _round_key(external)
     if official_key == external_key:
         return True
+    if year in _OPENING_ROUND_YEARS:
+        if (
+            official_key in _OPENING_ROUND_KEYS
+            and external_key in _OPENING_ROUND_KEYS
+        ):
+            return True
+        if official_key in _OPENING_ROUND_KEYS and external_key == "1":
+            return True
+        if official_key.isdigit() and external_key.isdigit():
+            if int(external_key) == int(official_key) + 1:
+                return True
     allowed = _OFFICIAL_FINALS_WEEKS.get(official_key)
     external_group = _OFFICIAL_FINALS_WEEKS.get(external_key)
     if allowed is not None and external_group is not None:
@@ -126,7 +139,7 @@ def _candidate_matches(
     orientation = _team_orientation(fixture, record)
     if orientation is None:
         return False
-    if not _rounds_match(fixture.round, record.round):
+    if not _rounds_match(fixture.round, record.round, record.year):
         return False
     if fixture.venue is None or fixture.scheduled_at is None:
         return False
@@ -295,7 +308,9 @@ def cross_check_official_match_details(
             "afl_official": official_scheduled_at.astimezone(timezone.utc),
             "afl_tables": external_scheduled_at.astimezone(timezone.utc),
         }
-    if not _rounds_match(official.round, external.round):
+    if not _rounds_match(
+        official.round, external.round, official_scheduled_at.year
+    ):
         conflicts["round"] = {
             "afl_official": official.round,
             "afl_tables": external.round,
