@@ -20,6 +20,7 @@ from .models import (
 
 _CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
 _FINAL_ROUNDS = {
+    "qualifying & elimination finals": "qe",
     "qf": "qf",
     "qualifying final": "qf",
     "qualifying finals": "qf",
