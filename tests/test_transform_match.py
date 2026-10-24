@@ -86,6 +86,7 @@ class TestResolveVenue:
 
     def test_afl_tables_source(self):
         assert resolve_venue("M.C.G.", "afl_tables") == "M.C.G."
+        assert resolve_venue("Eureka Stadium", "afl_tables") == "Eureka Stadium"
 
     @pytest.mark.parametrize(
         ("source_name", "venue_id"),
