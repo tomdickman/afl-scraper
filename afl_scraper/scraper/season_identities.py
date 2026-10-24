@@ -14,7 +14,8 @@ from .scrape import load_raw_match_data, scrape_match
 ProgressCallback = Callable[[int, int, int, bool], None]
 
 _SAME_SOURCE_GIVEN_NAME_ALIASES = {
-    frozenset(("paddy", "patrick")),
+    frozenset(("paddy", "patrick")): "patrick",
+    frozenset(("reuben", "rueben")): "reuben",
 }
 _RETRYABLE_FALLBACK_IDENTITY_ERRORS = (
     "no prior official season identities are available",
@@ -103,6 +104,18 @@ def _add_identity(
             f"{previous.display_name()} ({previous.team}, {previous.year}) vs "
             f"{player.display_name()} ({player.team}, {player.year})"
         )
+    alias = frozenset(
+        (
+            normalize_person_name(previous.first_name),
+            normalize_person_name(player.first_name),
+        )
+    )
+    preferred_given_name = _SAME_SOURCE_GIVEN_NAME_ALIASES.get(alias)
+    if preferred_given_name is not None:
+        for candidate in (previous, player):
+            if normalize_person_name(candidate.first_name) == preferred_given_name:
+                identities[player.id] = candidate
+                return
     if len(normalize_person_name(player.display_name())) > len(
         normalize_person_name(previous.display_name())
     ):
