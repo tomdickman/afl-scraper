@@ -16,6 +16,7 @@ ProgressCallback = Callable[[int, int, int, bool], None]
 _SAME_SOURCE_GIVEN_NAME_ALIASES = {
     frozenset(("paddy", "patrick")): "patrick",
     frozenset(("reuben", "rueben")): "reuben",
+    frozenset(("william", "willie")): "willie",
 }
 _RETRYABLE_FALLBACK_IDENTITY_ERRORS = (
     "no prior official season identities are available",
