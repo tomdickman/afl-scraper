@@ -19,6 +19,10 @@ from .models.match_metadata import MatchMetadataCatalog
 _PLAYER_PATH_PATTERN = re.compile(r"/players/[A-Za-z]/[^/]+\.html$")
 _JUMPER_PATTERN = re.compile(r"^(?P<number>\d+)")
 _OUTAGE_SIGNATURES = ("site is down", "awaiting solutions")
+_CROSS_SOURCE_GIVEN_NAME_ALIASES = {
+    frozenset(("harry", "harrison")),
+    frozenset(("tom", "thomas")),
+}
 _STAT_FIELDS = {
     "KI": "kicks",
     "MK": "marks",
@@ -90,6 +94,10 @@ def _names_match(left: str, right: str) -> bool:
         return False
     if left_parts[1:] != right_parts[1:]:
         return False
+    if frozenset((left_parts[0], right_parts[0])) in (
+        _CROSS_SOURCE_GIVEN_NAME_ALIASES
+    ):
+        return True
     shorter, longer = sorted((left_parts[0], right_parts[0]), key=len)
     return len(shorter) >= 3 and longer.startswith(shorter)
 

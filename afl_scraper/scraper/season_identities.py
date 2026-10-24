@@ -14,8 +14,10 @@ from .scrape import load_raw_match_data, scrape_match
 ProgressCallback = Callable[[int, int, int, bool], None]
 
 _SAME_SOURCE_GIVEN_NAME_ALIASES = {
+    frozenset(("harry", "harrison")): "harrison",
     frozenset(("paddy", "patrick")): "patrick",
     frozenset(("reuben", "rueben")): "reuben",
+    frozenset(("tom", "thomas")): "thomas",
     frozenset(("william", "willie")): "willie",
     frozenset(("willie", "junior")): "junior",
 }
@@ -164,6 +166,7 @@ def scrape_season_player_ids(
     *,
     refresh: bool = False,
     progress: ProgressCallback | None = None,
+    fallback_player_identities: list[PlayerInfo] | None = None,
 ) -> list[PlayerInfo]:
     """Collect every participating official identity in a completed season.
 
@@ -171,6 +174,7 @@ def scrape_season_player_ids(
     replaced; callers must deliberately pass ``refresh=True`` to reacquire it.
     """
     identities: dict[str, PlayerInfo] = {}
+    fallback_player_identities = list(fallback_player_identities or ())
     total = manifest.match_count
     cancelled_match_ids = {
         match_id
@@ -209,7 +213,10 @@ def scrape_season_player_ids(
                     match_id,
                     expected_year=manifest.year,
                     fixture=manifest.fixture_for(match_id),
-                    player_identities=list(identities.values()),
+                    player_identities=[
+                        *fallback_player_identities,
+                        *identities.values(),
+                    ],
                 )
             except RuntimeError as error:
                 if not _missing_fallback_identity(error):
@@ -235,7 +242,10 @@ def scrape_season_player_ids(
                     match_id,
                     expected_year=manifest.year,
                     fixture=manifest.fixture_for(match_id),
-                    player_identities=list(identities.values()),
+                    player_identities=[
+                        *fallback_player_identities,
+                        *identities.values(),
+                    ],
                 )
             except RuntimeError as error:
                 if not _missing_fallback_identity(error):

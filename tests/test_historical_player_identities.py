@@ -154,6 +154,8 @@ def test_match_identity_given_name_shortening_still_requires_same_surname():
 @pytest.mark.parametrize(
     ("first_name", "second_name", "canonical_name"),
     [
+        ("Tom Berry", "Thomas Berry", "Thomas Berry"),
+        ("Harry Petty", "Harrison Petty", "Harrison Petty"),
         ("Rueben William", "Reuben William", "Reuben William"),
         ("Reuben William", "Rueben William", "Reuben William"),
         ("William Rioli", "Willie Rioli", "Willie Rioli"),
@@ -326,6 +328,59 @@ def test_missing_fallback_identity_is_retried_after_later_matches(
     assert calls == [(100, set()), (101, set()), (100, {"202", "303"})]
     assert [player.id for player in players] == ["202", "303"]
     assert progress == [(2, 2, 101, False), (1, 2, 100, False)]
+
+
+def test_fallback_can_reuse_a_verified_previous_season_identity(monkeypatch):
+    calls = []
+    previous = PlayerInfo(
+        id="5068",
+        first_name="Judson",
+        last_name="Clarke",
+        team="Richmond",
+        year=2023,
+    )
+    clarke_match = raw_match(
+        year=2024,
+        home_team="Richmond",
+        home_name="Judson Clarke",
+        home_id="5068",
+    )
+
+    monkeypatch.setattr(
+        season_identities,
+        "load_raw_match_data",
+        lambda _match_id: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+
+    def scrape_live(_browser, match_id, *, player_identities, **_kwargs):
+        calls.append((match_id, list(player_identities)))
+        return clarke_match
+
+    monkeypatch.setattr(season_identities, "scrape_match", scrape_live)
+
+    players = season_identities.scrape_season_player_ids(
+        object(),
+        manifest((100,), year=2024),
+        fallback_player_identities=[previous],
+    )
+
+    assert calls == [(100, [previous])]
+    assert [player.model_dump() for player in players] == [
+        {
+            "id": "202",
+            "first_name": "Bob",
+            "last_name": "Jones",
+            "team": "Collingwood",
+            "year": 2024,
+        },
+        {
+            "id": "5068",
+            "first_name": "Judson",
+            "last_name": "Clarke",
+            "team": "Richmond",
+            "year": 2024,
+        },
+    ]
 
 
 def test_unresolved_fallback_identity_fails_after_full_retry_pass(monkeypatch):
