@@ -39,6 +39,7 @@ from ..scraper.constants import (
 )
 from ..scraper.models.australian_football import MAX_AVAILABLE_YEAR
 from ..transform.australian_football import historical_match_datetime
+from ..transform.map_players import load_player_ids_from_json
 from ..transform.match import parse_match_datetime, resolve_team, resolve_venue
 from ..utils.identity import normalize_person_name
 from .historical_players import load_player_snapshot, prepare_player_raw_data
@@ -681,6 +682,12 @@ def scrape_all_raw_data(
     )
 
     season_reports = []
+    try:
+        previous_official_players = load_player_ids_from_json(
+            "afl_official", start_year - 1
+        )
+    except FileNotFoundError:
+        previous_official_players = []
     with sync_browser_context(headless) as browser:
         for year in range(start_year, end_year + 1):
             emit(f"[{year}] preparing complete raw season cache")
@@ -806,7 +813,9 @@ def scrape_all_raw_data(
                     manifest,
                     refresh=refresh,
                     progress=official_progress,
+                    fallback_player_identities=previous_official_players,
                 )
+                previous_official_players = players
                 official_report = _write_official_catalog(
                     year, manifest, players
                 )
