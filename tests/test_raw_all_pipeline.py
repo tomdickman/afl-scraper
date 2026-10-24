@@ -199,6 +199,30 @@ def test_cached_official_range_reuses_manifest_and_match(monkeypatch, tmp_path):
     assert (tmp_path / "catalog" / "2012-2012-report.json").exists()
 
 
+def test_official_player_history_loads_all_available_prior_seasons(monkeypatch):
+    calls = []
+    players = [
+        PlayerInfo(
+            id="5068",
+            first_name="Judson",
+            last_name="Clarke",
+            team="Richmond",
+            year=2023,
+        )
+    ]
+
+    def load(_source, year):
+        calls.append(year)
+        if year == 2023:
+            return players
+        raise FileNotFoundError
+
+    monkeypatch.setattr(raw_all, "load_player_ids_from_json", load)
+
+    assert raw_all._load_official_player_history(2026) == players
+    assert calls == list(range(2012, 2026))
+
+
 def test_legacy_official_manifest_is_refreshed_for_metadata_fallback(
     monkeypatch, tmp_path
 ):
