@@ -199,6 +199,28 @@ def test_match_394_fallback_normalizes_stats_and_preserves_official_ids():
     assert (away.afl_official_id, away.fantasy_points) == ("549", 91)
 
 
+def test_fallback_orients_player_tables_from_official_team_order():
+    record = _record().model_copy(
+        update={
+            "home_team": "Collingwood",
+            "away_team": "Port Adelaide",
+            "home_goals": 7,
+            "home_behinds": 9,
+            "home_total": 51,
+            "away_goals": 13,
+            "away_behinds": 8,
+            "away_total": 86,
+        }
+    )
+
+    result = parse_afl_tables_player_stats(
+        _html(), record, _details(), _identities(), expected_players=1
+    )
+
+    assert result.home_team_stats[0].afl_official_id == "481"
+    assert result.away_team_stats[0].afl_official_id == "549"
+
+
 def test_fallback_fails_closed_when_an_official_identity_is_unavailable():
     with pytest.raises(ValueError, match="resolved to 0 official identities"):
         parse_afl_tables_player_stats(
