@@ -221,6 +221,20 @@ def test_pre_opening_round_seasons_reject_round_offset():
     assert not metadata_fallback._rounds_match("1", "Round 2", 2023)
 
 
+@pytest.mark.parametrize("official_round", ["WF", "Wildcard Final", "Wildcard Finals"])
+def test_2026_wildcard_final_matches_afl_tables_round_25(official_round):
+    assert metadata_fallback._rounds_match(official_round, "Round 25", 2026)
+
+
+def test_wildcard_final_round_equivalence_is_year_scoped():
+    assert not metadata_fallback._rounds_match("WF", "Round 25", 2025)
+
+
+@pytest.mark.parametrize("external_round", ["Qualifying Final", "Elimination Final"])
+def test_combined_qe_round_matches_first_week_final(external_round):
+    assert metadata_fallback._rounds_match("QE", external_round, 2026)
+
+
 def test_complete_official_details_are_cross_checked_field_by_field():
     external, _provenance = resolve_fallback_match_details(
         _official_fixture(), _catalog()

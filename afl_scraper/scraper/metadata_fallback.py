@@ -37,6 +37,7 @@ _FINAL_ROUNDS = {
     "grand finals": "gf",
 }
 _OFFICIAL_FINALS_WEEKS = {
+    "qe": {"qf", "ef"},
     "fw1": {"qf", "ef"},
     "finals week 1": {"qf", "ef"},
     "fw2": {"sf"},
@@ -48,6 +49,8 @@ _OFFICIAL_FINALS_WEEKS = {
 }
 _OPENING_ROUND_YEARS = frozenset({2024, 2025, 2026})
 _OPENING_ROUND_KEYS = frozenset({"or", "opening round"})
+_WILDCARD_ROUND_YEARS = frozenset({2026})
+_WILDCARD_ROUND_KEYS = frozenset({"wf", "wildcard final", "wildcard finals"})
 # AFL Official exposes the scheduled start, while AFL Tables can record the
 # actual bounce time after a short delay (for example, match 721 in 2014).
 _MAX_SCHEDULED_TIME_DRIFT = timedelta(minutes=15)
@@ -81,6 +84,12 @@ def _rounds_match(official: str, external: str, year: int) -> bool:
         if official_key.isdigit() and external_key.isdigit():
             if int(external_key) == int(official_key) + 1:
                 return True
+    if (
+        year in _WILDCARD_ROUND_YEARS
+        and official_key in _WILDCARD_ROUND_KEYS
+        and external_key == "25"
+    ):
+        return True
     allowed = _OFFICIAL_FINALS_WEEKS.get(official_key)
     external_group = _OFFICIAL_FINALS_WEEKS.get(external_key)
     if allowed is not None and external_group is not None:
