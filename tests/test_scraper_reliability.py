@@ -46,11 +46,13 @@ class FakePage:
     def __init__(self):
         self.closed = False
         self.gotos = []
+        self.goto_options = []
         self.locators = {}
         self.html = "<html>raw fixture</html>"
 
-    def goto(self, url):
+    def goto(self, url, **kwargs):
         self.gotos.append(url)
+        self.goto_options.append(kwargs)
 
     def locator(self, selector):
         return self.locators.setdefault(selector, FakeLocator())
@@ -225,8 +227,9 @@ def test_scrape_match_uses_consistent_raw_path_and_closes_page(monkeypatch, tmp_
 
 def test_scrape_match_retries_transient_navigation_timeout(monkeypatch, tmp_path):
     class RetryPage(FakePage):
-        def goto(self, url):
+        def goto(self, url, **kwargs):
             self.gotos.append(url)
+            self.goto_options.append(kwargs)
             if len(self.gotos) < 3:
                 raise PlaywrightTimeoutError("navigation timed out")
 
@@ -246,6 +249,11 @@ def test_scrape_match_retries_transient_navigation_timeout(monkeypatch, tmp_path
         "https://www.afl.com.au/afl/matches/920",
         "https://www.afl.com.au/afl/matches/920",
         "https://www.afl.com.au/afl/matches/920",
+    ]
+    assert page.goto_options == [
+        {"wait_until": "domcontentloaded"},
+        {"wait_until": "domcontentloaded"},
+        {"wait_until": "domcontentloaded"},
     ]
     assert page.closed is True
 
