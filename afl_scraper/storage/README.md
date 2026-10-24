@@ -14,6 +14,18 @@ Connection stings refer to required environment variables which are expected to 
 - `DB_USER_OWNER`: The user name of the database owner (required for migrations)
 - `DB_PORT`: This is the optional port for connections and migrations (defaults to 5432)
 
+Copy [`.env.example`](.env.example) to `.env`, replace its placeholders, and
+restrict the secrets file before using it:
+
+```sh
+chmod 600 afl_scraper/storage/.env
+uv run --env-file afl_scraper/storage/.env afl-scraper dbcheck
+```
+
+The application reads the process environment; it does not implicitly discover
+this nested file. The repository ignores `.env` files, while the example remains
+tracked.
+
 ## RBDMS
 
 We use Postgres for relational data, the schema and migrations are managed with an SQL first approach, not using models or an ORM.

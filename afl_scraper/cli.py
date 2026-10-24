@@ -10,7 +10,7 @@ from .scraper import (
     sync_browser_context,
 )
 from .scraper.constants import MAX_CONFIGURED_YEAR, MIN_HISTORY_YEAR
-from .storage import connection_check, test_all_connections
+from .storage import test_all_connections
 from .utils import health_check, smoke_test
 
 
@@ -38,12 +38,22 @@ def dbcheck():
     """
     Run a database connection check.
     """
-    try:
-        version = connection_check()
-        click.echo(test_all_connections())
-        click.echo(f"✅   DB version {version}")
-    except Exception as e:
-        click.echo(f"❌   Failed {e}")
+    results = test_all_connections()
+    failures = []
+    for result in results.values():
+        connection_type = result["connection_type"]
+        if result["status"] == "success":
+            click.echo(f"✅   {connection_type}: {result['version']}")
+            continue
+        failures.append(connection_type)
+        click.echo(
+            f"❌   {connection_type}: {result['error']}",
+            err=True,
+        )
+    if failures:
+        raise click.ClickException(
+            "database connection check failed for " + ", ".join(failures)
+        )
 
 
 @cli.group(name="database")

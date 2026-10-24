@@ -1,10 +1,11 @@
-import os
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
+from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy import pool
 
 from alembic import context
+from afl_scraper.storage.db_config import get_write_db_config
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -26,14 +27,15 @@ target_metadata = None
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
-# Build URL from environment variables
-user = os.getenv("DB_USER_OWNER")
-password = os.getenv("DB_PASSWORD_OWNER")
-host = os.getenv("DB_HOST", "localhost")
-db = os.getenv("DB_NAME")
-port = os.getenv("DB_PORT", "5432")
-
-url = f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
+database_config = get_write_db_config()
+url = URL.create(
+    "postgresql+psycopg",
+    username=database_config["user"],
+    password=database_config["password"],
+    host=database_config["host"],
+    port=int(database_config["port"]),
+    database=database_config["dbname"],
+)
 
 
 def run_migrations_offline() -> None:
@@ -66,11 +68,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        {"sqlalchemy.url": url},
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    connectable = create_engine(url, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         context.configure(

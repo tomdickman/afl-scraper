@@ -1,5 +1,7 @@
 import os
 
+from psycopg.conninfo import make_conninfo
+
 
 def _required_database_values(
     access: str,
@@ -22,6 +24,31 @@ def _required_database_values(
     return {name: value for name, value in variables.items() if value is not None}
 
 
+def _database_config(
+    access: str,
+    user_variable: str,
+    password_variable: str,
+) -> dict[str, str]:
+    values = _required_database_values(access, user_variable, password_variable)
+    return {
+        "host": values["DB_HOST"],
+        "port": values["DB_PORT"],
+        "dbname": values["DB_NAME"],
+        "user": values[user_variable],
+        "password": values[password_variable],
+    }
+
+
+def get_write_db_config() -> dict[str, str]:
+    """Return validated owner/write connection parameters."""
+    return _database_config("owner", "DB_USER_OWNER", "DB_PASSWORD_OWNER")
+
+
+def get_read_db_config() -> dict[str, str]:
+    """Return validated app/read connection parameters."""
+    return _database_config("app", "DB_USER_APP", "DB_PASSWORD_APP")
+
+
 def get_write_conninfo() -> str:
     """
     Get the connection string for owner access (write access).
@@ -31,14 +58,7 @@ def get_write_conninfo() -> str:
         str
             PostgreSQL connection string for admin user
     """
-    values = _required_database_values(
-        "owner", "DB_USER_OWNER", "DB_PASSWORD_OWNER"
-    )
-
-    return (
-        f"postgresql://{values['DB_USER_OWNER']}:{values['DB_PASSWORD_OWNER']}"
-        f"@{values['DB_HOST']}:{values['DB_PORT']}/{values['DB_NAME']}"
-    )
+    return make_conninfo(**get_write_db_config())
 
 
 def get_read_conninfo() -> str:
@@ -50,12 +70,7 @@ def get_read_conninfo() -> str:
         str
             PostgreSQL connection string for app user
     """
-    values = _required_database_values("app", "DB_USER_APP", "DB_PASSWORD_APP")
-
-    return (
-        f"postgresql://{values['DB_USER_APP']}:{values['DB_PASSWORD_APP']}"
-        f"@{values['DB_HOST']}:{values['DB_PORT']}/{values['DB_NAME']}"
-    )
+    return make_conninfo(**get_read_db_config())
 
 
 def get_db_config() -> dict:
@@ -67,10 +82,4 @@ def get_db_config() -> dict:
         dict
             Dictionary containing database connection parameters
     """
-    return {
-        "host": os.environ.get("DB_HOST", "localhost"),
-        "port": os.environ.get("DB_PORT", "5432"),
-        "dbname": os.environ.get("DB_NAME"),
-        "user": os.environ.get("DB_USER_APP"),
-        "password": os.environ.get("DB_PASSWORD_APP"),
-    }
+    return get_read_db_config()
