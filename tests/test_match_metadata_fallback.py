@@ -270,6 +270,7 @@ def test_cross_check_rejects_time_drift_over_fifteen_minutes():
     ("official_round", "external_round"),
     [
         ("Finals Week 1", "FW1"),
+        ("Qualifying & Elimination Finals", "QE"),
         ("Qualifying Finals", "QF"),
         ("Elimination Finals", "EF"),
         ("Semi Finals", "SF"),
