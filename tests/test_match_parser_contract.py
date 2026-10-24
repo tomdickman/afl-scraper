@@ -118,6 +118,35 @@ def test_completely_absent_official_header_has_typed_fallback_signal():
         _extract_match_details(page)
 
 
+def test_player_stats_waits_for_client_rendered_tab_before_counting():
+    page = MagicMock()
+    button = MagicMock()
+    table = MagicMock()
+    button.first = button
+    button.count.return_value = 1
+    page.get_by_role.return_value = button
+    page.locator.return_value = table
+
+    assert match_parser.display_player_stats(page) is page
+
+    button.wait_for.assert_called_once_with(state="visible")
+    button.click.assert_called_once_with()
+    table.wait_for.assert_called_once_with(state="visible")
+
+
+def test_unrendered_player_stats_tab_has_typed_fallback_signal():
+    page = MagicMock()
+    button = MagicMock()
+    button.first = button
+    button.wait_for.side_effect = match_parser.PlaywrightTimeoutError(
+        "tab did not render"
+    )
+    page.get_by_role.return_value = button
+
+    with pytest.raises(OfficialPlayerStatsUnavailable, match="tab is unavailable"):
+        match_parser.display_player_stats(page)
+
+
 def test_missing_date_header_has_typed_fallback_signal():
     page = MagicMock()
     page.locator.return_value.count.return_value = 0
