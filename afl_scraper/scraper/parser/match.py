@@ -198,6 +198,12 @@ def _parse_score_split(value: str) -> tuple[int, int]:
 
 def display_player_stats(page: Page) -> Page:
     player_stats_btn = page.get_by_role("tab", name="Player Stats")
+    try:
+        player_stats_btn.first.wait_for(state="visible")
+    except PlaywrightTimeoutError as error:
+        raise OfficialPlayerStatsUnavailable(
+            "AFL Official Player Stats tab is unavailable"
+        ) from error
     if player_stats_btn.count() != 1:
         raise OfficialPlayerStatsUnavailable(
             "AFL Official Player Stats tab is unavailable"
