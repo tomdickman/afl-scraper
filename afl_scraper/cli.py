@@ -216,13 +216,16 @@ def season(year, headless):
 
 @scrape.command(
     "historical-season",
-    help="Discover and optionally cache AustralianFootball matches from 2006-2011",
+    help="Discover and optionally cache AustralianFootball matches from 2006-2026",
 )
 @click.argument("year", nargs=1, type=int)
 @click.option(
     "--matches/--manifest-only",
     default=False,
-    help="Cache every validated match page after discovering the manifest.",
+    help=(
+        "Cache every available validated match page and reviewed absence "
+        "after discovering the manifest."
+    ),
 )
 @click.option(
     "--refresh/--reuse-cache",
