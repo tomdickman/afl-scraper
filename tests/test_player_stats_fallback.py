@@ -41,6 +41,28 @@ HEADERS = (
 )
 
 
+@pytest.mark.parametrize(
+    ("official_name", "tables_name"),
+    [
+        ("Thomas Berry", "Tom Berry"),
+        ("Harrison Petty", "Harry Petty"),
+    ],
+)
+def test_reviewed_cross_source_given_name_aliases(official_name, tables_name):
+    first_name, last_name = official_name.split(maxsplit=1)
+    identity = PlayerInfo(
+        id="101",
+        first_name=first_name,
+        last_name=last_name,
+        team="Gold Coast",
+        year=2023,
+    )
+
+    assert player_stats_fallback._official_id(
+        tables_name, "Gold Coast SUNS", [identity]
+    ) == "101"
+
+
 def _table(team, player, player_id, values):
     headers = "".join(f"<th>{header}</th>" for header in HEADERS)
     cells = "".join(f"<td>{value}</td>" for value in values)

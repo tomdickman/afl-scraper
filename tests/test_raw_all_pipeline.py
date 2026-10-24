@@ -192,6 +192,7 @@ def test_cached_official_range_reuses_manifest_and_match(monkeypatch, tmp_path):
         manifest,
         refresh=False,
         progress=ANY,
+        fallback_player_identities=[],
     )
     save_players.assert_called_once_with(players, "afl_official", 2012)
     assert (tmp_path / "catalog" / "2012.json").exists()
@@ -251,6 +252,7 @@ def test_legacy_official_manifest_is_refreshed_for_metadata_fallback(
         enriched,
         refresh=False,
         progress=ANY,
+        fallback_player_identities=[],
     )
 
 
