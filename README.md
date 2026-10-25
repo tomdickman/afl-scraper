@@ -78,6 +78,25 @@ export DB_PASSWORD_APP='app-password'
 
 `DB_PORT` is optional and defaults to `5432`. The owner account is used for migrations and write operations; the app account is used for the read connection check.
 
+For a local environment file, copy
+`afl_scraper/storage/.env.example` to `afl_scraper/storage/.env`, replace every
+placeholder, and restrict it to the current user:
+
+```sh
+chmod 600 afl_scraper/storage/.env
+```
+
+The CLI deliberately does not discover nested environment files implicitly.
+Pass the file explicitly to `uv run`:
+
+```sh
+uv run --env-file afl_scraper/storage/.env afl-scraper dbcheck
+uv run --env-file afl_scraper/storage/.env alembic upgrade head
+```
+
+The real `.env` file is ignored by Git; `.env.example` contains names and safe
+placeholders only.
+
 For a new local PostgreSQL instance, the included bootstrap script creates the default database and roles. Run it as a PostgreSQL administrator, then apply the migrations:
 
 ```sh
