@@ -86,6 +86,20 @@ def test_middle_initial_omitted_by_one_source_matches_within_same_team():
     ]
 
 
+def test_full_middle_name_omitted_by_one_source_requires_review():
+    result = map_players.match_players(
+        [player("2508", "Hewago Paul Oea", "Gold Coast SUNS")],
+        [player("Hewago_Oea", "Hewago Oea", "Gold Coast")],
+    )
+
+    assert not result.exact
+    assert [(match.afl.id, [p.id for p in match.tables]) for match in result.fuzzy] == [
+        ("2508", ["Hewago_Oea"])
+    ]
+    assert not result.unmatched_afl
+    assert not result.unmatched_tables
+
+
 def test_nickname_mismatch_with_same_team_and_surname_is_reviewable_not_exact():
     result = map_players.match_players(
         [player("1243", "Marty Mattner", "Sydney Swans")],
@@ -291,6 +305,7 @@ def test_review_does_not_create_identity_rows_for_unmatched_players(tmp_path):
         result = runner.invoke(
             cli,
             ["map", "review", "--year", "2026", "--input", str(review_file)],
+            input="\n",
         )
         assert result.exit_code == 0, result.output
         approved = json.loads(
@@ -298,7 +313,38 @@ def test_review_does_not_create_identity_rows_for_unmatched_players(tmp_path):
         )
 
     assert approved == []
-    assert "an AFL Tables player is required before mapping" in result.output
+    assert "Select unmatched option" in result.output
+
+
+def test_review_can_pair_otherwise_unmatched_same_team_players(tmp_path):
+    matches = MatchResult(
+        exact=[],
+        fuzzy=[],
+        unmatched_afl=[player("417", "Angus Litherland", "Hawthorn")],
+        unmatched_tables=[
+            player("Zed_Player", "Zed Player", "Hawthorn"),
+            player("Angus_Dewar", "Angus Dewar", "Hawthorn"),
+        ],
+    )
+    review_file = tmp_path / "review.json"
+    review_file.write_text(matches.model_dump_json(by_alias=True))
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            cli,
+            ["map", "review", "--year", "2014", "--input", str(review_file)],
+            input="1\n",
+        )
+        approved = json.loads(
+            (Path.cwd() / "data/mapping/2014_approved.json").read_text()
+        )
+
+    assert result.exit_code == 0, result.output
+    assert result.output.index("[1] Angus Dewar") < result.output.index(
+        "[2] Zed Player"
+    )
+    assert approved == [{"afl_official_id": "417", "player_id": "Angus_Dewar"}]
 
 
 def test_review_skips_ambiguous_match_by_default(tmp_path):
@@ -405,6 +451,55 @@ def test_review_all_continues_after_an_incomplete_year():
         assert "[2013] mapping coverage complete" in result.output
         assert "mapping review remains incomplete for: 2012" in result.output
         assert (root / "2013_approved.json").exists()
+
+
+def test_review_all_retains_prior_decisions_and_prompts_only_unresolved():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path.cwd() / "data/mapping"
+        _write_mapping_snapshot(
+            root / "2014_afl_official.json",
+            [
+                player("official-retained", "Marty Mattner", "Hawthorn"),
+                player("417", "Angus Litherland", "Hawthorn"),
+            ],
+        )
+        _write_mapping_snapshot(
+            root / "2014_afl_tables.json",
+            [
+                player("Martin_Mattner", "Martin Mattner", "Hawthorn"),
+                player("Angus_Dewar", "Angus Dewar", "Hawthorn"),
+            ],
+        )
+        (root / "2014_approved.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "afl_official_id": "official-retained",
+                        "player_id": "Martin_Mattner",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(
+            cli,
+            ["map", "review-all", "--from-year", "2014", "--to-year", "2014"],
+            input="1\n",
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Retained approved mapping: Martin_Mattner" in result.output
+        assert result.output.count("Select unmatched option") == 1
+        approved = json.loads((root / "2014_approved.json").read_text())
+        assert approved == [
+            {
+                "afl_official_id": "official-retained",
+                "player_id": "Martin_Mattner",
+            },
+            {"afl_official_id": "417", "player_id": "Angus_Dewar"},
+        ]
 
 
 def test_review_all_uses_historical_source_identities(monkeypatch):

@@ -533,9 +533,12 @@ uses AustralianFootball participants for 2006-2011 and AFL Official participants
 from 2012 onward, regenerates candidates from the validated local snapshots and
 match caches, and skips any year whose approved file already has complete source
 coverage. Each completed year is saved immediately, so an interrupted run can be
-resumed with the same command. Use `--from-year` and `--to-year` to limit the
-range, or `--force` to deliberately review complete years again. The command
-does not connect to PostgreSQL or upsert any mappings.
+resumed with the same command. Previously approved official-source decisions in
+an incomplete year are retained, while unresolved same-team players can be
+paired explicitly when a source has changed or shortened a name. Use
+`--from-year` and `--to-year` to limit the range, or `--force` to discard retained
+decisions and deliberately review a year again. The command does not connect to
+PostgreSQL or upsert any mappings.
 
 The individual commands remain available when working on one year:
 
