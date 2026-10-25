@@ -2,6 +2,7 @@
 
 import json
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -325,3 +326,127 @@ def test_review_skips_ambiguous_match_by_default(tmp_path):
         assert result.exit_code == 0, result.output
         output_path = tmp_path.cwd() / "data/mapping/2026_approved.json"
         assert json.loads(output_path.read_text()) == []
+
+
+def _write_mapping_snapshot(path, players):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps([item.model_dump(by_alias=True) for item in players]),
+        encoding="utf-8",
+    )
+
+
+def test_review_all_skips_complete_years_and_reviews_incomplete_years():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path.cwd() / "data/mapping"
+        _write_mapping_snapshot(
+            root / "2012_afl_official.json", [player("official-2012")]
+        )
+        _write_mapping_snapshot(root / "2012_afl_tables.json", [player("tables-2012")])
+        (root / "2012_approved.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "afl_official_id": "official-2012",
+                        "player_id": "tables-2012",
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+        _write_mapping_snapshot(
+            root / "2013_afl_official.json", [player("official-2013")]
+        )
+        _write_mapping_snapshot(root / "2013_afl_tables.json", [player("tables-2013")])
+
+        result = runner.invoke(
+            cli,
+            ["map", "review-all", "--from-year", "2012", "--to-year", "2013"],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "[2012] complete; skipping" in result.output
+        assert "[2013] mapping coverage complete" in result.output
+        approved = json.loads((root / "2013_approved.json").read_text())
+        assert approved == [
+            {
+                "afl_official_id": "official-2013",
+                "player_id": "tables-2013",
+            }
+        ]
+
+
+def test_review_all_continues_after_an_incomplete_year():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path.cwd() / "data/mapping"
+        _write_mapping_snapshot(
+            root / "2012_afl_official.json",
+            [player("official-2012", team="Carlton")],
+        )
+        _write_mapping_snapshot(
+            root / "2012_afl_tables.json",
+            [player("tables-2012", team="Essendon")],
+        )
+        _write_mapping_snapshot(
+            root / "2013_afl_official.json", [player("official-2013")]
+        )
+        _write_mapping_snapshot(root / "2013_afl_tables.json", [player("tables-2013")])
+
+        result = runner.invoke(
+            cli,
+            ["map", "review-all", "--from-year", "2012", "--to-year", "2013"],
+            input="\n",
+        )
+
+        assert result.exit_code == 1
+        assert "[2012] incomplete:" in result.output
+        assert "[2013] mapping coverage complete" in result.output
+        assert "mapping review remains incomplete for: 2012" in result.output
+        assert (root / "2013_approved.json").exists()
+
+
+def test_review_all_uses_historical_source_identities(monkeypatch):
+    from afl_scraper.pipelines import historical
+
+    source_player = player("historical-2011")
+    monkeypatch.setattr(
+        historical, "historical_source_players", lambda year: [source_player]
+    )
+    monkeypatch.setattr(
+        historical,
+        "historical_source_player_ids",
+        lambda year: {source_player.id},
+    )
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path.cwd() / "data/mapping"
+        _write_mapping_snapshot(root / "2011_afl_tables.json", [player("tables-2011")])
+
+        result = runner.invoke(
+            cli,
+            ["map", "review-all", "--from-year", "2011", "--to-year", "2011"],
+        )
+
+        assert result.exit_code == 0, result.output
+        approved = json.loads(
+            (root / "2011_australian_football_approved.json").read_text()
+        )
+        assert approved == [
+            {
+                "source_player_id": "historical-2011",
+                "player_id": "tables-2011",
+            }
+        ]
+
+
+def test_review_all_rejects_reversed_year_range():
+    result = CliRunner().invoke(
+        cli,
+        ["map", "review-all", "--from-year", "2013", "--to-year", "2012"],
+    )
+
+    assert result.exit_code == 2
+    assert "--from-year must be less than or equal to --to-year" in result.output

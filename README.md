@@ -159,6 +159,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `map scrape-season` | Derives participating historical official IDs from every match in a completed season. | No |
 | `map match` | Produces exact, reviewable, and unmatched cross-source player ID groups. | No |
 | `map review` | Interactively reviews mappings and writes an approved mapping file. | No |
+| `map review-all` | Reviews every incomplete mapping year in one resumable interactive run. | No |
 | `map upsert` | Upserts an approved mapping file into PostgreSQL. | Yes |
 
 Run `uv run afl-scraper COMMAND --help` for the options accepted by any command or command group.
@@ -522,6 +523,21 @@ locations are available through `--checkpoint` and `--report`.
 ### Map player IDs across sources
 
 The mapping workflow connects player identifiers across the configured sources:
+
+```sh
+uv run afl-scraper map review-all
+```
+
+`review-all` covers the configured 2006-2026 range in one interactive run. It
+uses AustralianFootball participants for 2006-2011 and AFL Official participants
+from 2012 onward, regenerates candidates from the validated local snapshots and
+match caches, and skips any year whose approved file already has complete source
+coverage. Each completed year is saved immediately, so an interrupted run can be
+resumed with the same command. Use `--from-year` and `--to-year` to limit the
+range, or `--force` to deliberately review complete years again. The command
+does not connect to PostgreSQL or upsert any mappings.
+
+The individual commands remain available when working on one year:
 
 ```sh
 uv run afl-scraper map scrape --year 2026

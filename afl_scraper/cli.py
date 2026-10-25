@@ -9,7 +9,11 @@ from .scraper import (
     scrape_players,
     sync_browser_context,
 )
-from .scraper.constants import MAX_CONFIGURED_YEAR, MIN_HISTORY_YEAR
+from .scraper.constants import (
+    MAX_CONFIGURED_YEAR,
+    MIN_HISTORY_YEAR,
+    OFFICIAL_FIXTURE_MIN_YEAR,
+)
 from .storage import test_all_connections
 from .utils import health_check, smoke_test
 
@@ -622,6 +626,186 @@ def map():
     click.echo("🗺️   Player ID Mapping...")
 
 
+def _generate_official_mapping_candidates(year):
+    from .transform.map_players import (
+        load_player_ids_from_json,
+        match_players,
+        save_matches_to_json,
+    )
+
+    official_players = load_player_ids_from_json("afl_official", year)
+    canonical_players = load_player_ids_from_json("afl_tables", year)
+    click.echo(
+        f"Loaded {len(official_players)} AFL official, "
+        f"{len(canonical_players)} AFL Tables"
+    )
+    matches = match_players(official_players, canonical_players)
+    save_matches_to_json(matches, year)
+    return matches
+
+
+def _generate_historical_mapping_candidates(year):
+    from .pipelines.historical import historical_source_players
+    from .transform import load_player_ids_from_json, match_players
+
+    source_players = historical_source_players(year)
+    canonical_players = load_player_ids_from_json("afl_tables", year)
+    matches = match_players(source_players, canonical_players)
+    output = Path(f"data/mapping/{year}_australian_football_to_review.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(matches.model_dump_json(by_alias=True, indent=2) + "\n")
+    return matches
+
+
+def _review_official_matches(matches, year):
+    import json
+
+    from .models.player import PlayerMapping
+    from .transform.map_players import validate_mappings
+
+    approved: list[PlayerMapping] = []
+
+    click.echo(f"\n=== Exact matches ({len(matches.exact)}) - auto-approved ===")
+    for match in matches.exact:
+        approved.append(
+            PlayerMapping(
+                afl_official_id=match.afl.id,
+                player_id=match.tables.id,
+            )
+        )
+
+    click.echo(f"\n=== Fuzzy matches ({len(matches.fuzzy)}) - need review ===")
+    for index, match in enumerate(matches.fuzzy, start=1):
+        click.echo(f"\n{index}. {match.afl.display_name()} ({match.afl.team})")
+        for option_index, option in enumerate(match.tables, start=1):
+            click.echo(f"   [{option_index}] {option.id} ({option.team})")
+        choice = click.prompt(
+            "Select option (number, or s to skip)", default="s", show_default=False
+        )
+        if choice and choice.isdigit() and 1 <= int(choice) <= len(match.tables):
+            selected = match.tables[int(choice) - 1]
+            if any(mapping.player_id == selected.id for mapping in approved):
+                click.echo(
+                    f"  Skipped: AFL Tables ID {selected.id} is already approved."
+                )
+            else:
+                approved.append(
+                    PlayerMapping(
+                        afl_official_id=match.afl.id,
+                        player_id=selected.id,
+                    )
+                )
+
+    click.echo(f"\n=== Unmatched AFL ({len(matches.unmatched_afl)}) ===")
+    for player in matches.unmatched_afl:
+        click.echo(f"  {player.display_name()} ({player.team}) - ID: {player.id}")
+        click.echo("  Not added: an AFL Tables player is required before mapping.")
+
+    click.echo(f"\n=== Unmatched Tables ({len(matches.unmatched_tables)}) ===")
+    for player in matches.unmatched_tables:
+        click.echo(
+            f"  {player.display_name()} ({player.team}) - ID: {player.id}; "
+            "no source identity row required"
+        )
+
+    validate_mappings(approved)
+    output = Path(f"data/mapping/{year}_approved.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps([mapping.model_dump() for mapping in approved], indent=2) + "\n"
+    )
+    click.echo(f"\n✅ Saved approved mappings to {output}")
+    return approved
+
+
+def _review_historical_matches(matches, year):
+    import json
+
+    from .models import SourcePlayerMapping
+    from .transform import validate_source_mappings
+
+    approved = [
+        SourcePlayerMapping(
+            source_player_id=match.afl.id,
+            player_id=match.tables.id,
+        )
+        for match in matches.exact
+    ]
+    click.echo(f"Auto-approved {len(approved)} exact name-and-team mappings")
+    for match in matches.fuzzy:
+        click.echo(f"\n{match.afl.display_name()} ({match.afl.team})")
+        for index, option in enumerate(match.tables, start=1):
+            click.echo(f"  [{index}] {option.id} ({option.team})")
+        choice = click.prompt(
+            "Select option (number, or s to skip)", default="s", show_default=False
+        )
+        if choice.isdigit() and 1 <= int(choice) <= len(match.tables):
+            option = match.tables[int(choice) - 1]
+            if any(mapping.player_id == option.id for mapping in approved):
+                click.echo(f"  Skipped: AFL Tables ID {option.id} is already approved.")
+            else:
+                approved.append(
+                    SourcePlayerMapping(
+                        source_player_id=match.afl.id,
+                        player_id=option.id,
+                    )
+                )
+    validate_source_mappings(approved)
+    output = Path(f"data/mapping/{year}_australian_football_approved.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps([mapping.model_dump() for mapping in approved], indent=2) + "\n"
+    )
+    click.echo(f"Saved {len(approved)} approved historical mappings to {output}")
+    return approved
+
+
+def _official_mapping_is_complete(year):
+    import json
+
+    from .models import PlayerMapping
+    from .transform.map_players import (
+        load_player_ids_from_json,
+        validate_mapping_coverage,
+    )
+
+    path = Path(f"data/mapping/{year}_approved.json")
+    if not path.exists():
+        return False
+    try:
+        mappings = [
+            PlayerMapping.model_validate(item)
+            for item in json.loads(path.read_text(encoding="utf-8"))
+        ]
+        validate_mapping_coverage(
+            load_player_ids_from_json("afl_official", year), mappings
+        )
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _historical_mapping_is_complete(year):
+    import json
+
+    from .models import SourcePlayerMapping
+    from .pipelines.historical import historical_source_player_ids
+    from .transform import validate_source_mapping_coverage
+
+    path = Path(f"data/mapping/{year}_australian_football_approved.json")
+    if not path.exists():
+        return False
+    try:
+        mappings = [
+            SourcePlayerMapping.model_validate(item)
+            for item in json.loads(path.read_text(encoding="utf-8"))
+        ]
+        validate_source_mapping_coverage(historical_source_player_ids(year), mappings)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 @map.command("scrape")
 @click.option(
     "--headless/--no-headless",
@@ -734,28 +918,15 @@ def map_scrape_season(headless, year, refresh):
 )
 def map_match(year):
     """Match player IDs between AFL official and AFL Tables sources."""
-    from .transform.map_players import (
-        load_player_ids_from_json,
-        match_players,
-        save_matches_to_json,
-    )
-
     click.echo(f"Loading player data for {year}...")
-    afl_players = load_player_ids_from_json("afl_official", year)
-    tables_players = load_player_ids_from_json("afl_tables", year)
-    click.echo(
-        f"Loaded {len(afl_players)} AFL official, {len(tables_players)} AFL Tables"
-    )
-
     click.echo("Matching players...")
-    matches = match_players(afl_players, tables_players)
+    matches = _generate_official_mapping_candidates(year)
 
     click.echo(
         f"Exact: {len(matches.exact)}, Fuzzy: {len(matches.fuzzy)}, "
         f"Unmatched AFL: {len(matches.unmatched_afl)}, Unmatched Tables: {len(matches.unmatched_tables)}"
     )
 
-    save_matches_to_json(matches, year)
     click.echo(f"Saved matches to data/mapping/{year}_to_review.json")
 
 
@@ -777,8 +948,7 @@ def map_review(year, input):
     """Review and approve player ID mappings."""
     import json
 
-    from .models.player import MatchResult, PlayerMapping
-    from .transform.map_players import validate_mappings
+    from .models.player import MatchResult
 
     if input is None:
         input = f"data/mapping/{year}_to_review.json"
@@ -787,53 +957,7 @@ def map_review(year, input):
         data = json.load(f)
     matches = MatchResult.model_validate(data)
 
-    approved: list[PlayerMapping] = []
-
-    click.echo(f"\n=== Exact matches ({len(matches.exact)}) - auto-approved ===")
-    for m in matches.exact:
-        approved.append(PlayerMapping(afl_official_id=m.afl.id, player_id=m.tables.id))
-
-    click.echo(f"\n=== Fuzzy matches ({len(matches.fuzzy)}) - need review ===")
-    for i, m in enumerate(matches.fuzzy):
-        click.echo(f"\n{i + 1}. {m.afl.display_name()} ({m.afl.team})")
-        for j, opt in enumerate(m.tables):
-            click.echo(f"   [{j + 1}] {opt.id} ({opt.team})")
-        choice = click.prompt(
-            "Select option (number, or s to skip)", default="s", show_default=False
-        )
-        if choice and choice.isdigit() and 1 <= int(choice) <= len(m.tables):
-            selected = m.tables[int(choice) - 1]
-            if any(mapping.player_id == selected.id for mapping in approved):
-                click.echo(
-                    f"  Skipped: AFL Tables ID {selected.id} is already approved."
-                )
-            else:
-                approved.append(
-                    PlayerMapping(
-                        afl_official_id=m.afl.id,
-                        player_id=selected.id,
-                    )
-                )
-
-    click.echo(f"\n=== Unmatched AFL ({len(matches.unmatched_afl)}) ===")
-    for p in matches.unmatched_afl:
-        click.echo(f"  {p.display_name()} ({p.team}) - ID: {p.id}")
-        click.echo("  Not added: an AFL Tables player is required before mapping.")
-
-    click.echo(f"\n=== Unmatched Tables ({len(matches.unmatched_tables)}) ===")
-    for p in matches.unmatched_tables:
-        click.echo(
-            f"  {p.display_name()} ({p.team}) - ID: {p.id}; "
-            "no source identity row required"
-        )
-
-    validate_mappings(approved)
-
-    output = f"data/mapping/{year}_approved.json"
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    with open(output, "w") as f:
-        json.dump([mapping.model_dump() for mapping in approved], f, indent=2)
-    click.echo(f"\n✅ Saved approved mappings to {output}")
+    _review_official_matches(matches, year)
 
 
 @map.command("upsert")
@@ -890,15 +1014,8 @@ def map_upsert(year, input, require_complete):
 @click.option("--year", required=True, type=int)
 def map_match_historical(year):
     """Match AustralianFootball participants to an AFL Tables snapshot."""
-    from .pipelines.historical import historical_source_players
-    from .transform import load_player_ids_from_json, match_players
-
-    source_players = historical_source_players(year)
-    canonical_players = load_player_ids_from_json("afl_tables", year)
-    matches = match_players(source_players, canonical_players)
+    matches = _generate_historical_mapping_candidates(year)
     output = Path(f"data/mapping/{year}_australian_football_to_review.json")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(matches.model_dump_json(by_alias=True, indent=2) + "\n")
     click.echo(
         f"Exact: {len(matches.exact)}, review: {len(matches.fuzzy)}, "
         f"unmatched source: {len(matches.unmatched_afl)}, "
@@ -915,37 +1032,98 @@ def map_match_historical(year):
 @click.option("-i", "--input", type=click.Path(exists=True, path_type=Path))
 def map_review_historical(year, input):
     """Approve exact mappings and explicitly resolve ambiguous candidates."""
-    import json
-
-    from .models import MatchResult, SourcePlayerMapping
-    from .transform import validate_source_mappings
+    from .models import MatchResult
 
     input = input or Path(f"data/mapping/{year}_australian_football_to_review.json")
     matches = MatchResult.model_validate_json(input.read_text(encoding="utf-8"))
-    approved = [
-        SourcePlayerMapping(source_player_id=match.afl.id, player_id=match.tables.id)
-        for match in matches.exact
-    ]
-    click.echo(f"Auto-approved {len(approved)} exact name-and-team mappings")
-    for match in matches.fuzzy:
-        click.echo(f"\n{match.afl.display_name()} ({match.afl.team})")
-        for index, option in enumerate(match.tables, start=1):
-            click.echo(f"  [{index}] {option.id} ({option.team})")
-        choice = click.prompt(
-            "Select option (number, or s to skip)", default="s", show_default=False
-        )
-        if choice.isdigit() and 1 <= int(choice) <= len(match.tables):
-            option = match.tables[int(choice) - 1]
-            approved.append(
-                SourcePlayerMapping(source_player_id=match.afl.id, player_id=option.id)
-            )
-    validate_source_mappings(approved)
-    output = Path(f"data/mapping/{year}_australian_football_approved.json")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps([mapping.model_dump() for mapping in approved], indent=2) + "\n"
+    _review_historical_matches(matches, year)
+
+
+@map.command(
+    "review-all",
+    help="Review every incomplete player mapping year in one resumable run",
+)
+@click.option(
+    "--from-year",
+    "start_year",
+    default=MIN_HISTORY_YEAR,
+    type=click.IntRange(MIN_HISTORY_YEAR, MAX_CONFIGURED_YEAR),
+    show_default=True,
+)
+@click.option(
+    "--to-year",
+    "end_year",
+    default=MAX_CONFIGURED_YEAR,
+    type=click.IntRange(MIN_HISTORY_YEAR, MAX_CONFIGURED_YEAR),
+    show_default=True,
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Re-review years whose approved mapping files are already complete.",
+)
+def map_review_all(start_year, end_year, force):
+    """Regenerate candidates and review incomplete mappings across all years."""
+    from .pipelines.historical import historical_source_player_ids
+    from .transform import validate_source_mapping_coverage
+    from .transform.map_players import (
+        load_player_ids_from_json,
+        validate_mapping_coverage,
     )
-    click.echo(f"Saved {len(approved)} approved historical mappings to {output}")
+
+    if start_year > end_year:
+        raise click.UsageError("--from-year must be less than or equal to --to-year")
+
+    completed = []
+    skipped = []
+    incomplete = []
+    for year in range(start_year, end_year + 1):
+        historical = year < OFFICIAL_FIXTURE_MIN_YEAR
+        is_complete = (
+            _historical_mapping_is_complete(year)
+            if historical
+            else _official_mapping_is_complete(year)
+        )
+        if is_complete and not force:
+            skipped.append(year)
+            click.echo(f"[{year}] complete; skipping")
+            continue
+
+        source = "AustralianFootball" if historical else "AFL Official"
+        click.echo(f"\n[{year}] reviewing {source} player mappings")
+        try:
+            if historical:
+                matches = _generate_historical_mapping_candidates(year)
+                mappings = _review_historical_matches(matches, year)
+                validate_source_mapping_coverage(
+                    historical_source_player_ids(year), mappings
+                )
+            else:
+                matches = _generate_official_mapping_candidates(year)
+                mappings = _review_official_matches(matches, year)
+                validate_mapping_coverage(
+                    load_player_ids_from_json("afl_official", year), mappings
+                )
+        except (click.Abort, KeyboardInterrupt):
+            raise
+        except Exception as error:
+            incomplete.append((year, str(error)))
+            click.echo(f"[{year}] incomplete: {error}", err=True)
+            continue
+
+        completed.append(year)
+        click.echo(f"[{year}] mapping coverage complete")
+
+    click.echo(
+        f"\nReview summary: {len(completed)} completed, "
+        f"{len(skipped)} already complete, {len(incomplete)} incomplete."
+    )
+    if incomplete:
+        years = ", ".join(str(year) for year, _ in incomplete)
+        raise click.ClickException(
+            f"mapping review remains incomplete for: {years}; "
+            "resolve the reported candidates or source data, then rerun review-all"
+        )
 
 
 @map.command(
