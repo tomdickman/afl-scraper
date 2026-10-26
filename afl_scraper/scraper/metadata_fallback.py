@@ -7,6 +7,7 @@ from functools import cache
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ..rounds import normalize_round_label
 from ..transform.match import parse_match_datetime, resolve_venue
 from ..transformer.teams import transform_team_name
 from .models import (
@@ -19,24 +20,6 @@ from .models import (
 
 
 _CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
-_FINAL_ROUNDS = {
-    "qualifying & elimination finals": "qe",
-    "qf": "qf",
-    "qualifying final": "qf",
-    "qualifying finals": "qf",
-    "ef": "ef",
-    "elimination final": "ef",
-    "elimination finals": "ef",
-    "sf": "sf",
-    "semi final": "sf",
-    "semi finals": "sf",
-    "pf": "pf",
-    "preliminary final": "pf",
-    "preliminary finals": "pf",
-    "gf": "gf",
-    "grand final": "gf",
-    "grand finals": "gf",
-}
 _OFFICIAL_FINALS_WEEKS = {
     "qe": {"qf", "ef"},
     "fw1": {"qf", "ef"},
@@ -67,10 +50,7 @@ def _load_jsonc(path: Path) -> dict:
 
 
 def _round_key(value: str) -> str:
-    normalized = " ".join(value.casefold().split())
-    if normalized.startswith("round "):
-        normalized = normalized.removeprefix("round ")
-    return _FINAL_ROUNDS.get(normalized, normalized)
+    return normalize_round_label(value).casefold()
 
 
 def _rounds_match(official: str, external: str, year: int) -> bool:

@@ -7,6 +7,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..models import Game, PlayerGameStats
+from ..rounds import normalize_round_label
 from ..scraper.models import AustralianFootballMatchData
 from .match import resolve_team, resolve_venue
 
@@ -59,7 +60,7 @@ def transform_australian_football_match(
         id=game_id,
         venue=venue,
         start_date=start_date,
-        round=details.round,
+        round=normalize_round_label(details.round),
         home_team=home_team,
         away_team=away_team,
         home_goals=details.home_team_goals,

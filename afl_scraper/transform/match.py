@@ -7,6 +7,7 @@ from pathlib import Path
 from ..models.game import Game
 from ..models.player_game_stats import PlayerGameStats
 from ..scraper.models import RawMatchData, RawPlayerStat
+from ..rounds import normalize_round_label
 from ..transformer.teams import transform_team_name
 
 
@@ -158,7 +159,7 @@ def transform_match(
         id=match_id,
         venue=venue_id,
         start_date=start_date,
-        round=details.round,
+        round=normalize_round_label(details.round),
         home_team=home_team_id,
         away_team=away_team_id,
         home_goals=details.home_team_goals,

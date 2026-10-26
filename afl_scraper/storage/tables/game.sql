@@ -5,7 +5,8 @@ CREATE TABLE game (
   year INT GENERATED ALWAYS AS (
     EXTRACT(YEAR FROM start_date AT TIME ZONE 'UTC')
   ) STORED,
-  round TEXT NOT NULL,
+  round TEXT NOT NULL CONSTRAINT game_round_format
+    CHECK (round ~ '^([1-9][0-9]*|OR|WF|QE|QF|EF|SF|PF|GF)$'),
   home_team VARCHAR(50) NOT NULL REFERENCES team(id),
   away_team VARCHAR(50) NOT NULL REFERENCES team(id),
   home_goals INT NOT NULL CHECK (home_goals >= 0),

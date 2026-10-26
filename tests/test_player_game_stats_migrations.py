@@ -161,3 +161,22 @@ def test_long_round_label_downgrade_reports_values_that_do_not_fit(monkeypatch):
         migration.downgrade()
 
     drop_view.assert_not_called()
+
+
+def test_round_normalization_migration_updates_existing_rows_and_adds_constraint():
+    migration = (MIGRATIONS / "6d2f319ec61a_normalize_game_rounds.py").read_text()
+    current_schema = (REPO_ROOT / "afl_scraper/storage/tables/game.sql").read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "f2a68bfac932"' in migration
+    for source in (
+        "round",
+        "opening round",
+        "qualifying & elimination finals",
+        "finals week 1",
+        "semi finals",
+        "preliminary finals",
+        "grand final",
+    ):
+        assert source in migration.lower()
+    assert "game_round_format" in migration
+    assert "game_round_format" in current_schema

@@ -350,6 +350,10 @@ labels such as `OR`, `WF`, `QE`, `QF`, `EF`, `SF`, `PF`, or `GF`:
 uv run afl-scraper scrape round OR --year 2026
 ```
 
+Raw providers use several spellings for the same stage. The transform layer
+stores only positive round numbers without a `Round` prefix, or the canonical
+special-round values `OR`, `WF`, `QE`, `QF`, `EF`, `SF`, `PF`, and `GF`.
+
 To scrape a round without loading its transformed records into PostgreSQL:
 
 ```sh

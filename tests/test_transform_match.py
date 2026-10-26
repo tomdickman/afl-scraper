@@ -142,7 +142,7 @@ class TestParseMatchDatetime:
 
 
 class TestTransformMatch:
-    def test_preserves_long_source_round_label(self):
+    def test_normalizes_long_source_round_label(self):
         raw = _raw_match()
         raw = raw.model_copy(
             update={
@@ -154,7 +154,7 @@ class TestTransformMatch:
 
         game, _ = transform_match(raw, 9024)
 
-        assert game.round == "Qualifying & Elimination Finals"
+        assert game.round == "QE"
 
     def test_basic_transform_uses_official_id_resolver(self):
         calls = []
@@ -170,6 +170,7 @@ class TestTransformMatch:
         assert game.id == 12345
         assert game.venue == "M.C.G."
         assert game.start_date.utcoffset() == timedelta(hours=10)
+        assert game.round == "1"
         assert game.home_team == "Carlton"
         assert game.away_team == "Collingwood"
         assert game.home_goals == 12

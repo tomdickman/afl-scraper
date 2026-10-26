@@ -86,7 +86,7 @@ def test_historical_transform_uses_date_aware_venue_timezone_and_sparse_stats():
     assert stats[0].fantasy_points is None
 
 
-def test_historical_transform_preserves_long_source_round_label():
+def test_historical_transform_normalizes_long_source_round_label():
     match = _match()
     match = match.model_copy(
         update={
@@ -102,7 +102,7 @@ def test_historical_transform_preserves_long_source_round_label():
         player_id_map={"14797": "Scott_Pendlebury", "200": "Alex_Example"},
     )
 
-    assert game.round == "Qualifying & Elimination Finals"
+    assert game.round == "QE"
 
 
 def test_historical_transform_preserves_unavailable_jumper_number():
