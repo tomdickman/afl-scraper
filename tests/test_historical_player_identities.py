@@ -9,6 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 import afl_scraper.cli as cli_module
+import afl_scraper.transform as transform_package
 from afl_scraper.transform import map_players
 from afl_scraper.models.player import PlayerInfo, PlayerMapping
 from afl_scraper.scraper import scrape, season_identities
@@ -25,6 +26,9 @@ from afl_scraper.transform.map_players import validate_mapping_coverage
 
 scraper_package = importlib.import_module("afl_scraper.scraper")
 snapshot_module = importlib.import_module("afl_scraper.scraper.scrape_player_ids")
+historical_players_module = importlib.import_module(
+    "afl_scraper.pipelines.historical_players"
+)
 
 
 def stat(official_id: str, name: str) -> RawPlayerStat:
@@ -526,9 +530,7 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
         lambda *_args, **_kwargs: [official],
     )
     monkeypatch.setattr(
-        snapshot_module,
-        "scrape_player_ids",
-        lambda *_args, **_kwargs: [tables],
+        historical_players_module, "load_player_snapshot", lambda _year: [tables]
     )
 
     def save_snapshots(snapshots, year):
@@ -541,9 +543,7 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
         save_snapshots,
     )
 
-    result = CliRunner().invoke(
-        cli_module.cli, ["map", "scrape-season", "--year", str(year)]
-    )
+    result = CliRunner().invoke(cli_module.cli, ["map", "scrape", "--year", str(year)])
 
     assert result.exit_code == 0, result.output
     assert saved == {"afl_official": [official], "afl_tables": [tables]}
@@ -563,9 +563,7 @@ def test_scrape_season_mapping_cli_rejects_future_year_before_manifest(monkeypat
         lambda year: manifest_calls.append(year),
     )
 
-    result = CliRunner().invoke(
-        cli_module.cli, ["map", "scrape-season", "--year", "2027"]
-    )
+    result = CliRunner().invoke(cli_module.cli, ["map", "scrape", "--year", "2027"])
 
     assert result.exit_code == 2
     assert "cannot process a future season" in result.output
@@ -592,8 +590,8 @@ def test_mapping_upsert_complete_gate_runs_before_database(monkeypatch, tmp_path
         lambda _source, _year: required,
     )
     monkeypatch.setattr(
-        map_players,
-        "upsert_mapping_years",
+        transform_package,
+        "upsert_source_mapping_years",
         lambda *_args: database_calls.append(True),
     )
 
@@ -611,5 +609,5 @@ def test_mapping_upsert_complete_gate_runs_before_database(monkeypatch, tmp_path
     )
 
     assert result.exit_code != 0
-    assert "Missing 1 participating AFL official mappings: 202" in str(result.exception)
+    assert "Source mapping coverage mismatch; missing 1: 202" in str(result.exception)
     assert database_calls == []

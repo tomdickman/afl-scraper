@@ -9,8 +9,10 @@ import pytest
 from click.testing import CliRunner
 
 from afl_scraper.cli import cli
+from afl_scraper.models import SourcePlayerMapping
 from afl_scraper.models.player import MatchResult, PlayerInfo, PlayerMapping
-from afl_scraper.transform import map_players
+import afl_scraper.transform as transform_package
+from afl_scraper.transform import map_players, source_mappings
 
 
 def player(
@@ -356,6 +358,40 @@ def test_multi_year_upsert_uses_one_database_connection(monkeypatch):
     ]
 
 
+def test_source_mapping_range_uses_one_explicit_transaction(monkeypatch):
+    connection = Mock()
+
+    @contextmanager
+    def transaction():
+        yield
+
+    connection.transaction = Mock(side_effect=transaction)
+
+    @contextmanager
+    def pool():
+        yield connection
+
+    monkeypatch.setattr(source_mappings, "admin_connection_pool", pool)
+
+    counts = source_mappings.upsert_source_mapping_years(
+        {
+            ("australian_football", 2011): [
+                SourcePlayerMapping(source_player_id="101", player_id="Player_One")
+            ],
+            ("afl_official", 2012): [
+                SourcePlayerMapping(source_player_id="202", player_id="Player_Two")
+            ],
+        }
+    )
+
+    assert counts == {
+        ("australian_football", 2011): 1,
+        ("afl_official", 2012): 1,
+    }
+    connection.transaction.assert_called_once_with()
+    assert connection.execute.call_count == 2
+
+
 def test_review_does_not_create_identity_rows_for_unmatched_players(tmp_path):
     matches = MatchResult(
         exact=[],
@@ -451,11 +487,13 @@ def _write_mapping_snapshot(path, players):
 def test_upsert_cli_supports_an_inclusive_year_range(monkeypatch):
     captured = {}
 
-    def upsert_mapping_years(mappings_by_year):
-        captured.update(mappings_by_year)
-        return {year: len(mappings) for year, mappings in mappings_by_year.items()}
+    def upsert_mapping_years(mappings_by_source_year):
+        captured.update(mappings_by_source_year)
+        return {key: len(mappings) for key, mappings in mappings_by_source_year.items()}
 
-    monkeypatch.setattr(map_players, "upsert_mapping_years", upsert_mapping_years)
+    monkeypatch.setattr(
+        transform_package, "upsert_source_mapping_years", upsert_mapping_years
+    )
 
     runner = CliRunner()
     with runner.isolated_filesystem():
@@ -480,10 +518,64 @@ def test_upsert_cli_supports_an_inclusive_year_range(monkeypatch):
         )
 
     assert result.exit_code == 0, result.output
-    assert list(captured) == [2024, 2025]
-    assert captured[2024][0].afl_official_id == "official-2024"
-    assert captured[2025][0].player_id == "tables-2025"
+    assert list(captured) == [("afl_official", 2024), ("afl_official", 2025)]
+    assert captured[("afl_official", 2024)][0].source_player_id == "official-2024"
+    assert captured[("afl_official", 2025)][0].player_id == "tables-2025"
     assert "✅ Upserted 2 mappings across 2 years" in result.output
+
+
+def test_upsert_cli_routes_a_range_across_source_eras(monkeypatch):
+    from afl_scraper.pipelines import historical
+
+    captured = {}
+
+    def upsert_mapping_years(mappings_by_source_year):
+        captured.update(mappings_by_source_year)
+        return {key: len(mappings) for key, mappings in mappings_by_source_year.items()}
+
+    monkeypatch.setattr(
+        historical, "historical_source_player_ids", lambda _year: {"historical-1"}
+    )
+    monkeypatch.setattr(
+        transform_package, "upsert_source_mapping_years", upsert_mapping_years
+    )
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path("data/mapping")
+        root.mkdir(parents=True)
+        (root / "2011_australian_football_approved.json").write_text(
+            json.dumps([{"source_player_id": "historical-1", "player_id": "tables-1"}]),
+            encoding="utf-8",
+        )
+        (root / "2012_approved.json").write_text(
+            json.dumps([{"afl_official_id": "official-1", "player_id": "tables-2"}]),
+            encoding="utf-8",
+        )
+        _write_mapping_snapshot(root / "2012_afl_official.json", [player("official-1")])
+
+        result = runner.invoke(
+            cli,
+            [
+                "map",
+                "upsert",
+                "--from-year",
+                "2011",
+                "--to-year",
+                "2012",
+                "--require-complete",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert list(captured) == [
+        ("australian_football", 2011),
+        ("afl_official", 2012),
+    ]
+    assert captured[("australian_football", 2011)][0].source_player_id == (
+        "historical-1"
+    )
+    assert captured[("afl_official", 2012)][0].source_player_id == "official-1"
 
 
 def test_upsert_cli_preserves_single_year_and_custom_input(monkeypatch, tmp_path):
@@ -494,11 +586,13 @@ def test_upsert_cli_preserves_single_year_and_custom_input(monkeypatch, tmp_path
     )
     captured = {}
 
-    def upsert_mapping_years(mappings_by_year):
-        captured.update(mappings_by_year)
-        return {2026: 1}
+    def upsert_mapping_years(mappings_by_source_year):
+        captured.update(mappings_by_source_year)
+        return {("afl_official", 2026): 1}
 
-    monkeypatch.setattr(map_players, "upsert_mapping_years", upsert_mapping_years)
+    monkeypatch.setattr(
+        transform_package, "upsert_source_mapping_years", upsert_mapping_years
+    )
 
     result = CliRunner().invoke(
         cli,
@@ -506,16 +600,16 @@ def test_upsert_cli_preserves_single_year_and_custom_input(monkeypatch, tmp_path
     )
 
     assert result.exit_code == 0, result.output
-    assert list(captured) == [2026]
-    assert captured[2026][0].player_id == "tables-2026"
+    assert list(captured) == [("afl_official", 2026)]
+    assert captured[("afl_official", 2026)][0].player_id == "tables-2026"
     assert "✅ Upserted 1 mappings" in result.output
 
 
 def test_upsert_cli_preflights_complete_range_before_database(monkeypatch):
     database_calls = []
     monkeypatch.setattr(
-        map_players,
-        "upsert_mapping_years",
+        transform_package,
+        "upsert_source_mapping_years",
         lambda *_args: database_calls.append(True),
     )
 
@@ -553,7 +647,7 @@ def test_upsert_cli_preflights_complete_range_before_database(monkeypatch):
         )
 
     assert result.exit_code != 0
-    assert "Missing 1 participating AFL official mappings" in str(result.exception)
+    assert "Source mapping coverage mismatch; missing 1" in str(result.exception)
     assert database_calls == []
 
 
@@ -570,7 +664,7 @@ def test_upsert_cli_preflights_complete_range_before_database(monkeypatch):
         ),
         (
             ["--from-year", "2025", "--to-year", "2024"],
-            "--from-year must be less than or equal to --to-year",
+            "Season start year must not exceed end year",
         ),
         (
             [

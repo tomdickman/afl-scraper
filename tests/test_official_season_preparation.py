@@ -9,6 +9,7 @@ import pytest
 
 from afl_scraper.pipelines import official_season
 from afl_scraper.scraper import save_raw_match_data, save_season_manifest
+from afl_scraper.scraper.constants import official_season_id
 from afl_scraper.scraper.models import (
     DiscoveredRound,
     RawMatchData,
@@ -40,6 +41,7 @@ def _stat(official_id: str, name: str) -> RawPlayerStat:
 
 def _match(
     *,
+    year: int = 2012,
     home_id: str = "101",
     home_name: str = "Alex Smith",
 ) -> RawMatchData:
@@ -48,7 +50,7 @@ def _match(
             home_team="Carlton",
             away_team="Collingwood",
             round="Round 1",
-            date="Saturday 24 March 2012",
+            date=f"Saturday 24 March {year}",
             time="7:30 PM (GMT+10)",
             venue="MCG",
             status="FULL TIME",
@@ -64,11 +66,11 @@ def _match(
     )
 
 
-def _manifest(match_ids=(100, 101)) -> SeasonManifest:
+def _manifest(match_ids=(100, 101), *, year: int = 2012) -> SeasonManifest:
     return SeasonManifest(
-        year=2012,
-        season_id=2,
-        fixture_url="https://www.afl.com.au/fixture?Competition=1&Season=2",
+        year=year,
+        season_id=official_season_id(year),
+        fixture_url=f"https://www.afl.com.au/fixture?year={year}",
         discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
         rounds=[DiscoveredRound(label="1", match_ids=list(match_ids))],
     )
@@ -136,6 +138,30 @@ def test_prepares_complete_season_with_canonical_players_and_no_writes(
     connection.transaction.assert_not_called()
     connection.commit.assert_not_called()
     connection.execute.assert_not_called()
+
+
+def test_preflight_excludes_cancelled_fixture_from_loading(monkeypatch, tmp_path):
+    manifest_root = tmp_path / "season"
+    raw_root = tmp_path / "match"
+    save_season_manifest(_manifest((847, 848), year=2015), manifest_root)
+    save_raw_match_data(_match(year=2015), 848, raw_root)
+    connection, _ = _connection(
+        [
+            [("101", "Alex_Smith"), ("202", "Bob_Jones")],
+            [("Alex_Smith",), ("Bob_Jones",)],
+            [("Carlton",), ("Collingwood",)],
+            [("M.C.G.",)],
+        ]
+    )
+    load_match = MagicMock(wraps=official_season.load_raw_match_data)
+    monkeypatch.setattr(official_season, "load_raw_match_data", load_match)
+
+    prepared = official_season.preflight_official_season(
+        connection, 2015, manifest_root=manifest_root, raw_root=raw_root
+    )
+
+    assert [match.source_match_id for match in prepared] == ["848"]
+    assert [call.args[0] for call in load_match.call_args_list] == [848, 848]
 
 
 def test_incomplete_cache_fails_before_database_is_opened(monkeypatch, tmp_path):

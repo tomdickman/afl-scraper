@@ -271,7 +271,7 @@ def test_historical_review_writes_source_qualified_approval(tmp_path):
             cli,
             [
                 "map",
-                "review-historical",
+                "review",
                 "--year",
                 "2006",
                 "--input",

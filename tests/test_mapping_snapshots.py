@@ -13,6 +13,10 @@ from afl_scraper.scraper.scrape_player_ids import save_player_id_snapshots
 
 
 snapshot_module = importlib.import_module("afl_scraper.scraper.scrape_player_ids")
+scraper_package = importlib.import_module("afl_scraper.scraper")
+historical_players_module = importlib.import_module(
+    "afl_scraper.pipelines.historical_players"
+)
 
 
 def player(player_id, source_team="Carlton"):
@@ -164,20 +168,29 @@ def test_rollback_cleanup_failure_does_not_mask_promotion_error_or_skip_restore(
     assert "Could not remove obsolete snapshot file" in caplog.text
 
 
-def test_map_scrape_does_not_promote_official_when_tables_scrape_fails(monkeypatch):
+def test_map_scrape_does_not_promote_official_when_tables_snapshot_fails(monkeypatch):
     @contextmanager
     def browser_context(_headless):
         yield object()
 
     save = Mock()
 
-    def scrape(_browser, _year, source):
-        if source == "afl_tables":
-            raise RuntimeError("AFL Tables unavailable")
-        return [player("101")]
-
     monkeypatch.setattr(cli_module, "sync_browser_context", browser_context)
-    monkeypatch.setattr(snapshot_module, "scrape_player_ids", scrape)
+    monkeypatch.setattr(
+        scraper_package,
+        "load_season_manifest",
+        lambda _year: Mock(match_count=1),
+    )
+    monkeypatch.setattr(
+        scraper_package,
+        "scrape_season_player_ids",
+        lambda *_args, **_kwargs: [player("101")],
+    )
+    monkeypatch.setattr(
+        historical_players_module,
+        "load_player_snapshot",
+        Mock(side_effect=RuntimeError("AFL Tables unavailable")),
+    )
     monkeypatch.setattr(snapshot_module, "save_player_id_snapshots", save)
 
     result = CliRunner().invoke(cli, ["map", "scrape", "--year", "2026"])

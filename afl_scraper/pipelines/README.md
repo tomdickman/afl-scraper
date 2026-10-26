@@ -2,29 +2,29 @@
 
 This module contains pipelines for orchestrating data lifecycles, utilising the `scraper`, `transform` and `storage` modules to extract data, transform it into known structures and then loading it into a database for use.
 
-The AFL Official season cache preflight is a read-only boundary for future
-season loading. It revalidates every manifest-member cache, reports missing or
-same-season unexpected matches, and rejects wrong-year data or player identity
-drift without opening a browser or database connection.
+Season routing is centralized by year: AustralianFootball supplies canonical
+matches for 2006-2011 and AFL Official supplies them from 2012 onward. Public
+commands operate on years and ranges rather than exposing provider-specific
+pipelines.
 
-Official season preparation runs only after that cache preflight. It resolves
+The generic season pipeline revalidates every manifest-member cache, resolves
 year-scoped canonical player mappings, transforms every match with placeholder
-internal IDs, and checks player, team, and venue references using read-only
-database queries. It does not allocate identities or persist models.
+internal IDs, and checks player, team, and venue references. Dry-run is the
+default and performs no writes.
 
-The historical-season pipeline is cache-only: scraping is a separate operator
-step. It preflights the complete season before writes and defaults to dry-run.
 When loading is explicit, each game and all player statistics share one database
-transaction, allowing a failed run to resume safely without partial matches.
+transaction. Source-qualified game identities make reruns idempotent. Exact
+post-load reconciliation checks game fields, participant sets, and every
+available statistic.
 
-The historical-backfill pipeline preflights an entire inclusive range before
-the first database write. It stores atomic per-year checkpoints but confirms
-them against exact database reconciliation before skipping work. Interrupted
-runs therefore resume after the last reconciled year without treating local
-checkpoint state as authoritative.
+The generic backfill pipeline preflights an entire inclusive 2006-2026 range
+before the first database write. Seasons that already reconcile are skipped;
+incomplete seasons are loaded and reconciled before the next season proceeds.
+Reviewed cancellations count toward scheduled fixture coverage while being
+excluded from match-cache, transformation, and database-loading requirements.
 
-The historical-player preparation pipeline builds the canonical prerequisites
-for that backfill. It validates year-scoped AFL Tables snapshots, deduplicates
+The player pipeline builds canonical prerequisites for any configured range. It
+validates year-scoped AFL Tables snapshots, deduplicates
 profiles across seasons, resumes from each validated immutable cache, and opens
 the database only after the complete requested range passes preflight. A load
 upserts every canonical player in one transaction.
