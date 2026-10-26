@@ -674,7 +674,23 @@ def _load_official_approved_mappings(year):
     return mappings
 
 
-def _review_official_matches(matches, year, retained_mappings=None):
+def _select_review_option(options, prompt, accept_single_candidate):
+    if accept_single_candidate and len(options) == 1:
+        selected = options[0]
+        click.echo(f"  Auto-accepted sole candidate: {selected.id}")
+        return selected
+    choice = click.prompt(prompt, default="s", show_default=False)
+    if choice and choice.isdigit() and 1 <= int(choice) <= len(options):
+        return options[int(choice) - 1]
+    return None
+
+
+def _review_official_matches(
+    matches,
+    year,
+    retained_mappings=None,
+    accept_single_candidate=False,
+):
     import json
 
     from .models.player import PlayerMapping
@@ -739,11 +755,12 @@ def _review_official_matches(matches, year, retained_mappings=None):
             continue
         for option_index, option in enumerate(match.tables, start=1):
             click.echo(f"   [{option_index}] {option.id} ({option.team})")
-        choice = click.prompt(
-            "Select option (number, or s to skip)", default="s", show_default=False
+        selected = _select_review_option(
+            match.tables,
+            "Select option (number, or s to skip)",
+            accept_single_candidate,
         )
-        if choice and choice.isdigit() and 1 <= int(choice) <= len(match.tables):
-            selected = match.tables[int(choice) - 1]
+        if selected is not None:
             if any(mapping.player_id == selected.id for mapping in approved):
                 click.echo(
                     f"  Skipped: AFL Tables ID {selected.id} is already approved."
@@ -781,13 +798,12 @@ def _review_official_matches(matches, year, retained_mappings=None):
         if not options:
             click.echo("  Not added: an AFL Tables player is required before mapping.")
             continue
-        choice = click.prompt(
+        selected = _select_review_option(
+            options,
             "Select unmatched option (number, or s to skip)",
-            default="s",
-            show_default=False,
+            accept_single_candidate,
         )
-        if choice and choice.isdigit() and 1 <= int(choice) <= len(options):
-            selected = options[int(choice) - 1]
+        if selected is not None:
             approved.append(
                 PlayerMapping(
                     afl_official_id=player.id,
@@ -818,7 +834,7 @@ def _review_official_matches(matches, year, retained_mappings=None):
     return approved
 
 
-def _review_historical_matches(matches, year):
+def _review_historical_matches(matches, year, accept_single_candidate=False):
     import json
 
     from .models import SourcePlayerMapping
@@ -836,11 +852,12 @@ def _review_historical_matches(matches, year):
         click.echo(f"\n{match.afl.display_name()} ({match.afl.team})")
         for index, option in enumerate(match.tables, start=1):
             click.echo(f"  [{index}] {option.id} ({option.team})")
-        choice = click.prompt(
-            "Select option (number, or s to skip)", default="s", show_default=False
+        option = _select_review_option(
+            match.tables,
+            "Select option (number, or s to skip)",
+            accept_single_candidate,
         )
-        if choice.isdigit() and 1 <= int(choice) <= len(match.tables):
-            option = match.tables[int(choice) - 1]
+        if option is not None:
             if any(mapping.player_id == option.id for mapping in approved):
                 click.echo(f"  Skipped: AFL Tables ID {option.id} is already approved.")
             else:
@@ -1162,7 +1179,12 @@ def map_review_historical(year, input):
     is_flag=True,
     help="Re-review years whose approved mapping files are already complete.",
 )
-def map_review_all(start_year, end_year, force):
+@click.option(
+    "--accept-single-candidate",
+    is_flag=True,
+    help="Automatically approve review items that have exactly one candidate.",
+)
+def map_review_all(start_year, end_year, force, accept_single_candidate):
     """Regenerate candidates and review incomplete mappings across all years."""
     from .pipelines.historical import historical_source_player_ids
     from .transform import validate_source_mapping_coverage
@@ -1194,7 +1216,11 @@ def map_review_all(start_year, end_year, force):
         try:
             if historical:
                 matches = _generate_historical_mapping_candidates(year)
-                mappings = _review_historical_matches(matches, year)
+                mappings = _review_historical_matches(
+                    matches,
+                    year,
+                    accept_single_candidate=accept_single_candidate,
+                )
                 validate_source_mapping_coverage(
                     historical_source_player_ids(year), mappings
                 )
@@ -1205,6 +1231,7 @@ def map_review_all(start_year, end_year, force):
                     matches,
                     year,
                     retained_mappings=retained,
+                    accept_single_candidate=accept_single_candidate,
                 )
                 validate_mapping_coverage(
                     load_player_ids_from_json("afl_official", year), mappings
