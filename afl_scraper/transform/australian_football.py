@@ -50,11 +50,6 @@ def transform_australian_football_match(
     """Transform without inventing statistics absent from the source."""
     match = AustralianFootballMatchData.model_validate(raw_data)
     details = match.details
-    if len(details.round) > 20:
-        raise ValueError(
-            f"Historical round label exceeds database limit: {details.round!r}"
-        )
-
     home_team = resolve_team(details.home_team)
     away_team = resolve_team(details.away_team)
     venue = resolve_venue(details.venue, SOURCE)

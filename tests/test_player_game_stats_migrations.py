@@ -110,3 +110,25 @@ def test_negative_fantasy_points_migration_replaces_legacy_check():
     assert "op.drop_constraint" in migration
     assert "op.create_check_constraint" in migration
     assert 'NON_NEGATIVE_STAT_CHECK + " AND fantasy_points >= 0"' in migration
+
+
+def test_long_round_label_migration_follows_current_head():
+    migration = (MIGRATIONS / "f2a68bfac932_allow_long_round_labels.py").read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "d3c7f8a91b24"' in migration
+    assert '"game"' in migration
+    assert '"round"' in migration
+    assert "type_=sa.Text()" in migration
+    assert "type_=sa.String(length=20)" in migration
+    assert "DROP VIEW IF EXISTS player_game_stats_with_career_number" in migration
+    assert "player_game_stats_with_career_number.sql" in migration
+    upgrade = migration[
+        migration.index("def upgrade") : migration.index("def downgrade")
+    ]
+    assert upgrade.index("_drop_career_game_view()") < upgrade.index("op.alter_column")
+    assert upgrade.index("_create_career_game_view()") > upgrade.index(
+        "op.alter_column"
+    )
+
+    current_schema = (REPO_ROOT / "afl_scraper/storage/tables/game.sql").read_text()
+    assert "round TEXT NOT NULL" in current_schema

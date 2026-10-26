@@ -142,6 +142,20 @@ class TestParseMatchDatetime:
 
 
 class TestTransformMatch:
+    def test_preserves_long_source_round_label(self):
+        raw = _raw_match()
+        raw = raw.model_copy(
+            update={
+                "details": raw.details.model_copy(
+                    update={"round": "Qualifying & Elimination Finals"}
+                )
+            }
+        )
+
+        game, _ = transform_match(raw, 9024)
+
+        assert game.round == "Qualifying & Elimination Finals"
+
     def test_basic_transform_uses_official_id_resolver(self):
         calls = []
 
