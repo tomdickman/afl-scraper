@@ -5,7 +5,11 @@ from pathlib import Path
 
 from ..diagnostics import summarize_identifiers
 from ..models import Game, PlayerGameStats
-from ..scraper import load_raw_match_data, load_season_manifest
+from ..scraper import (
+    afl_official_cancelled_fixture,
+    load_raw_match_data,
+    load_season_manifest,
+)
 from ..scraper.models import RawMatchData
 from ..scraper.season_identities import collect_match_identities
 from ..storage import connection_pool, load_player_source_id_map
@@ -19,10 +23,12 @@ class OfficialSeasonCacheReport:
     """Observed coverage and contents of one official season cache."""
 
     year: int
+    scheduled_fixtures: int
     expected_matches: int
     cached_matches: int
     player_stats: int
     participants: int
+    cancelled_match_ids: tuple[int, ...] = ()
     missing_match_ids: tuple[int, ...] = ()
     unexpected_match_ids: tuple[int, ...] = ()
 
@@ -74,7 +80,13 @@ def inspect_official_season_cache(
     caches can safely share the same raw-data root.
     """
     manifest = load_season_manifest(year, manifest_root)
-    expected_ids = set(manifest.match_ids)
+    scheduled_ids = set(manifest.match_ids)
+    cancelled_ids = {
+        match_id
+        for match_id in manifest.match_ids
+        if afl_official_cancelled_fixture(match_id, year) is not None
+    }
+    expected_ids = scheduled_ids - cancelled_ids
     available_ids = _cached_match_ids(raw_root)
     missing = expected_ids - available_ids
     missing_ids = tuple(sorted(missing))
@@ -83,6 +95,8 @@ def inspect_official_season_cache(
     cached_matches = 0
     player_stats = 0
     for match_id in manifest.match_ids:
+        if match_id in cancelled_ids:
+            continue
         if match_id in missing:
             continue
         try:
@@ -96,7 +110,7 @@ def inspect_official_season_cache(
         player_stats += len(match.home_team_stats) + len(match.away_team_stats)
 
     unexpected_ids = []
-    for match_id in sorted(available_ids - expected_ids):
+    for match_id in sorted(available_ids - scheduled_ids):
         try:
             match = load_raw_match_data(match_id, raw_root)
             if _match_year(match) == year:
@@ -109,10 +123,12 @@ def inspect_official_season_cache(
 
     return OfficialSeasonCacheReport(
         year=year,
-        expected_matches=manifest.match_count,
+        scheduled_fixtures=manifest.match_count,
+        expected_matches=len(expected_ids),
         cached_matches=cached_matches,
         player_stats=player_stats,
         participants=len(identities),
+        cancelled_match_ids=tuple(sorted(cancelled_ids)),
         missing_match_ids=missing_ids,
         unexpected_match_ids=tuple(unexpected_ids),
     )
@@ -229,15 +245,17 @@ def prepare_official_season(
     phase performs mapping and reference lookups only; persistence belongs to a
     later pipeline feature.
     """
-    preflight_official_season_cache(
+    report = preflight_official_season_cache(
         year,
         manifest_root=manifest_root,
         raw_root=raw_root,
     )
     manifest = load_season_manifest(year, manifest_root)
+    cancelled_ids = set(report.cancelled_match_ids)
     matches = [
         (match_id, load_raw_match_data(match_id, raw_root))
         for match_id in manifest.match_ids
+        if match_id not in cancelled_ids
     ]
 
     with connection_pool() as conn:
@@ -252,14 +270,16 @@ def preflight_official_season(
     raw_root: Path = Path("data/raw/afl_official/match"),
 ) -> list[PreparedOfficialMatch]:
     """Prepare a complete cached official season using an existing connection."""
-    preflight_official_season_cache(
+    report = preflight_official_season_cache(
         year,
         manifest_root=manifest_root,
         raw_root=raw_root,
     )
     manifest = load_season_manifest(year, manifest_root)
+    cancelled_ids = set(report.cancelled_match_ids)
     matches = [
         (match_id, load_raw_match_data(match_id, raw_root))
         for match_id in manifest.match_ids
+        if match_id not in cancelled_ids
     ]
     return _prepare_official_matches(conn, year, matches)

@@ -11,6 +11,7 @@ from afl_scraper.pipelines.official_season import (
     preflight_official_season_cache,
 )
 from afl_scraper.scraper import save_raw_match_data, save_season_manifest
+from afl_scraper.scraper.constants import official_season_id
 from afl_scraper.scraper.models import (
     DiscoveredRound,
     RawMatchData,
@@ -67,11 +68,11 @@ def _match(
     )
 
 
-def _manifest(match_ids=(100, 101)) -> SeasonManifest:
+def _manifest(match_ids=(100, 101), *, year: int = 2012) -> SeasonManifest:
     return SeasonManifest(
-        year=2012,
-        season_id=2,
-        fixture_url="https://www.afl.com.au/fixture?Competition=1&Season=2",
+        year=year,
+        season_id=official_season_id(year),
+        fixture_url=f"https://www.afl.com.au/fixture?year={year}",
         discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
         rounds=[DiscoveredRound(label="1", match_ids=list(match_ids))],
     )
@@ -98,6 +99,7 @@ def test_complete_cache_preflight_returns_typed_report_without_writes(tmp_path):
 
     assert report == OfficialSeasonCacheReport(
         year=2012,
+        scheduled_fixtures=2,
         expected_matches=2,
         cached_matches=2,
         player_stats=4,
@@ -110,6 +112,22 @@ def test_complete_cache_preflight_returns_typed_report_without_writes(tmp_path):
         if path.is_file()
     }
     assert after == before
+
+
+def test_cancelled_fixture_counts_as_scheduled_without_requiring_cache(tmp_path):
+    manifest_root, raw_root = _roots(tmp_path)
+    save_season_manifest(_manifest((847, 848), year=2015), manifest_root)
+    save_raw_match_data(_match(year=2015), 848, raw_root)
+
+    report = preflight_official_season_cache(
+        2015, manifest_root=manifest_root, raw_root=raw_root
+    )
+
+    assert report.scheduled_fixtures == 2
+    assert report.expected_matches == 1
+    assert report.cached_matches == 1
+    assert report.cancelled_match_ids == (847,)
+    assert report.ok
 
 
 def test_inspection_reports_missing_cache_and_strict_preflight_rejects_it(tmp_path):

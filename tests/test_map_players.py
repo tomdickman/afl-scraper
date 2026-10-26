@@ -9,9 +9,10 @@ import pytest
 from click.testing import CliRunner
 
 from afl_scraper.cli import cli
+from afl_scraper.models import SourcePlayerMapping
 from afl_scraper.models.player import MatchResult, PlayerInfo, PlayerMapping
 import afl_scraper.transform as transform_package
-from afl_scraper.transform import map_players
+from afl_scraper.transform import map_players, source_mappings
 
 
 def player(
@@ -355,6 +356,40 @@ def test_multi_year_upsert_uses_one_database_connection(monkeypatch):
         2025,
         2026,
     ]
+
+
+def test_source_mapping_range_uses_one_explicit_transaction(monkeypatch):
+    connection = Mock()
+
+    @contextmanager
+    def transaction():
+        yield
+
+    connection.transaction = Mock(side_effect=transaction)
+
+    @contextmanager
+    def pool():
+        yield connection
+
+    monkeypatch.setattr(source_mappings, "admin_connection_pool", pool)
+
+    counts = source_mappings.upsert_source_mapping_years(
+        {
+            ("australian_football", 2011): [
+                SourcePlayerMapping(source_player_id="101", player_id="Player_One")
+            ],
+            ("afl_official", 2012): [
+                SourcePlayerMapping(source_player_id="202", player_id="Player_Two")
+            ],
+        }
+    )
+
+    assert counts == {
+        ("australian_football", 2011): 1,
+        ("afl_official", 2012): 1,
+    }
+    connection.transaction.assert_called_once_with()
+    assert connection.execute.call_count == 2
 
 
 def test_review_does_not_create_identity_rows_for_unmatched_players(tmp_path):

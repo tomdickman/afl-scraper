@@ -475,6 +475,8 @@ Provider match IDs are resolved through a source-qualified identity before an
 internal game ID is allocated. Each game and all of its player rows are one
 transaction. Replaying a season updates the same records, and null historical
 fields do not erase richer values already stored for those records.
+Reviewed cancelled fixtures remain part of scheduled-season coverage, but do
+not require a match cache and are never transformed or loaded as played games.
 
 ### Run a multi-season backfill
 

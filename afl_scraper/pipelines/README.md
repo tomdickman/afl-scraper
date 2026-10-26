@@ -20,6 +20,8 @@ available statistic.
 The generic backfill pipeline preflights an entire inclusive 2006-2026 range
 before the first database write. Seasons that already reconcile are skipped;
 incomplete seasons are loaded and reconciled before the next season proceeds.
+Reviewed cancellations count toward scheduled fixture coverage while being
+excluded from match-cache, transformation, and database-loading requirements.
 
 The player pipeline builds canonical prerequisites for any configured range. It
 validates year-scoped AFL Tables snapshots, deduplicates
