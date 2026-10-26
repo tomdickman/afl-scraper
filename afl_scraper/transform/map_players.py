@@ -287,8 +287,9 @@ def upsert_mapping_years(
 
     counts = {}
     with admin_connection_pool() as conn:
-        for year, mappings in mappings_by_year.items():
-            counts[year] = _upsert_mappings_for_year(conn, mappings, year)
+        with conn.transaction():
+            for year, mappings in mappings_by_year.items():
+                counts[year] = _upsert_mappings_for_year(conn, mappings, year)
     return counts
 
 

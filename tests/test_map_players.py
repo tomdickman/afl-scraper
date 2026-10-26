@@ -272,6 +272,12 @@ def test_upsert_persists_only_real_source_identities(monkeypatch):
     connection = Mock()
 
     @contextmanager
+    def transaction():
+        yield
+
+    connection.transaction = Mock(side_effect=transaction)
+
+    @contextmanager
     def pool():
         yield connection
 
@@ -283,6 +289,7 @@ def test_upsert_persists_only_real_source_identities(monkeypatch):
 
     assert map_players.upsert_mappings(mappings, 2026) == 1
     assert connection.execute.call_count == 1
+    connection.transaction.assert_called_once_with()
     assert connection.execute.call_args_list[0].args[1] == {
         "source_player_id": "afl-1",
         "player_id": "tables-1",
@@ -317,6 +324,12 @@ def test_multi_year_upsert_uses_one_database_connection(monkeypatch):
     pool_calls = []
 
     @contextmanager
+    def transaction():
+        yield
+
+    connection.transaction = Mock(side_effect=transaction)
+
+    @contextmanager
     def pool():
         pool_calls.append(True)
         yield connection
@@ -336,6 +349,7 @@ def test_multi_year_upsert_uses_one_database_connection(monkeypatch):
 
     assert counts == {2025: 1, 2026: 1}
     assert pool_calls == [True]
+    connection.transaction.assert_called_once_with()
     assert [call.args[1]["year"] for call in connection.execute.call_args_list] == [
         2025,
         2026,
