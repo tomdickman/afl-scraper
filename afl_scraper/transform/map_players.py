@@ -34,6 +34,18 @@ def normalize_family_name(player: PlayerInfo) -> str:
     return normalized.removeprefix("given ").replace(" ", "")
 
 
+def name_boundaries_match(left: PlayerInfo, right: PlayerInfo) -> bool:
+    """Identify full-middle-name differences for explicit human review."""
+    left_parts = normalize_name(left.display_name()).split()
+    right_parts = normalize_name(right.display_name()).split()
+    return (
+        len(left_parts) >= 2
+        and len(right_parts) >= 2
+        and left_parts[0] == right_parts[0]
+        and left_parts[-1] == right_parts[-1]
+    )
+
+
 _TEAM_ALIASES = {
     "adelaide": "adelaide",
     "adelaide crows": "adelaide",
@@ -163,9 +175,9 @@ def match_players(
             matched_afl.add(afl.id)
             matched_tables.update(tables.id for tables in review_candidates)
 
-    # Different given-name forms (for example Marty/Martin) must not be
-    # auto-approved. Present same-team, same-surname candidates for explicit
-    # review instead of leaving the official identity impossible to resolve.
+    # Different given-name forms (for example Marty/Martin) and full middle
+    # names omitted by one source must not be auto-approved. Present them for
+    # explicit review instead of leaving the identity impossible to resolve.
     remaining_afl = [p for p in afl_players if p.id not in matched_afl]
     remaining_tables = [p for p in tables_players if p.id not in matched_tables]
     for afl in remaining_afl:
@@ -173,7 +185,10 @@ def match_players(
             tables
             for tables in remaining_tables
             if teams_match(afl.team, tables.team)
-            and normalize_family_name(afl) == normalize_family_name(tables)
+            and (
+                normalize_family_name(afl) == normalize_family_name(tables)
+                or name_boundaries_match(afl, tables)
+            )
         ]
         if not review_candidates:
             continue

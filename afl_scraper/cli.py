@@ -657,26 +657,86 @@ def _generate_historical_mapping_candidates(year):
     return matches
 
 
-def _review_official_matches(matches, year):
+def _load_official_approved_mappings(year):
+    import json
+
+    from .models import PlayerMapping
+    from .transform.map_players import validate_mappings
+
+    path = Path(f"data/mapping/{year}_approved.json")
+    if not path.exists():
+        return []
+    mappings = [
+        PlayerMapping.model_validate(item)
+        for item in json.loads(path.read_text(encoding="utf-8"))
+    ]
+    validate_mappings(mappings)
+    return mappings
+
+
+def _review_official_matches(matches, year, retained_mappings=None):
     import json
 
     from .models.player import PlayerMapping
-    from .transform.map_players import validate_mappings
+    from .transform.map_players import teams_match, validate_mappings
 
     approved: list[PlayerMapping] = []
+    retained_mappings = list(retained_mappings or [])
+    validate_mappings(retained_mappings)
+    source_ids = (
+        {match.afl.id for match in matches.exact}
+        | {match.afl.id for match in matches.fuzzy}
+        | {player.id for player in matches.unmatched_afl}
+    )
+    canonical_ids = (
+        {match.tables.id for match in matches.exact}
+        | {option.id for match in matches.fuzzy for option in match.tables}
+        | {player.id for player in matches.unmatched_tables}
+    )
+    for mapping in retained_mappings:
+        if mapping.afl_official_id not in source_ids:
+            raise ValueError(
+                f"Previously approved AFL Official ID "
+                f"{mapping.afl_official_id!r} is not in the current snapshot; "
+                "rerun with --force to discard retained decisions"
+            )
+        if mapping.player_id not in canonical_ids:
+            raise ValueError(
+                f"Previously approved AFL Tables ID {mapping.player_id!r} is not "
+                "in the current snapshot; rerun with --force to discard retained "
+                "decisions"
+            )
+    retained_by_source = {
+        mapping.afl_official_id: mapping for mapping in retained_mappings
+    }
 
     click.echo(f"\n=== Exact matches ({len(matches.exact)}) - auto-approved ===")
     for match in matches.exact:
-        approved.append(
-            PlayerMapping(
-                afl_official_id=match.afl.id,
-                player_id=match.tables.id,
+        retained = retained_by_source.get(match.afl.id)
+        if retained is not None and retained.player_id != match.tables.id:
+            raise ValueError(
+                f"Previously approved mapping for AFL Official ID {match.afl.id} "
+                f"conflicts with exact match {match.tables.id}; rerun with --force "
+                "to discard retained decisions"
             )
+        approved.append(
+            PlayerMapping(afl_official_id=match.afl.id, player_id=match.tables.id)
         )
+    exact_source_ids = {mapping.afl_official_id for mapping in approved}
+    approved.extend(
+        mapping
+        for mapping in retained_mappings
+        if mapping.afl_official_id not in exact_source_ids
+    )
+    validate_mappings(approved)
 
     click.echo(f"\n=== Fuzzy matches ({len(matches.fuzzy)}) - need review ===")
     for index, match in enumerate(matches.fuzzy, start=1):
         click.echo(f"\n{index}. {match.afl.display_name()} ({match.afl.team})")
+        retained = retained_by_source.get(match.afl.id)
+        if retained is not None:
+            click.echo(f"   Retained approved mapping: {retained.player_id}")
+            continue
         for option_index, option in enumerate(match.tables, start=1):
             click.echo(f"   [{option_index}] {option.id} ({option.team})")
         choice = click.prompt(
@@ -699,10 +759,50 @@ def _review_official_matches(matches, year):
     click.echo(f"\n=== Unmatched AFL ({len(matches.unmatched_afl)}) ===")
     for player in matches.unmatched_afl:
         click.echo(f"  {player.display_name()} ({player.team}) - ID: {player.id}")
-        click.echo("  Not added: an AFL Tables player is required before mapping.")
+        retained = retained_by_source.get(player.id)
+        if retained is not None:
+            click.echo(f"  Retained approved mapping: {retained.player_id}")
+            continue
+        used_player_ids = {mapping.player_id for mapping in approved}
+        options = sorted(
+            (
+                candidate
+                for candidate in matches.unmatched_tables
+                if candidate.id not in used_player_ids
+                and teams_match(player.team, candidate.team)
+            ),
+            key=lambda candidate: candidate.id,
+        )
+        for option_index, option in enumerate(options, start=1):
+            click.echo(
+                f"   [{option_index}] {option.display_name()} "
+                f"({option.team}) - ID: {option.id}"
+            )
+        if not options:
+            click.echo("  Not added: an AFL Tables player is required before mapping.")
+            continue
+        choice = click.prompt(
+            "Select unmatched option (number, or s to skip)",
+            default="s",
+            show_default=False,
+        )
+        if choice and choice.isdigit() and 1 <= int(choice) <= len(options):
+            selected = options[int(choice) - 1]
+            approved.append(
+                PlayerMapping(
+                    afl_official_id=player.id,
+                    player_id=selected.id,
+                )
+            )
 
-    click.echo(f"\n=== Unmatched Tables ({len(matches.unmatched_tables)}) ===")
-    for player in matches.unmatched_tables:
+    used_player_ids = {mapping.player_id for mapping in approved}
+    unmatched_tables = [
+        player
+        for player in matches.unmatched_tables
+        if player.id not in used_player_ids
+    ]
+    click.echo(f"\n=== Unmatched Tables ({len(unmatched_tables)}) ===")
+    for player in unmatched_tables:
         click.echo(
             f"  {player.display_name()} ({player.team}) - ID: {player.id}; "
             "no source identity row required"
@@ -1100,7 +1200,12 @@ def map_review_all(start_year, end_year, force):
                 )
             else:
                 matches = _generate_official_mapping_candidates(year)
-                mappings = _review_official_matches(matches, year)
+                retained = [] if force else _load_official_approved_mappings(year)
+                mappings = _review_official_matches(
+                    matches,
+                    year,
+                    retained_mappings=retained,
+                )
                 validate_mapping_coverage(
                     load_player_ids_from_json("afl_official", year), mappings
                 )
