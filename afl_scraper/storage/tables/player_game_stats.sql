@@ -47,7 +47,6 @@ CREATE TABLE player_game_stats (
     marks_inside_50 >= 0 AND
     one_percenters >= 0 AND
     bounces >= 0 AND
-    goal_assists >= 0 AND
-    fantasy_points >= 0
+    goal_assists >= 0
   )
 );

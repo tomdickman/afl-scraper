@@ -32,6 +32,7 @@ def test_current_schema_represents_post_migration_identity():
     assert "rebound_50s int not null" not in current_schema
     assert "jumper_number int," in current_schema
     assert "jumper_number int not null" not in current_schema
+    assert "fantasy_points >= 0" not in current_schema
 
 
 def test_identity_migration_follows_and_transforms_legacy_schema():
@@ -97,3 +98,15 @@ def test_unavailable_jumper_number_migration_follows_current_head():
     assert '"jumper_number"' in migration
     assert "nullable=True" in migration
     assert "nullable=False" in migration
+
+
+def test_negative_fantasy_points_migration_replaces_legacy_check():
+    migration = (
+        MIGRATIONS / "d3c7f8a91b24_allow_negative_fantasy_points.py"
+    ).read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "c8d4f6a2b901"' in migration
+    assert '"player_game_stats_check"' in migration
+    assert "op.drop_constraint" in migration
+    assert "op.create_check_constraint" in migration
+    assert 'NON_NEGATIVE_STAT_CHECK + " AND fantasy_points >= 0"' in migration
