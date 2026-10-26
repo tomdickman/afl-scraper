@@ -160,7 +160,7 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `map match` | Produces exact, reviewable, and unmatched cross-source player ID groups. | No |
 | `map review` | Interactively reviews mappings and writes an approved mapping file. | No |
 | `map review-all` | Reviews every incomplete mapping year in one resumable interactive run. | No |
-| `map upsert` | Upserts an approved mapping file into PostgreSQL. | Yes |
+| `map upsert` | Upserts approved mapping files for one year or an inclusive range into PostgreSQL. | Yes |
 
 Run `uv run afl-scraper COMMAND --help` for the options accepted by any command or command group.
 
@@ -557,6 +557,24 @@ uv run afl-scraper map review --year 2026
 uv run afl-scraper map upsert --year 2026
 ```
 
+After reviewing several seasons, upsert the complete inclusive range in one
+command:
+
+```sh
+uv run afl-scraper map upsert \
+  --from-year 2012 \
+  --to-year 2026 \
+  --require-complete
+```
+
+Every approved file, and every source snapshot when `--require-complete` is
+used, is validated before the database connection is opened. The range is then
+written through one connection so a failure does not commit only part of the
+requested range. `--year` remains available for a single season and defaults to
+the current year when no year options are supplied. `--input` is supported only
+for single-year upserts because range mode resolves each year's default approved
+file.
+
 The steps create ignored local source, review, and approval files under `data/mapping/`:
 
 1. One source file for each configured provider
@@ -592,10 +610,10 @@ team, and year across every match. Benign punctuation, suffix, and middle-initia
 differences can match exactly when the team also agrees. Nickname differences
 remain interactive review items using same-team, same-surname candidates.
 
-Use `--require-complete` when upserting match-derived mappings. It verifies that
-every participating official ID has an approved canonical mapping before opening
-a database connection. Individual match loading retains its existing mapping
-coverage check as a second guard.
+Use `--require-complete` when upserting match-derived mappings. For either a
+single year or a range, it verifies that every participating official ID has an
+approved canonical mapping before opening a database connection. Individual
+match loading retains its existing mapping coverage check as a second guard.
 
 When reachable, the AFL Tables mapping source likewise requires all expected team
 sections, plausible player counts, valid unique identifiers, and complete names.
