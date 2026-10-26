@@ -344,7 +344,7 @@ uv run afl-scraper scrape round 1 --year 2026
 ```
 
 Round identifiers are strings, so special rounds and finals can use fixture
-labels such as `OR`, `WF`, `QE`, `QF`, `EF`, `SF`, `PF`, or `GF`:
+labels such as `OR`, `WF`, `QF`, `EF`, `SF`, `PF`, or `GF`:
 
 ```sh
 uv run afl-scraper scrape round OR --year 2026
@@ -352,7 +352,8 @@ uv run afl-scraper scrape round OR --year 2026
 
 Raw providers use several spellings for the same stage. The transform layer
 stores only positive round numbers without a `Round` prefix, or the canonical
-special-round values `OR`, `WF`, `QE`, `QF`, `EF`, `SF`, `PF`, and `GF`.
+special-round values `OR`, `WF`, `QF`, `EF`, `SF`, `PF`, and `GF`. Combined
+qualifying-and-elimination fixture groups are stored as `QF`.
 
 To scrape a round without loading its transformed records into PostgreSQL:
 

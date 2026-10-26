@@ -20,6 +20,15 @@ from .models import (
 
 
 _CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
+_COMBINED_FIRST_FINALS_KEYS = frozenset(
+    {
+        "qe",
+        "fw1",
+        "finals week 1",
+        "qualifying & elimination final",
+        "qualifying & elimination finals",
+    }
+)
 _OFFICIAL_FINALS_WEEKS = {
     "qe": {"qf", "ef"},
     "fw1": {"qf", "ef"},
@@ -50,6 +59,11 @@ def _load_jsonc(path: Path) -> dict:
 
 
 def _round_key(value: str) -> str:
+    source_key = " ".join(value.casefold().split())
+    if source_key in _COMBINED_FIRST_FINALS_KEYS:
+        # Preserve the broader source meaning while matching metadata. The
+        # canonical database value for this group is QF.
+        return "qe"
     return normalize_round_label(value).casefold()
 
 

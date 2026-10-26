@@ -2,7 +2,7 @@
 
 import re
 
-CANONICAL_SPECIAL_ROUNDS = frozenset({"OR", "WF", "QE", "QF", "EF", "SF", "PF", "GF"})
+CANONICAL_SPECIAL_ROUNDS = frozenset({"OR", "WF", "QF", "EF", "SF", "PF", "GF"})
 
 _ALIASES = {
     "or": "OR",
@@ -11,11 +11,11 @@ _ALIASES = {
     "wcf": "WF",
     "wildcard final": "WF",
     "wildcard finals": "WF",
-    "qe": "QE",
-    "fw1": "QE",
-    "finals week 1": "QE",
-    "qualifying & elimination final": "QE",
-    "qualifying & elimination finals": "QE",
+    "qe": "QF",
+    "fw1": "QF",
+    "finals week 1": "QF",
+    "qualifying & elimination final": "QF",
+    "qualifying & elimination finals": "QF",
     "qf": "QF",
     "qualifying final": "QF",
     "qualifying finals": "QF",

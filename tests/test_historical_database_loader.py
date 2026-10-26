@@ -102,7 +102,7 @@ def test_historical_transform_normalizes_long_source_round_label():
         player_id_map={"14797": "Scott_Pendlebury", "200": "Alex_Example"},
     )
 
-    assert game.round == "QE"
+    assert game.round == "QF"
 
 
 def test_historical_transform_preserves_unavailable_jumper_number():

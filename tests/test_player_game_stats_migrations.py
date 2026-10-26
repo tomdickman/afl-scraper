@@ -180,3 +180,12 @@ def test_round_normalization_migration_updates_existing_rows_and_adds_constraint
         assert source in migration.lower()
     assert "game_round_format" in migration
     assert "game_round_format" in current_schema
+
+
+def test_qe_merge_migration_removes_qe_from_canonical_rounds():
+    migration = (MIGRATIONS / "a37bd1fd30ec_merge_qe_into_qf.py").read_text()
+    current_schema = (REPO_ROOT / "afl_scraper/storage/tables/game.sql").read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "6d2f319ec61a"' in migration
+    assert "SET round = 'QF' WHERE round = 'QE'" in migration
+    assert "|QE|" not in current_schema

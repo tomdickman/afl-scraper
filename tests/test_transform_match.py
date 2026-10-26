@@ -154,7 +154,7 @@ class TestTransformMatch:
 
         game, _ = transform_match(raw, 9024)
 
-        assert game.round == "QE"
+        assert game.round == "QF"
 
     def test_basic_transform_uses_official_id_resolver(self):
         calls = []
