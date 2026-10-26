@@ -502,10 +502,84 @@ def test_review_all_retains_prior_decisions_and_prompts_only_unresolved():
         ]
 
 
+def test_review_all_can_auto_accept_single_official_candidates():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path.cwd() / "data/mapping"
+        _write_mapping_snapshot(
+            root / "2014_afl_official.json",
+            [
+                player("official-fuzzy", "Marty Mattner", "Hawthorn"),
+                player("417", "Angus Litherland", "Hawthorn"),
+            ],
+        )
+        _write_mapping_snapshot(
+            root / "2014_afl_tables.json",
+            [
+                player("Martin_Mattner", "Martin Mattner", "Hawthorn"),
+                player("Angus_Dewar", "Angus Dewar", "Hawthorn"),
+            ],
+        )
+
+        result = runner.invoke(
+            cli,
+            [
+                "map",
+                "review-all",
+                "--from-year",
+                "2014",
+                "--to-year",
+                "2014",
+                "--accept-single-candidate",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert result.output.count("Auto-accepted sole candidate:") == 2
+        approved = json.loads((root / "2014_approved.json").read_text())
+        assert approved == [
+            {
+                "afl_official_id": "official-fuzzy",
+                "player_id": "Martin_Mattner",
+            },
+            {"afl_official_id": "417", "player_id": "Angus_Dewar"},
+        ]
+
+
+def test_review_all_does_not_auto_accept_multiple_candidates():
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path.cwd() / "data/mapping"
+        _write_mapping_snapshot(root / "2014_afl_official.json", [player("official-1")])
+        _write_mapping_snapshot(
+            root / "2014_afl_tables.json",
+            [player("tables-2"), player("tables-1")],
+        )
+
+        result = runner.invoke(
+            cli,
+            [
+                "map",
+                "review-all",
+                "--from-year",
+                "2014",
+                "--to-year",
+                "2014",
+                "--accept-single-candidate",
+            ],
+            input="\n",
+        )
+
+        assert result.exit_code == 1
+        assert "Select option (number, or s to skip)" in result.output
+        assert "Auto-accepted sole candidate:" not in result.output
+        assert json.loads((root / "2014_approved.json").read_text()) == []
+
+
 def test_review_all_uses_historical_source_identities(monkeypatch):
     from afl_scraper.pipelines import historical
 
-    source_player = player("historical-2011")
+    source_player = player("historical-2011", "Marty Mattner")
     monkeypatch.setattr(
         historical, "historical_source_players", lambda year: [source_player]
     )
@@ -518,14 +592,26 @@ def test_review_all_uses_historical_source_identities(monkeypatch):
     runner = CliRunner()
     with runner.isolated_filesystem():
         root = Path.cwd() / "data/mapping"
-        _write_mapping_snapshot(root / "2011_afl_tables.json", [player("tables-2011")])
+        _write_mapping_snapshot(
+            root / "2011_afl_tables.json",
+            [player("tables-2011", "Martin Mattner")],
+        )
 
         result = runner.invoke(
             cli,
-            ["map", "review-all", "--from-year", "2011", "--to-year", "2011"],
+            [
+                "map",
+                "review-all",
+                "--from-year",
+                "2011",
+                "--to-year",
+                "2011",
+                "--accept-single-candidate",
+            ],
         )
 
         assert result.exit_code == 0, result.output
+        assert "Auto-accepted sole candidate: tables-2011" in result.output
         approved = json.loads(
             (root / "2011_australian_football_approved.json").read_text()
         )

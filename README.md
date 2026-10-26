@@ -528,6 +528,13 @@ The mapping workflow connects player identifiers across the configured sources:
 uv run afl-scraper map review-all
 ```
 
+To approve every review item that has exactly one candidate while retaining
+interactive prompts for ambiguous choices, run:
+
+```sh
+uv run afl-scraper map review-all --accept-single-candidate
+```
+
 `review-all` covers the configured 2006-2026 range in one interactive run. It
 uses AustralianFootball participants for 2006-2011 and AFL Official participants
 from 2012 onward, regenerates candidates from the validated local snapshots and
@@ -537,8 +544,9 @@ resumed with the same command. Previously approved official-source decisions in
 an incomplete year are retained, while unresolved same-team players can be
 paired explicitly when a source has changed or shortened a name. Use
 `--from-year` and `--to-year` to limit the range, or `--force` to discard retained
-decisions and deliberately review a year again. The command does not connect to
-PostgreSQL or upsert any mappings.
+decisions and deliberately review a year again. `--accept-single-candidate` is
+explicitly opt-in and never selects among two or more candidates. The command
+does not connect to PostgreSQL or upsert any mappings.
 
 The individual commands remain available when working on one year:
 
