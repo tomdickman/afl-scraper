@@ -35,9 +35,19 @@ def validate_source_mapping_coverage(
 def upsert_source_mappings(
     mappings: list[SourcePlayerMapping], year: int, source: str
 ) -> int:
-    validate_source_mappings(mappings)
+    return upsert_source_mapping_years({(source, year): mappings})[(source, year)]
+
+
+def upsert_source_mapping_years(
+    mappings_by_source_year: dict[tuple[str, int], list[SourcePlayerMapping]],
+) -> dict[tuple[str, int], int]:
+    """Upsert source-qualified mappings for multiple seasons atomically."""
+    for mappings in mappings_by_source_year.values():
+        validate_source_mappings(mappings)
+
+    counts = {}
     with admin_connection_pool() as conn:
-        with conn.transaction():
+        for (source, year), mappings in mappings_by_source_year.items():
             for mapping in mappings:
                 conn.execute(
                     """
@@ -55,4 +65,5 @@ def upsert_source_mappings(
                         "year": year,
                     },
                 )
-    return len(mappings)
+            counts[(source, year)] = len(mappings)
+    return counts

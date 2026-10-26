@@ -683,7 +683,7 @@ def load_australian_football_manifest(
     if not path.exists():
         raise FileNotFoundError(
             f"Historical season manifest not found: {path}. "
-            f"Run `scrape historical-season {year}` first."
+            f"Run `scrape season {year}` first."
         )
     manifest = AustralianFootballSeasonManifest.model_validate_json(
         path.read_text(encoding="utf-8")

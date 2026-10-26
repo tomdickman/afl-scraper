@@ -266,11 +266,19 @@ def test_cli_reports_preparation_counts(monkeypatch):
         dry_run=True,
     )
     prepare = Mock(return_value=report)
-    monkeypatch.setattr(pipelines_package, "prepare_historical_players", prepare)
+    monkeypatch.setattr(pipelines_package, "prepare_players", prepare)
 
     result = CliRunner().invoke(
         cli_module.cli,
-        ["pipeline", "prepare-historical-players", "--offline"],
+        [
+            "pipeline",
+            "players",
+            "--from-year",
+            "2006",
+            "--to-year",
+            "2011",
+            "--offline",
+        ],
     )
 
     assert result.exit_code == 0, result.output

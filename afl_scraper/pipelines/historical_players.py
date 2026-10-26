@@ -313,6 +313,31 @@ def prepare_historical_players(
     )
 
 
+def prepare_players(
+    start_year: int = MIN_HISTORY_YEAR,
+    end_year: int = MAX_CONFIGURED_YEAR,
+    *,
+    load: bool = False,
+    refresh: bool = False,
+    offline: bool = False,
+    headless: bool = True,
+    delay_ms: int = 500,
+    progress=None,
+) -> HistoricalPlayerPreparationReport:
+    """Prepare canonical AFL Tables players for any configured season range."""
+    validate_player_raw_range(start_year, end_year)
+    return _prepare_players(
+        start_year,
+        end_year,
+        load=load,
+        refresh=refresh,
+        offline=offline,
+        headless=headless,
+        delay_ms=delay_ms,
+        progress=progress,
+    )
+
+
 def prepare_player_raw_data(
     start_year: int = MIN_HISTORY_YEAR,
     end_year: int = MAX_CONFIGURED_YEAR,
@@ -324,8 +349,7 @@ def prepare_player_raw_data(
     progress=None,
 ) -> HistoricalPlayerPreparationReport:
     """Cache and validate AFL Tables snapshots/profiles without database access."""
-    validate_player_raw_range(start_year, end_year)
-    return _prepare_players(
+    return prepare_players(
         start_year,
         end_year,
         load=False,

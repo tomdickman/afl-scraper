@@ -354,7 +354,7 @@ def test_backfill_cli_rejects_unsupported_range_before_database_access():
         cli,
         [
             "pipeline",
-            "historical-backfill",
+            "backfill",
             "--from-year",
             "2005",
             "--to-year",
@@ -363,4 +363,4 @@ def test_backfill_cli_rejects_unsupported_range_before_database_access():
     )
 
     assert result.exit_code != 0
-    assert "supports 2006-2011" in str(result.exception)
+    assert "between 2006 and 2026" in result.output

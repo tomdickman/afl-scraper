@@ -669,7 +669,7 @@ def test_season_cache_resumes_missing_matches_and_fails_on_invalid_cache(
         )
 
 
-def test_historical_season_cli_keeps_full_match_scrape_explicit(monkeypatch, tmp_path):
+def test_season_cli_routes_historical_full_match_scrape(monkeypatch, tmp_path):
     manifest = source.parse_australian_football_season(season_html(), 2006)
     cache_calls = []
     browser_modes = []
@@ -696,20 +696,16 @@ def test_historical_season_cli_keeps_full_match_scrape_explicit(monkeypatch, tmp
         lambda *_args, **_kwargs: cache_calls.append(True) or [tmp_path] * 185,
     )
 
-    manifest_only = CliRunner().invoke(
-        cli_module.cli, ["scrape", "historical-season", "2006"]
-    )
+    manifest_only = CliRunner().invoke(cli_module.cli, ["scrape", "season", "2006"])
     assert manifest_only.exit_code == 0, manifest_only.output
-    assert (
-        "Saved historical season manifest covering 185 matches" in manifest_only.output
-    )
+    assert "Saved 185 matches" in manifest_only.output
     assert cache_calls == []
 
     with_matches = CliRunner().invoke(
         cli_module.cli,
         [
             "scrape",
-            "historical-season",
+            "season",
             "2006",
             "--matches",
             "--delay-ms",
@@ -717,6 +713,6 @@ def test_historical_season_cli_keeps_full_match_scrape_explicit(monkeypatch, tmp
         ],
     )
     assert with_matches.exit_code == 0, with_matches.output
-    assert "Validated 185 historical match caches" in with_matches.output
+    assert "Validated 185 AustralianFootball match caches" in with_matches.output
     assert cache_calls == [True]
     assert browser_modes == [False, False]

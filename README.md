@@ -12,12 +12,12 @@ A Python CLI for collecting Australian Football League data, normalising it, and
 - Run browser, fixture-selector, and database connection checks to detect local setup or upstream source changes.
 - Manage the SQL-first PostgreSQL schema with Alembic migrations. The schema includes teams, venues, players, games, player game statistics, and player ID mappings.
 
-The complete raw-data workflow covers 2006 through 2026. AFL Tables provides
+The complete raw-data and database workflows cover 2006 through 2026. AFL Tables provides
 player seasons, profiles, match metadata, and statistics across that range;
 AustralianFootball provides an independent match source across the same range;
-and the reviewed AFL Official fixture catalogue covers 2012 through 2026. The
-database historical-backfill workflow is deliberately bounded to 2006-2011,
-where AFL Official fixtures are unavailable. AFL Tables validation covers the
+and the reviewed AFL Official fixture catalogue covers 2012 through 2026.
+Generic season commands route 2006-2011 through AustralianFootball and
+2012-2026 through AFL Official. AFL Tables validation covers the
 16-club, 17-club, and 18-club competition eras.
 
 ## Requirements
@@ -146,17 +146,15 @@ All examples below use `uv run afl-scraper`. If the virtual environment is activ
 | `database reset` | Clears and rebuilds a disposable local PostgreSQL database. | Yes |
 | `scrape players YEAR` | Saves raw player records under `data/raw/`. | No |
 | `scrape all` | Resumably caches and validates every configured player and match source, plus team/venue audit catalogs. | No |
-| `scrape season YEAR` | Discovers every source round and match ID and writes a validated season manifest. | No |
-| `scrape historical-season YEAR` | Discovers an AustralianFootball season from 2006-2026 and optionally caches every available validated match page. | No |
+| `scrape season YEAR` | Discovers a provider-routed season and optionally caches every match. | No |
 | `scrape match ID` | Scrapes, transforms, and loads one match and its player statistics. | Yes |
 | `audit match-metadata --year YEAR` | Verifies every official fixture resolves to one AFL Tables metadata record and writes an atomic report. | No |
 | `scrape round ROUND` | Processes every match in a round; use `--no-load` for extraction only. | Unless `--no-load` is used |
 | `transform players` | Transforms stored player records and loads the resulting player models. | Yes |
-| `pipeline players` | Runs the player transform/load pipeline, optionally refreshing raw pages first. | Yes |
-| `pipeline official-season YEAR` | Validates and prepares a complete cached AFL Official season without writing. | Yes |
-| `pipeline prepare-historical-players` | Prepares validated AFL Tables snapshots and canonical players for 2006-2011. | Only with `--load` |
-| `map scrape` | Saves player identity data from each configured source to `data/mapping/`. | No |
-| `map scrape-season` | Derives participating historical official IDs from every match in a completed season. | No |
+| `pipeline players` | Prepares and optionally loads canonical players for any configured range. | Only with `--load` |
+| `pipeline season YEAR` | Preflights and optionally loads any provider-routed cached season. | Yes |
+| `pipeline backfill` | Preflights and optionally loads an inclusive 2006-2026 range. | Yes |
+| `map scrape` | Derives source-qualified identities from any configured cached season. | No |
 | `map match` | Produces exact, reviewable, and unmatched cross-source player ID groups. | No |
 | `map review` | Interactively reviews mappings and writes an approved mapping file. | No |
 | `map review-all` | Reviews every incomplete mapping year in one resumable interactive run. | No |
@@ -268,11 +266,14 @@ Transform the stored pages and load them into PostgreSQL:
 uv run afl-scraper transform players
 ```
 
-The full pipeline combines those steps. By default it reuses the raw pages already on disk; add `--scrape` to refresh them first:
+The generic player pipeline validates the requested AFL Tables snapshots and
+profiles before loading anything. It defaults to the complete configured range
+and a dry run:
 
 ```sh
-uv run afl-scraper pipeline players --year 2026
-uv run afl-scraper pipeline players --scrape --year 2026
+uv run afl-scraper pipeline players --offline
+uv run afl-scraper pipeline players --offline --load
+uv run afl-scraper pipeline players --from-year 2026 --to-year 2026 --offline
 ```
 
 A fresh AFL Tables extraction is staged separately and replaces the cached player
@@ -358,29 +359,25 @@ uv run afl-scraper scrape round 1 --year 2026 --no-load
 The round pipeline isolates match failures: it reports an error for the affected match and continues processing the remaining fixture.
 
 After a completed season manifest, match caches, and player mappings exist,
-validate and transform the complete AFL Official season without writing:
+validate and transform any complete season without writing:
 
 ```sh
-uv run afl-scraper pipeline official-season 2025
+uv run afl-scraper pipeline season 2025
 ```
 
-This command fails before opening PostgreSQL if the cache is incomplete or
-invalid. It then checks year-scoped player mappings and database references,
-transforms every match using placeholder IDs, and reports the match and
-player-stat totals. It uses the app connection for these read-only checks,
-fails immediately when required database environment variables are missing,
-and never allocates game identities or writes database rows.
+The command resolves the configured source for the year, checks its complete
+cache, year-scoped player mappings and database references, transforms every
+match, and reports match and player-stat totals. Add `--load` to persist each
+game and all of its statistics atomically and require exact reconciliation.
 
-### Cache an AustralianFootball season
+### Cache any season
 
-AustralianFootball is the match source for the 2006-2011 historical backfill
-and an independent validation source through 2026. Raw acquisition accepts any
-configured 2006-2026 season; the database historical-load workflows remain
-deliberately bounded to 2006-2011. Discover and validate a season without
-requesting every match page:
+The command resolves the canonical match source from the year. Seasons from
+2006-2011 use AustralianFootball; seasons from 2012 onward use AFL Official.
+Discover and validate a manifest without requesting every match page:
 
 ```sh
-uv run afl-scraper scrape historical-season 2006
+uv run afl-scraper scrape season 2006
 ```
 
 This command defaults to a visible browser because the source currently returns
@@ -392,7 +389,7 @@ are reused, so rerunning the command safely resumes after a network or source
 failure:
 
 ```sh
-uv run afl-scraper scrape historical-season 2006 --matches
+uv run afl-scraper scrape season 2006 --matches
 ```
 
 The default 500 ms delay applies only between live match requests. Use
@@ -405,13 +402,13 @@ number is retained as unavailable when the source leaves that player's cell
 blank. Statistics the source does not publish are absent rather than recorded
 as zero.
 
-### Prepare canonical players for 2006-2011
+### Prepare canonical players
 
 Before reviewing AustralianFootball identities, prepare the corresponding
 year-scoped AFL Tables snapshots and canonical player records:
 
 ```sh
-uv run afl-scraper pipeline prepare-historical-players
+uv run afl-scraper pipeline players --offline
 ```
 
 The safe default acquires only missing data, validates all six season snapshots
@@ -423,7 +420,7 @@ delay; use `--delay-ms` to increase it if the source is under load.
 After the complete dry run succeeds, load the same validated caches:
 
 ```sh
-uv run afl-scraper pipeline prepare-historical-players --offline --load
+uv run afl-scraper pipeline players --offline --load
 ```
 
 The offline load performs no web requests and upserts all canonical players in
@@ -434,11 +431,11 @@ cache if the refresh fails. It cannot be combined with `--offline`.
 Use `--from-year` and `--to-year` for a smaller inclusive pilot, for example:
 
 ```sh
-uv run afl-scraper pipeline prepare-historical-players \
+uv run afl-scraper pipeline players \
   --from-year 2006 --to-year 2006
 ```
 
-### Map and load a cached 2006-2011 season
+### Map and load a cached season
 
 Apply the source-qualified identity and nullable-stat migration first:
 
@@ -446,16 +443,14 @@ Apply the source-qualified identity and nullable-stat migration first:
 uv run alembic upgrade head
 ```
 
-Historical loading uses the AFL Tables player ID as the existing canonical
-database player ID, but never treats an AustralianFootball numeric ID as the
-same namespace. Generate conservative candidates from the complete match cache
-and an existing `data/mapping/<year>_afl_tables.json` snapshot, review ambiguous
-names, and require exact season coverage when saving the approved mappings:
+Mapping uses the AFL Tables player ID as the canonical database player ID and
+keeps every provider ID source-qualified. The same commands select
+AustralianFootball for 2006-2011 and AFL Official from 2012 onward:
 
 ```sh
-uv run afl-scraper map match-historical --year 2006
-uv run afl-scraper map review-historical --year 2006
-uv run afl-scraper map upsert-historical --year 2006
+uv run afl-scraper map match --year 2006
+uv run afl-scraper map review --year 2006
+uv run afl-scraper map upsert --year 2006 --require-complete
 ```
 
 The upsert fails before opening a database connection if any participating
@@ -467,13 +462,13 @@ Run the complete cache, mapping, team, venue, timezone and database-reference
 preflight. This is the safe default and performs no writes:
 
 ```sh
-uv run afl-scraper pipeline historical-season 2006
+uv run afl-scraper pipeline season 2006
 ```
 
 After reviewing the counts, load the season explicitly:
 
 ```sh
-uv run afl-scraper pipeline historical-season 2006 --load
+uv run afl-scraper pipeline season 2006 --load
 ```
 
 Provider match IDs are resolved through a source-qualified identity before an
@@ -481,44 +476,30 @@ internal game ID is allocated. Each game and all of its player rows are one
 transaction. Replaying a season updates the same records, and null historical
 fields do not erase richer values already stored for those records.
 
-### Run the resumable 2006-2011 backfill
+### Run a multi-season backfill
 
 After every year has complete caches and approved mappings, preflight the full
 range before allowing any database writes:
 
 ```sh
-uv run afl-scraper pipeline historical-backfill
+uv run afl-scraper pipeline backfill --from-year 2006 --to-year 2026
 ```
 
-The dry run validates all six years and writes two ignored, atomic artifacts:
-
-- `data/checkpoints/australian_football/2006-2011.json` records per-year state.
-- `data/reports/australian_football/2006-2011.json` compares expected caches
-  with source-qualified database games and player statistics.
-
-The reconciliation checks identities, every canonical game field, participant
+The dry run validates the entire range before any write is possible. The
+reconciliation checks identities, every canonical game field, participant
 sets, and every statistic published by the historical source. Unpublished null
 fields are ignored so independently enriched values remain valid.
 
 Load the range only after reviewing the dry-run output:
 
 ```sh
-uv run afl-scraper pipeline historical-backfill --load
+uv run afl-scraper pipeline backfill \
+  --from-year 2006 --to-year 2026 --load
 ```
 
-All requested years must pass preflight before the first game is written. After
-each completed year, the checkpoint and reconciliation report are atomically
-replaced. A rerun resumes by skipping only years that reconcile completely with
-the database; the checkpoint file alone is never trusted. If a previously
-completed year has drifted, resume fails closed. Inspect the report, then use
-`--reprocess` only when deliberately repairing it with idempotent upserts:
-
-```sh
-uv run afl-scraper pipeline historical-backfill --load --reprocess
-```
-
-Use `--from-year` and `--to-year` for a smaller inclusive range. Custom artifact
-locations are available through `--checkpoint` and `--report`.
+All requested years must pass preflight before the first game is written. Each
+game and its player rows are one transaction. A rerun skips seasons that already
+reconcile completely and uses idempotent upserts for incomplete seasons.
 
 ### Map player IDs across sources
 
@@ -581,19 +562,18 @@ The steps create ignored local source, review, and approval files under `data/ma
 2. `data/mapping/2026_to_review.json`
 3. `data/mapping/2026_approved.json`
 
-AFL Official team pages expose current rosters only, so `map scrape` rejects a
-historical `--year` rather than labeling current players as historical data. The
-Official scrape requires plausible, unique rosters from all 18 clubs. Snapshot
-writes reject empty, duplicate, or wrong-year records and atomically replace the
-last-known-good file.
+`map scrape` derives identities from the completed season cache selected by the
+year-routing policy, rather than labeling current rosters as historical data.
+Snapshot writes reject empty, duplicate, or wrong-year records and atomically
+replace the last-known-good file.
 
 For a completed season in the reviewed 2012-2026 official fixture range, first
 discover its manifest and then derive identities from the completed match pages.
 This includes the current calendar year once its final match is complete:
 
 ```sh
-uv run afl-scraper scrape season 2012
-uv run afl-scraper map scrape-season --year 2012
+uv run afl-scraper scrape season 2012 --matches
+uv run afl-scraper map scrape --year 2012
 uv run afl-scraper map match --year 2012
 uv run afl-scraper map review --year 2012
 uv run afl-scraper map upsert --year 2012 --require-complete
@@ -604,14 +584,15 @@ Each fully validated match is cached as
 that cache; pass `--refresh` to reacquire every page deliberately. Invalid cached
 JSON fails closed rather than being silently replaced.
 
-Historical identities are the union of players who actually appeared in the
-season manifest. Repeated official IDs must retain the same normalized name,
-team, and year across every match. Benign punctuation, suffix, and middle-initial
-differences can match exactly when the team also agrees. Nickname differences
-remain interactive review items using same-team, same-surname candidates.
+Season identities are the union of players who actually appeared in the
+selected source manifest. Repeated source IDs must retain the same normalized
+name, team, and year across every match. Benign punctuation, suffix, and
+middle-initial differences can match exactly when the team also agrees.
+Nickname differences remain interactive review items using same-team,
+same-surname candidates.
 
 Use `--require-complete` when upserting match-derived mappings. For either a
-single year or a range, it verifies that every participating official ID has an
+single year or a range, it verifies that every participating source ID has an
 approved canonical mapping before opening a database connection. Individual
 match loading retains its existing mapping coverage check as a second guard.
 

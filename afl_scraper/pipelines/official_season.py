@@ -242,3 +242,24 @@ def prepare_official_season(
 
     with connection_pool() as conn:
         return _prepare_official_matches(conn, year, matches)
+
+
+def preflight_official_season(
+    conn,
+    year: int,
+    *,
+    manifest_root: Path = Path("data/raw/afl_official/season"),
+    raw_root: Path = Path("data/raw/afl_official/match"),
+) -> list[PreparedOfficialMatch]:
+    """Prepare a complete cached official season using an existing connection."""
+    preflight_official_season_cache(
+        year,
+        manifest_root=manifest_root,
+        raw_root=raw_root,
+    )
+    manifest = load_season_manifest(year, manifest_root)
+    matches = [
+        (match_id, load_raw_match_data(match_id, raw_root))
+        for match_id in manifest.match_ids
+    ]
+    return _prepare_official_matches(conn, year, matches)

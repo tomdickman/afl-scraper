@@ -9,6 +9,7 @@ from .map_players import (
 from .match import resolve_venue, resolve_team, parse_match_datetime, transform_match
 from .australian_football import transform_australian_football_match
 from .source_mappings import (
+    upsert_source_mapping_years,
     upsert_source_mappings,
     validate_source_mapping_coverage,
     validate_source_mappings,
@@ -27,6 +28,7 @@ __all__ = [
     "transform_match",
     "transform_australian_football_match",
     "upsert_source_mappings",
+    "upsert_source_mapping_years",
     "validate_source_mapping_coverage",
     "validate_source_mappings",
 ]

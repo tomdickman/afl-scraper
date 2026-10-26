@@ -210,36 +210,15 @@ def round(round_number, headless, year, load):
     click.echo(f"\nProcessed {len(results)} matches in round {round_number}")
 
 
-@scrape.command("season", help="Discover and save every round and match in a season")
-@click.argument("year", nargs=1, type=int)
-@click.option(
-    "--headless/--no-headless",
-    default=True,
-    help="Run the scraper in headless mode (default: headless).",
-)
-def season(year, headless):
-    """Write a validated, year-scoped official fixture manifest."""
-    with sync_browser_context(headless) as browser:
-        manifest = discover_official_season(browser, year)
-    path = save_season_manifest(manifest)
-    click.echo(
-        f"Saved {manifest.match_count} matches across {len(manifest.rounds)} "
-        f"rounds to {path}"
-    )
-
-
 @scrape.command(
-    "historical-season",
-    help="Discover and optionally cache AustralianFootball matches from 2006-2026",
+    "season",
+    help="Discover and optionally cache every match for any configured season",
 )
 @click.argument("year", nargs=1, type=int)
 @click.option(
     "--matches/--manifest-only",
     default=False,
-    help=(
-        "Cache every available validated match page and reviewed absence "
-        "after discovering the manifest."
-    ),
+    help="Cache every validated match after discovering the manifest.",
 )
 @click.option(
     "--refresh/--reuse-cache",
@@ -251,44 +230,67 @@ def season(year, headless):
     default=500,
     type=click.IntRange(min=0),
     show_default=True,
-    help="Delay between live match requests.",
+    help="Delay between live match requests when supported by the source.",
 )
 @click.option(
     "--headless/--no-headless",
     default=False,
-    help="Use headless mode; the historical source may reject fresh sessions.",
+    help="Use headless mode; some configured sources may reject fresh sessions.",
 )
-def historical_season(year, matches, refresh, delay_ms, headless):
-    """Write a validated AustralianFootball manifest and resumable match cache."""
+def season(year, matches, refresh, delay_ms, headless):
+    """Route season acquisition to the configured source for the requested year."""
+    from .season_routing import season_plan
     from .scraper import (
         cache_australian_football_season_matches,
         discover_australian_football_season,
         save_australian_football_manifest,
+        scrape_season_player_ids,
     )
 
+    plan = season_plan(year)
+    click.echo(f"[{year}] source: {plan.display_source}")
     with sync_browser_context(headless) as browser:
-        manifest = discover_australian_football_season(browser, year)
-        path = save_australian_football_manifest(manifest)
-        click.echo(
-            f"Saved historical season manifest covering {manifest.match_count} "
-            f"matches across {len(manifest.rounds)} groups to {path}"
-        )
-        if not matches:
-            return
+        if plan.match_source == "australian_football":
+            manifest = discover_australian_football_season(browser, year)
+            path = save_australian_football_manifest(manifest)
+        else:
+            manifest = discover_official_season(browser, year)
+            path = save_season_manifest(manifest)
 
         def report_progress(index, total, match_id, cached):
             if index == 1 or index == total or index % 10 == 0:
                 source = "cache" if cached else "live"
                 click.echo(f"[{index}/{total}] match {match_id} ({source})")
 
-        paths = cache_australian_football_season_matches(
-            browser,
-            manifest,
-            refresh=refresh,
-            delay_ms=delay_ms,
-            progress=report_progress,
+        if matches and plan.match_source == "australian_football":
+            cached_count = len(
+                cache_australian_football_season_matches(
+                    browser,
+                    manifest,
+                    refresh=refresh,
+                    delay_ms=delay_ms,
+                    progress=report_progress,
+                )
+            )
+        elif matches:
+            scrape_season_player_ids(
+                browser,
+                manifest,
+                refresh=refresh,
+                progress=report_progress,
+            )
+            cached_count = manifest.match_count
+        else:
+            cached_count = None
+
+    click.echo(
+        f"Saved {manifest.match_count} matches across {len(manifest.rounds)} "
+        f"rounds to {path}"
+    )
+    if cached_count is not None:
+        click.echo(
+            f"Validated {cached_count} {plan.display_source} match caches for {year}"
         )
-    click.echo(f"Validated {len(paths)} historical match caches for {year}")
 
 
 @scrape.command("match", help="Scrape details a specific match by ID")
@@ -410,150 +412,31 @@ def pipeline():
 
 
 @pipeline.command(
-    "players", help="Transform all unstructured player data into structured format"
+    "players", help="Prepare and optionally load players for any season range"
 )
 @click.option(
-    "--scrape/--no-scrape",
-    default=False,
-    help="Run the scraper to refresh extracted data before transform and load.",
-)
-@click.option(
-    "--year",
-    default=datetime.now().year,
+    "--from-year",
+    "start_year",
+    default=MIN_HISTORY_YEAR,
     type=int,
-    help="The year, defaults to current if not included.",
+    show_default=True,
 )
-def pipeline_players(scrape: bool, year=2026):
-    print(players_pipeline(scrape, year))
-
-
-@pipeline.command(
-    "official-season",
-    help="Validate and prepare one cached AFL Official season without writing",
+@click.option(
+    "--to-year",
+    "end_year",
+    default=MAX_CONFIGURED_YEAR,
+    type=int,
+    show_default=True,
 )
-@click.argument("year", nargs=1, type=int)
-def pipeline_official_season(year):
-    """Run the read-only AFL Official season preparation pipeline."""
-    from .pipelines import prepare_official_season
-
-    try:
-        prepared = prepare_official_season(year)
-    except Exception as error:
-        raise click.ClickException(str(error)) from error
-
-    player_stats = sum(len(match.player_stats) for match in prepared)
-    click.echo(
-        f"Validated {len(prepared)} official matches and "
-        f"{player_stats} player-stat rows for {year}"
-    )
-    click.echo("Database writes: 0 (dry run)")
-
-
-@pipeline.command(
-    "historical-season",
-    help="Preflight and optionally load one cached 2006-2011 season",
-)
-@click.argument("year", nargs=1, type=int)
 @click.option(
     "--load/--dry-run",
     default=False,
-    help="Write only after complete cache, identity and reference preflight.",
-)
-def pipeline_historical_season(year, load):
-    """Load AustralianFootball caches; safe default is validation only."""
-    from .pipelines import historical_season_pipeline
-
-    report = historical_season_pipeline(year, load=load)
-    action = "Loaded" if load else "Validated"
-    click.echo(
-        f"{action} {report.matches} historical matches and "
-        f"{report.player_stats} player-stat rows for {year}"
-    )
-    if load:
-        click.echo(
-            f"Games inserted: {report.inserted_games}; "
-            f"updated: {report.updated_games}"
-        )
-
-
-@pipeline.command(
-    "historical-backfill",
-    help="Preflight, reconcile, and optionally load a cached historical range",
-)
-@click.option("--from-year", "start_year", default=2006, type=int, show_default=True)
-@click.option("--to-year", "end_year", default=2011, type=int, show_default=True)
-@click.option(
-    "--load/--dry-run",
-    default=False,
-    help="Load only after every requested year passes preflight.",
-)
-@click.option(
-    "--resume/--reprocess",
-    default=True,
-    help="Skip only years that reconcile completely with the database.",
-)
-@click.option(
-    "--checkpoint",
-    type=click.Path(path_type=Path),
-    help="Override the atomic checkpoint JSON path.",
-)
-@click.option(
-    "--report",
-    type=click.Path(path_type=Path),
-    help="Override the reconciliation report JSON path.",
-)
-def pipeline_historical_backfill(
-    start_year, end_year, load, resume, checkpoint, report
-):
-    """Run the resumable 2006-2011 backfill orchestrator."""
-    from .pipelines import historical_backfill_pipeline
-
-    def progress(year, status):
-        click.echo(f"[{year}] {status}")
-
-    result = historical_backfill_pipeline(
-        start_year,
-        end_year,
-        load=load,
-        resume=resume,
-        checkpoint_path=checkpoint,
-        report_path=report,
-        progress=progress,
-    )
-    for year_report in result.report.years:
-        click.echo(
-            f"{year_report.year}: DB matches "
-            f"{year_report.database_matches}/{year_report.expected_matches}; "
-            f"player stats {year_report.database_player_stats}/"
-            f"{year_report.expected_player_stats}; "
-            f"differences {year_report.mismatch_count}"
-        )
-    click.echo(
-        f"Range totals: DB matches {result.report.database_matches}/"
-        f"{result.report.expected_matches}; player stats "
-        f"{result.report.database_player_stats}/"
-        f"{result.report.expected_player_stats}; differences "
-        f"{result.report.mismatch_count}"
-    )
-    click.echo(f"Checkpoint: {result.checkpoint_path}")
-    click.echo(f"Reconciliation report: {result.report_path}")
-
-
-@pipeline.command(
-    "prepare-historical-players",
-    help="Prepare AFL Tables players and snapshots required for 2006-2011",
-)
-@click.option("--from-year", "start_year", default=2006, type=int, show_default=True)
-@click.option("--to-year", "end_year", default=2011, type=int, show_default=True)
-@click.option(
-    "--load/--dry-run",
-    default=False,
-    help="Upsert canonical players only after every snapshot and profile validates.",
+    help="Upsert canonical players only after all profiles validate.",
 )
 @click.option(
     "--refresh",
     is_flag=True,
-    help="Deliberately replace all requested snapshots and player profiles.",
+    help="Deliberately replace requested snapshots and profiles.",
 )
 @click.option(
     "--offline",
@@ -563,7 +446,7 @@ def pipeline_historical_backfill(
 @click.option(
     "--headless/--no-headless",
     default=True,
-    help="Run live AFL Tables requests in headless mode (default: headless).",
+    help="Run live AFL Tables requests in headless mode.",
 )
 @click.option(
     "--delay-ms",
@@ -572,13 +455,11 @@ def pipeline_historical_backfill(
     show_default=True,
     help="Delay between live AFL Tables requests.",
 )
-def pipeline_prepare_historical_players(
-    start_year, end_year, load, refresh, offline, headless, delay_ms
-):
-    """Build canonical player prerequisites for the historical backfill."""
-    from .pipelines import prepare_historical_players
+def pipeline_players(start_year, end_year, load, refresh, offline, headless, delay_ms):
+    """Prepare canonical AFL Tables players across the configured range."""
+    from .pipelines import prepare_players
 
-    report = prepare_historical_players(
+    report = prepare_players(
         start_year,
         end_year,
         load=load,
@@ -591,8 +472,7 @@ def pipeline_prepare_historical_players(
     action = "Loaded" if load else "Prepared"
     click.echo(
         f"{action} {report.unique_players} unique AFL Tables players across "
-        f"{report.snapshots} season snapshots ({report.start_year}-"
-        f"{report.end_year})"
+        f"{report.snapshots} season snapshots ({report.start_year}-{report.end_year})"
     )
     click.echo(
         f"Profiles downloaded: {report.downloaded_profiles}; "
@@ -603,6 +483,101 @@ def pipeline_prepare_historical_players(
             f"Players inserted: {report.inserted_players}; "
             f"updated: {report.updated_players}"
         )
+
+
+@pipeline.command(
+    "season",
+    help="Preflight and optionally load any configured cached season",
+)
+@click.argument("year", nargs=1, type=int)
+@click.option(
+    "--load/--dry-run",
+    default=False,
+    help="Write only after complete cache, mapping and reference preflight.",
+)
+def pipeline_season(year, load):
+    """Route preparation and loading through the configured season source."""
+    from .pipelines import season_pipeline
+
+    def progress(index, total, source_match_id, inserted):
+        if index == 1 or index == total or index % 10 == 0:
+            action = "inserted" if inserted else "updated"
+            click.echo(f"[{index}/{total}] match {source_match_id} ({action})")
+
+    try:
+        result = season_pipeline(year, load=load, progress=progress)
+    except Exception as error:
+        raise click.ClickException(str(error)) from error
+
+    action = "Loaded" if load else "Validated"
+    click.echo(
+        f"{action} {result.matches} matches and {result.player_stats} "
+        f"player-stat rows for {year} from {result.source}"
+    )
+    if not load:
+        click.echo("Database writes: 0 (dry run)")
+    elif result.already_reconciled:
+        click.echo("Database already reconciled; writes: 0")
+    else:
+        click.echo(
+            f"Games inserted: {result.inserted_games}; "
+            f"updated: {result.updated_games}; reconciliation differences: 0"
+        )
+
+
+@pipeline.command(
+    "backfill",
+    help="Preflight and optionally load an inclusive configured season range",
+)
+@click.option(
+    "--from-year",
+    "start_year",
+    default=MIN_HISTORY_YEAR,
+    type=int,
+    show_default=True,
+)
+@click.option(
+    "--to-year",
+    "end_year",
+    default=MAX_CONFIGURED_YEAR,
+    type=int,
+    show_default=True,
+)
+@click.option(
+    "--load/--dry-run",
+    default=False,
+    help="Load only after every requested year passes preflight.",
+)
+def pipeline_backfill(start_year, end_year, load):
+    """Run a provider-routed multi-season backfill."""
+    from .pipelines import backfill_pipeline
+
+    def progress(year, status):
+        click.echo(f"[{year}] {status}")
+
+    try:
+        result = backfill_pipeline(
+            start_year,
+            end_year,
+            load=load,
+            progress=progress,
+        )
+    except Exception as error:
+        raise click.ClickException(str(error)) from error
+
+    for report in result.years:
+        reconciliation = report.reconciliation
+        click.echo(
+            f"{report.year} ({report.source}): DB matches "
+            f"{reconciliation.database_matches}/{reconciliation.expected_matches}; "
+            f"player stats {reconciliation.database_player_stats}/"
+            f"{reconciliation.expected_player_stats}; differences "
+            f"{reconciliation.mismatch_count}"
+        )
+    click.echo(
+        f"Range totals: {result.matches} matches and "
+        f"{result.player_stats} player-stat rows"
+    )
 
 
 @cli.command(name="smoke")
@@ -923,47 +898,9 @@ def _historical_mapping_is_complete(year):
     return True
 
 
-@map.command("scrape")
-@click.option(
-    "--headless/--no-headless",
-    default=True,
-    help="Run the scraper in headless mode (default: headless).",
-)
-@click.option(
-    "--year",
-    default=datetime.now().year,
-    type=int,
-    help="The year, defaults to current if not included.",
-)
-def map_scrape(headless, year):
-    """Scrape player IDs from both AFL official and AFL Tables sources."""
-    from .scraper.scrape_player_ids import (
-        scrape_player_ids,
-        save_player_id_snapshots,
-    )
-
-    with sync_browser_context(headless) as browser:
-        click.echo(f"Scraping AFL official players for {year}...")
-        afl_players = scrape_player_ids(browser, year, "afl_official")
-
-        click.echo(f"Scraping AFL Tables players for {year}...")
-        tables_players = scrape_player_ids(browser, year, "afl_tables")
-        paths = save_player_id_snapshots(
-            {"afl_official": afl_players, "afl_tables": tables_players}, year
-        )
-        click.echo(
-            f"Saved {len(afl_players)} AFL official players to "
-            f"{paths['afl_official']}"
-        )
-        click.echo(
-            f"Saved {len(tables_players)} AFL Tables players to "
-            f"{paths['afl_tables']}"
-        )
-
-
 @map.command(
-    "scrape-season",
-    help="Derive official player IDs from every match in a completed season",
+    "scrape",
+    help="Derive source player identities for any configured cached season",
 )
 @click.option(
     "--headless/--no-headless",
@@ -974,52 +911,54 @@ def map_scrape(headless, year):
     "--year",
     default=lambda: datetime.now().year - 1,
     type=int,
-    help="A completed official fixture season (defaults to last year).",
+    help="A completed season (defaults to last year).",
 )
 @click.option(
     "--refresh/--reuse-cache",
     default=False,
     help="Re-scrape every match instead of reusing validated match JSON.",
 )
-def map_scrape_season(headless, year, refresh):
-    """Create mapping snapshots from all participants in a completed season."""
+def map_scrape(headless, year, refresh):
+    """Create mapping snapshots from a provider-routed completed season."""
+    from .pipelines.historical import historical_source_players
+    from .pipelines.historical_players import load_player_snapshot
     from .scraper import load_season_manifest, scrape_season_player_ids
-    from .scraper.scrape_player_ids import (
-        save_player_id_snapshots,
-        scrape_player_ids,
-    )
+    from .scraper.scrape_player_ids import save_player_id_snapshots
+    from .season_routing import season_plan
 
     if year > datetime.now().year:
-        raise click.UsageError("scrape-season cannot process a future season")
-
-    manifest = load_season_manifest(year)
+        raise click.UsageError("map scrape cannot process a future season")
+    plan = season_plan(year)
 
     def report_progress(index, total, match_id, cached):
         if index == 1 or index == total or index % 10 == 0:
             source = "cache" if cached else "live"
             click.echo(f"[{index}/{total}] match {match_id} ({source})")
 
-    with sync_browser_context(headless) as browser:
+    if plan.match_source == "australian_football":
+        source_players = historical_source_players(year)
+    else:
+        manifest = load_season_manifest(year)
         click.echo(
-            f"Collecting AFL official participants from "
+            f"Collecting {plan.display_source} participants from "
             f"{manifest.match_count} matches in {year}..."
         )
-        afl_players = scrape_season_player_ids(
-            browser,
-            manifest,
-            refresh=refresh,
-            progress=report_progress,
-        )
+        with sync_browser_context(headless) as browser:
+            source_players = scrape_season_player_ids(
+                browser,
+                manifest,
+                refresh=refresh,
+                progress=report_progress,
+            )
 
-        click.echo(f"Scraping AFL Tables players for {year}...")
-        tables_players = scrape_player_ids(browser, year, "afl_tables")
+    tables_players = load_player_snapshot(year)
 
     paths = save_player_id_snapshots(
-        {"afl_official": afl_players, "afl_tables": tables_players}, year
+        {plan.match_source: source_players, "afl_tables": tables_players}, year
     )
     click.echo(
-        f"Saved {len(afl_players)} participating AFL official players to "
-        f"{paths['afl_official']}"
+        f"Saved {len(source_players)} participating {plan.display_source} "
+        f"players to {paths[plan.match_source]}"
     )
     click.echo(
         f"Saved {len(tables_players)} AFL Tables players to " f"{paths['afl_tables']}"
@@ -1034,17 +973,23 @@ def map_scrape_season(headless, year, refresh):
     help="The year, defaults to current if not included.",
 )
 def map_match(year):
-    """Match player IDs between AFL official and AFL Tables sources."""
-    click.echo(f"Loading player data for {year}...")
-    click.echo("Matching players...")
-    matches = _generate_official_mapping_candidates(year)
+    """Generate mapping candidates using the configured source for a year."""
+    from .season_routing import season_plan
 
-    click.echo(
-        f"Exact: {len(matches.exact)}, Fuzzy: {len(matches.fuzzy)}, "
-        f"Unmatched AFL: {len(matches.unmatched_afl)}, Unmatched Tables: {len(matches.unmatched_tables)}"
+    plan = season_plan(year)
+    click.echo(f"[{year}] source: {plan.display_source}")
+    matches = (
+        _generate_historical_mapping_candidates(year)
+        if plan.match_source == "australian_football"
+        else _generate_official_mapping_candidates(year)
     )
 
-    click.echo(f"Saved matches to data/mapping/{year}_to_review.json")
+    click.echo(
+        f"Exact: {len(matches.exact)}, review: {len(matches.fuzzy)}, "
+        f"unmatched source: {len(matches.unmatched_afl)}, "
+        f"unmatched canonical: {len(matches.unmatched_tables)}"
+    )
+    click.echo(f"Saved mapping candidates to {plan.review_mapping_path}")
 
 
 @map.command("review")
@@ -1062,19 +1007,18 @@ def map_match(year):
     help="Input JSON file (default: data/mapping/{year}_to_review.json)",
 )
 def map_review(year, input):
-    """Review and approve player ID mappings."""
-    import json
-
+    """Review mappings using the configured source for a year."""
     from .models.player import MatchResult
+    from .season_routing import season_plan
 
-    if input is None:
-        input = f"data/mapping/{year}_to_review.json"
+    plan = season_plan(year)
+    input = Path(input) if input is not None else plan.review_mapping_path
+    matches = MatchResult.model_validate_json(input.read_text(encoding="utf-8"))
 
-    with open(input) as f:
-        data = json.load(f)
-    matches = MatchResult.model_validate(data)
-
-    _review_official_matches(matches, year)
+    if plan.match_source == "australian_football":
+        _review_historical_matches(matches, year)
+    else:
+        _review_official_matches(matches, year)
 
 
 @map.command("upsert")
@@ -1112,13 +1056,14 @@ def map_upsert(year, start_year, end_year, input, require_complete):
     """Upsert approved player ID mappings for one year or an inclusive range."""
     import json
 
-    from .models.player import PlayerMapping
-
-    from .transform.map_players import (
-        load_player_ids_from_json,
-        upsert_mapping_years,
-        validate_mapping_coverage,
+    from .models import PlayerMapping, SourcePlayerMapping
+    from .pipelines.historical import historical_source_player_ids
+    from .season_routing import season_plan, season_years
+    from .transform import (
+        upsert_source_mapping_years,
+        validate_source_mapping_coverage,
     )
+    from .transform.map_players import load_player_ids_from_json
 
     range_requested = start_year is not None or end_year is not None
     if year is not None and range_requested:
@@ -1129,74 +1074,68 @@ def map_upsert(year, start_year, end_year, input, require_complete):
         raise click.UsageError("--input can only be used with a single --year")
 
     if range_requested:
-        if start_year > end_year:
-            raise click.UsageError(
-                "--from-year must be less than or equal to --to-year"
-            )
-        years = range(start_year, end_year + 1)
+        try:
+            years = season_years(start_year, end_year)
+        except ValueError as error:
+            raise click.UsageError(str(error)) from error
     else:
         years = [year if year is not None else datetime.now().year]
 
-    mappings_by_year = {}
+    mappings_by_source_year = {}
+    display_counts = {}
     for mapping_year in years:
-        mapping_input = input or f"data/mapping/{mapping_year}_approved.json"
-        with open(mapping_input) as f:
-            data = json.load(f)
-        mappings = [PlayerMapping(**item) for item in data]
+        plan = season_plan(mapping_year)
+        mapping_input = Path(input) if input else plan.approved_mapping_path
+        data = json.loads(mapping_input.read_text(encoding="utf-8"))
+        if plan.match_source == "australian_football":
+            mappings = [SourcePlayerMapping.model_validate(item) for item in data]
+            required_ids = (
+                historical_source_player_ids(mapping_year)
+                if require_complete
+                else set()
+            )
+        else:
+            official_mappings = [PlayerMapping.model_validate(item) for item in data]
+            mappings = [
+                SourcePlayerMapping(
+                    source_player_id=item.afl_official_id,
+                    player_id=item.player_id,
+                )
+                for item in official_mappings
+                if item.afl_official_id is not None
+            ]
+            required_ids = (
+                {
+                    item.id
+                    for item in load_player_ids_from_json("afl_official", mapping_year)
+                }
+                if require_complete
+                else set()
+            )
         if require_complete:
-            required_players = load_player_ids_from_json("afl_official", mapping_year)
-            validate_mapping_coverage(required_players, mappings)
-        mappings_by_year[mapping_year] = mappings
+            validate_source_mapping_coverage(required_ids, mappings)
+        mappings_by_source_year[(plan.match_source, mapping_year)] = mappings
+        display_counts[mapping_year] = len(mappings)
 
-    if len(mappings_by_year) == 1:
-        mapping_year, mappings = next(iter(mappings_by_year.items()))
-        click.echo(f"Upserting {len(mappings)} mappings to database...")
-        count = upsert_mapping_years(mappings_by_year)[mapping_year]
+    if len(mappings_by_source_year) == 1:
+        (source, mapping_year), mappings = next(iter(mappings_by_source_year.items()))
+        click.echo(f"Upserting {len(mappings)} {source} mappings to database...")
+        count = upsert_source_mapping_years(mappings_by_source_year)[
+            (source, mapping_year)
+        ]
         click.echo(f"✅ Upserted {count} mappings")
         return
 
     click.echo(
-        f"Upserting {sum(len(items) for items in mappings_by_year.values())} mappings "
-        f"across {len(mappings_by_year)} years..."
+        f"Upserting {sum(display_counts.values())} mappings "
+        f"across {len(display_counts)} years..."
     )
-    counts = upsert_mapping_years(mappings_by_year)
-    for mapping_year, count in counts.items():
+    counts = upsert_source_mapping_years(mappings_by_source_year)
+    for (_source, mapping_year), count in counts.items():
         click.echo(f"[{mapping_year}] ✅ Upserted {count} mappings")
     click.echo(
         f"✅ Upserted {sum(counts.values())} mappings across {len(counts)} years"
     )
-
-
-@map.command(
-    "match-historical",
-    help="Generate reviewed mapping candidates from historical match caches",
-)
-@click.option("--year", required=True, type=int)
-def map_match_historical(year):
-    """Match AustralianFootball participants to an AFL Tables snapshot."""
-    matches = _generate_historical_mapping_candidates(year)
-    output = Path(f"data/mapping/{year}_australian_football_to_review.json")
-    click.echo(
-        f"Exact: {len(matches.exact)}, review: {len(matches.fuzzy)}, "
-        f"unmatched source: {len(matches.unmatched_afl)}, "
-        f"unmatched canonical: {len(matches.unmatched_tables)}"
-    )
-    click.echo(f"Saved historical mapping candidates to {output}")
-
-
-@map.command(
-    "review-historical",
-    help="Review AustralianFootball-to-canonical player mappings",
-)
-@click.option("--year", required=True, type=int)
-@click.option("-i", "--input", type=click.Path(exists=True, path_type=Path))
-def map_review_historical(year, input):
-    """Approve exact mappings and explicitly resolve ambiguous candidates."""
-    from .models import MatchResult
-
-    input = input or Path(f"data/mapping/{year}_australian_football_to_review.json")
-    matches = MatchResult.model_validate_json(input.read_text(encoding="utf-8"))
-    _review_historical_matches(matches, year)
 
 
 @map.command(
@@ -1230,6 +1169,7 @@ def map_review_historical(year, input):
 def map_review_all(start_year, end_year, force, accept_single_candidate):
     """Regenerate candidates and review incomplete mappings across all years."""
     from .pipelines.historical import historical_source_player_ids
+    from .season_routing import season_plan
     from .transform import validate_source_mapping_coverage
     from .transform.map_players import (
         load_player_ids_from_json,
@@ -1243,7 +1183,8 @@ def map_review_all(start_year, end_year, force, accept_single_candidate):
     skipped = []
     incomplete = []
     for year in range(start_year, end_year + 1):
-        historical = year < OFFICIAL_FIXTURE_MIN_YEAR
+        plan = season_plan(year)
+        historical = plan.match_source == "australian_football"
         is_complete = (
             _historical_mapping_is_complete(year)
             if historical
@@ -1254,8 +1195,7 @@ def map_review_all(start_year, end_year, force, accept_single_candidate):
             click.echo(f"[{year}] complete; skipping")
             continue
 
-        source = "AustralianFootball" if historical else "AFL Official"
-        click.echo(f"\n[{year}] reviewing {source} player mappings")
+        click.echo(f"\n[{year}] reviewing {plan.display_source} player mappings")
         try:
             if historical:
                 matches = _generate_historical_mapping_candidates(year)
@@ -1299,32 +1239,3 @@ def map_review_all(start_year, end_year, force, accept_single_candidate):
             f"mapping review remains incomplete for: {years}; "
             "resolve the reported candidates or source data, then rerun review-all"
         )
-
-
-@map.command(
-    "upsert-historical",
-    help="Upsert complete AustralianFootball-to-canonical player mappings",
-)
-@click.option("--year", required=True, type=int)
-@click.option(
-    "-i",
-    "--input",
-    type=click.Path(exists=True, path_type=Path),
-    help="Reviewed JSON (defaults to the year-specific approved file).",
-)
-def map_upsert_historical(year, input):
-    """Require exact cache coverage before persisting historical mappings."""
-    import json
-
-    from .models import SourcePlayerMapping
-    from .pipelines.historical import historical_source_player_ids
-    from .transform import upsert_source_mappings, validate_source_mapping_coverage
-
-    input = input or Path(f"data/mapping/{year}_australian_football_approved.json")
-    mappings = [
-        SourcePlayerMapping.model_validate(item)
-        for item in json.loads(input.read_text(encoding="utf-8"))
-    ]
-    validate_source_mapping_coverage(historical_source_player_ids(year), mappings)
-    count = upsert_source_mappings(mappings, year, "australian_football")
-    click.echo(f"✅ Upserted {count} complete historical mappings for {year}")
