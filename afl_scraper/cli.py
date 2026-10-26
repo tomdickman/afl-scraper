@@ -1080,9 +1080,21 @@ def map_review(year, input):
 @map.command("upsert")
 @click.option(
     "--year",
-    default=datetime.now().year,
+    default=None,
     type=int,
-    help="The year, defaults to current if not included.",
+    help="Upsert one year; defaults to the current year when no range is given.",
+)
+@click.option(
+    "--from-year",
+    "start_year",
+    type=int,
+    help="First year in an inclusive upsert range.",
+)
+@click.option(
+    "--to-year",
+    "end_year",
+    type=int,
+    help="Last year in an inclusive upsert range.",
 )
 @click.option(
     "-i",
@@ -1096,32 +1108,63 @@ def map_review(year, input):
     default=False,
     help="Require mappings for every official ID in the year snapshot.",
 )
-def map_upsert(year, input, require_complete):
-    """Upsert approved player ID mappings to database."""
+def map_upsert(year, start_year, end_year, input, require_complete):
+    """Upsert approved player ID mappings for one year or an inclusive range."""
     import json
 
     from .models.player import PlayerMapping
 
-    if input is None:
-        input = f"data/mapping/{year}_approved.json"
-
-    with open(input) as f:
-        data = json.load(f)
-    mappings = [PlayerMapping(**m) for m in data]
-
     from .transform.map_players import (
         load_player_ids_from_json,
-        upsert_mappings,
+        upsert_mapping_years,
         validate_mapping_coverage,
     )
 
-    if require_complete:
-        required_players = load_player_ids_from_json("afl_official", year)
-        validate_mapping_coverage(required_players, mappings)
+    range_requested = start_year is not None or end_year is not None
+    if year is not None and range_requested:
+        raise click.UsageError("--year cannot be combined with --from-year/--to-year")
+    if (start_year is None) != (end_year is None):
+        raise click.UsageError("--from-year and --to-year must be provided together")
+    if input is not None and range_requested:
+        raise click.UsageError("--input can only be used with a single --year")
 
-    click.echo(f"Upserting {len(mappings)} mappings to database...")
-    count = upsert_mappings(mappings, year)
-    click.echo(f"✅ Upserted {count} mappings")
+    if range_requested:
+        if start_year > end_year:
+            raise click.UsageError(
+                "--from-year must be less than or equal to --to-year"
+            )
+        years = range(start_year, end_year + 1)
+    else:
+        years = [year if year is not None else datetime.now().year]
+
+    mappings_by_year = {}
+    for mapping_year in years:
+        mapping_input = input or f"data/mapping/{mapping_year}_approved.json"
+        with open(mapping_input) as f:
+            data = json.load(f)
+        mappings = [PlayerMapping(**item) for item in data]
+        if require_complete:
+            required_players = load_player_ids_from_json("afl_official", mapping_year)
+            validate_mapping_coverage(required_players, mappings)
+        mappings_by_year[mapping_year] = mappings
+
+    if len(mappings_by_year) == 1:
+        mapping_year, mappings = next(iter(mappings_by_year.items()))
+        click.echo(f"Upserting {len(mappings)} mappings to database...")
+        count = upsert_mapping_years(mappings_by_year)[mapping_year]
+        click.echo(f"✅ Upserted {count} mappings")
+        return
+
+    click.echo(
+        f"Upserting {sum(len(items) for items in mappings_by_year.values())} mappings "
+        f"across {len(mappings_by_year)} years..."
+    )
+    counts = upsert_mapping_years(mappings_by_year)
+    for mapping_year, count in counts.items():
+        click.echo(f"[{mapping_year}] ✅ Upserted {count} mappings")
+    click.echo(
+        f"✅ Upserted {sum(counts.values())} mappings across {len(counts)} years"
+    )
 
 
 @map.command(

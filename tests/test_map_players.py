@@ -290,6 +290,58 @@ def test_upsert_persists_only_real_source_identities(monkeypatch):
     }
 
 
+def test_multi_year_upsert_validates_every_year_before_opening_database(monkeypatch):
+    open_pool = Mock()
+    monkeypatch.setattr(map_players, "admin_connection_pool", open_pool)
+
+    with pytest.raises(ValueError, match="Duplicate AFL Tables player ID"):
+        map_players.upsert_mapping_years(
+            {
+                2025: [
+                    PlayerMapping(
+                        afl_official_id="official-2025", player_id="tables-2025"
+                    )
+                ],
+                2026: [
+                    PlayerMapping(afl_official_id="afl-1", player_id="tables-1"),
+                    PlayerMapping(afl_official_id="afl-2", player_id="tables-1"),
+                ],
+            }
+        )
+
+    open_pool.assert_not_called()
+
+
+def test_multi_year_upsert_uses_one_database_connection(monkeypatch):
+    connection = Mock()
+    pool_calls = []
+
+    @contextmanager
+    def pool():
+        pool_calls.append(True)
+        yield connection
+
+    monkeypatch.setattr(map_players, "admin_connection_pool", pool)
+
+    counts = map_players.upsert_mapping_years(
+        {
+            2025: [
+                PlayerMapping(afl_official_id="official-2025", player_id="tables-2025")
+            ],
+            2026: [
+                PlayerMapping(afl_official_id="official-2026", player_id="tables-2026")
+            ],
+        }
+    )
+
+    assert counts == {2025: 1, 2026: 1}
+    assert pool_calls == [True]
+    assert [call.args[1]["year"] for call in connection.execute.call_args_list] == [
+        2025,
+        2026,
+    ]
+
+
 def test_review_does_not_create_identity_rows_for_unmatched_players(tmp_path):
     matches = MatchResult(
         exact=[],
@@ -380,6 +432,150 @@ def _write_mapping_snapshot(path, players):
         json.dumps([item.model_dump(by_alias=True) for item in players]),
         encoding="utf-8",
     )
+
+
+def test_upsert_cli_supports_an_inclusive_year_range(monkeypatch):
+    captured = {}
+
+    def upsert_mapping_years(mappings_by_year):
+        captured.update(mappings_by_year)
+        return {year: len(mappings) for year, mappings in mappings_by_year.items()}
+
+    monkeypatch.setattr(map_players, "upsert_mapping_years", upsert_mapping_years)
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path("data/mapping")
+        root.mkdir(parents=True)
+        for year in (2024, 2025):
+            (root / f"{year}_approved.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "afl_official_id": f"official-{year}",
+                            "player_id": f"tables-{year}",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+        result = runner.invoke(
+            cli,
+            ["map", "upsert", "--from-year", "2024", "--to-year", "2025"],
+        )
+
+    assert result.exit_code == 0, result.output
+    assert list(captured) == [2024, 2025]
+    assert captured[2024][0].afl_official_id == "official-2024"
+    assert captured[2025][0].player_id == "tables-2025"
+    assert "✅ Upserted 2 mappings across 2 years" in result.output
+
+
+def test_upsert_cli_preserves_single_year_and_custom_input(monkeypatch, tmp_path):
+    approved = tmp_path / "approved.json"
+    approved.write_text(
+        json.dumps([{"afl_official_id": "official-2026", "player_id": "tables-2026"}]),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def upsert_mapping_years(mappings_by_year):
+        captured.update(mappings_by_year)
+        return {2026: 1}
+
+    monkeypatch.setattr(map_players, "upsert_mapping_years", upsert_mapping_years)
+
+    result = CliRunner().invoke(
+        cli,
+        ["map", "upsert", "--year", "2026", "--input", str(approved)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert list(captured) == [2026]
+    assert captured[2026][0].player_id == "tables-2026"
+    assert "✅ Upserted 1 mappings" in result.output
+
+
+def test_upsert_cli_preflights_complete_range_before_database(monkeypatch):
+    database_calls = []
+    monkeypatch.setattr(
+        map_players,
+        "upsert_mapping_years",
+        lambda *_args: database_calls.append(True),
+    )
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        root = Path("data/mapping")
+        for year in (2024, 2025):
+            _write_mapping_snapshot(
+                root / f"{year}_afl_official.json",
+                [player(f"official-{year}"), player(f"missing-{year}")],
+            )
+            (root / f"{year}_approved.json").write_text(
+                json.dumps(
+                    [
+                        {
+                            "afl_official_id": f"official-{year}",
+                            "player_id": f"tables-{year}",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+        result = runner.invoke(
+            cli,
+            [
+                "map",
+                "upsert",
+                "--from-year",
+                "2024",
+                "--to-year",
+                "2025",
+                "--require-complete",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "Missing 1 participating AFL official mappings" in str(result.exception)
+    assert database_calls == []
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        (
+            ["--year", "2024", "--from-year", "2024", "--to-year", "2025"],
+            "--year cannot be combined with --from-year/--to-year",
+        ),
+        (
+            ["--from-year", "2024"],
+            "--from-year and --to-year must be provided together",
+        ),
+        (
+            ["--from-year", "2025", "--to-year", "2024"],
+            "--from-year must be less than or equal to --to-year",
+        ),
+        (
+            [
+                "--from-year",
+                "2024",
+                "--to-year",
+                "2025",
+                "--input",
+                __file__,
+            ],
+            "--input can only be used with a single --year",
+        ),
+    ],
+)
+def test_upsert_cli_rejects_invalid_year_selection(options, message):
+    result = CliRunner().invoke(cli, ["map", "upsert", *options])
+
+    assert result.exit_code == 2
+    assert message in result.output
 
 
 def test_review_all_skips_complete_years_and_reviews_incomplete_years():

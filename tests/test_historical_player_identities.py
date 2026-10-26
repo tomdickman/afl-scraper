@@ -408,15 +408,11 @@ def test_unresolved_fallback_identity_fails_after_full_retry_pass(monkeypatch):
             "after scanning every match in 2012"
         ),
     ) as raised:
-        season_identities.scrape_season_player_ids(
-            object(), manifest((100,))
-        )
+        season_identities.scrape_season_player_ids(object(), manifest((100,)))
 
     assert calls == [100, 100]
     assert isinstance(raised.value.__cause__, RuntimeError)
-    assert "resolved to 0 official identities" in str(
-        raised.value.__cause__.__cause__
-    )
+    assert "resolved to 0 official identities" in str(raised.value.__cause__.__cause__)
 
 
 def test_invalid_cache_fails_instead_of_silently_refreshing(monkeypatch):
@@ -597,7 +593,7 @@ def test_mapping_upsert_complete_gate_runs_before_database(monkeypatch, tmp_path
     )
     monkeypatch.setattr(
         map_players,
-        "upsert_mappings",
+        "upsert_mapping_years",
         lambda *_args: database_calls.append(True),
     )
 

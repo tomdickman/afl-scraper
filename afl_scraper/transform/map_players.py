@@ -254,29 +254,44 @@ def save_matches_to_json(matches: MatchResult, year: int) -> Path:
     return path
 
 
-def upsert_mappings(mappings: list[PlayerMapping], year: int) -> int:
-    validate_mappings(mappings)
+def _upsert_mappings_for_year(conn, mappings: list[PlayerMapping], year: int) -> int:
     inserted = 0
-
-    with admin_connection_pool() as conn:
-        for mapping in mappings:
-            if mapping.afl_official_id is None:
-                continue
-            conn.execute(
-                """
-                INSERT INTO player_source_identity
-                  (source, source_player_id, player_id, year)
-                VALUES ('afl_official', %(source_player_id)s, %(player_id)s, %(year)s)
-                ON CONFLICT (source, source_player_id, year) DO UPDATE
-                SET player_id = EXCLUDED.player_id,
-                    updated_at = NOW()
-                """,
-                {
-                    "source_player_id": mapping.afl_official_id,
-                    "player_id": mapping.player_id,
-                    "year": year,
-                },
-            )
-            inserted += 1
-
+    for mapping in mappings:
+        if mapping.afl_official_id is None:
+            continue
+        conn.execute(
+            """
+            INSERT INTO player_source_identity
+              (source, source_player_id, player_id, year)
+            VALUES ('afl_official', %(source_player_id)s, %(player_id)s, %(year)s)
+            ON CONFLICT (source, source_player_id, year) DO UPDATE
+            SET player_id = EXCLUDED.player_id,
+                updated_at = NOW()
+            """,
+            {
+                "source_player_id": mapping.afl_official_id,
+                "player_id": mapping.player_id,
+                "year": year,
+            },
+        )
+        inserted += 1
     return inserted
+
+
+def upsert_mapping_years(
+    mappings_by_year: dict[int, list[PlayerMapping]],
+) -> dict[int, int]:
+    """Upsert one or more prevalidated mapping years in one transaction."""
+    for mappings in mappings_by_year.values():
+        validate_mappings(mappings)
+
+    counts = {}
+    with admin_connection_pool() as conn:
+        for year, mappings in mappings_by_year.items():
+            counts[year] = _upsert_mappings_for_year(conn, mappings, year)
+    return counts
+
+
+def upsert_mappings(mappings: list[PlayerMapping], year: int) -> int:
+    """Upsert one mapping year while preserving the original public API."""
+    return upsert_mapping_years({year: mappings})[year]
