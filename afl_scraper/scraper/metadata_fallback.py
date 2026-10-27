@@ -20,17 +20,7 @@ from .models import (
 
 
 _CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
-_OFFICIAL_FINALS_WEEKS = {
-    "qe": {"qf", "ef"},
-    "fw1": {"qf", "ef"},
-    "finals week 1": {"qf", "ef"},
-    "fw2": {"sf"},
-    "finals week 2": {"sf"},
-    "fw3": {"pf"},
-    "finals week 3": {"pf"},
-    "fw4": {"gf"},
-    "finals week 4": {"gf"},
-}
+_COMBINED_FIRST_FINALS_STAGES = frozenset({"qf", "ef"})
 _OPENING_ROUND_YEARS = frozenset({2024, 2025, 2026})
 _OPENING_ROUND_KEYS = frozenset({"or", "opening round"})
 _WILDCARD_ROUND_YEARS = frozenset({2026})
@@ -79,12 +69,8 @@ def _rounds_match(official: str, external: str, year: int) -> bool:
         and external_key == "25"
     ):
         return True
-    allowed = _OFFICIAL_FINALS_WEEKS.get(official_key)
-    external_group = _OFFICIAL_FINALS_WEEKS.get(external_key)
-    if allowed is not None and external_group is not None:
-        return allowed == external_group
     return (
-        external_key in allowed if allowed is not None else official_key == external_key
+        official_key == "qe" and external_key in _COMBINED_FIRST_FINALS_STAGES
     )
 
 
