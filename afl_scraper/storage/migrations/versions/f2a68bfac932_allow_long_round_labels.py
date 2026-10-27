@@ -29,6 +29,32 @@ def _create_career_game_view() -> None:
     op.execute(sql)
 
 
+def _require_rounds_fit_legacy_column() -> None:
+    rows = (
+        op.get_bind()
+        .execute(
+            sa.text(
+                """
+            SELECT id, CHAR_LENGTH(round)
+            FROM game
+            WHERE CHAR_LENGTH(round) > 20
+            ORDER BY id
+            LIMIT 5
+            """
+            )
+        )
+        .fetchall()
+    )
+    if rows:
+        sample = ", ".join(
+            f"game {game_id} ({length} chars)" for game_id, length in rows
+        )
+        raise RuntimeError(
+            "Cannot downgrade game.round to VARCHAR(20) while longer values "
+            f"remain; normalize or shorten them first. Examples: {sample}"
+        )
+
+
 def upgrade() -> None:
     _drop_career_game_view()
     op.alter_column(
@@ -42,6 +68,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    _require_rounds_fit_legacy_column()
     _drop_career_game_view()
     op.alter_column(
         "game",
