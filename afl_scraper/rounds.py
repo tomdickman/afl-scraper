@@ -4,6 +4,21 @@ import re
 
 CANONICAL_SPECIAL_ROUNDS = frozenset({"OR", "WF", "QF", "EF", "SF", "PF", "GF"})
 
+GROUPED_FIRST_FINALS_LABELS = frozenset(
+    {
+        "qe",
+        "fw1",
+        "finals week 1",
+        "qualifying & elimination final",
+        "qualifying & elimination finals",
+    }
+)
+
+
+class AmbiguousRoundLabelError(ValueError):
+    """Raised when a source label groups distinct canonical finals stages."""
+
+
 _ALIASES = {
     "or": "OR",
     "opening round": "OR",
@@ -11,11 +26,6 @@ _ALIASES = {
     "wcf": "WF",
     "wildcard final": "WF",
     "wildcard finals": "WF",
-    "qe": "QF",
-    "fw1": "QF",
-    "finals week 1": "QF",
-    "qualifying & elimination final": "QF",
-    "qualifying & elimination finals": "QF",
     "qf": "QF",
     "qualifying final": "QF",
     "qualifying finals": "QF",
@@ -57,6 +67,11 @@ _FINAL_CODES = {
 def normalize_round_label(value: str) -> str:
     """Return a source-neutral positive round number or finals-stage acronym."""
     normalized = " ".join(value.replace("\xa0", " ").split()).casefold()
+    if normalized in GROUPED_FIRST_FINALS_LABELS:
+        raise AmbiguousRoundLabelError(
+            f"Ambiguous first-finals-week label {value!r}; resolve the individual "
+            "match to QF or EF before normalization"
+        )
     if normalized.startswith("round "):
         normalized = normalized.removeprefix("round ").strip()
     if normalized.isdigit() and int(normalized) > 0:
@@ -79,3 +94,9 @@ def normalize_round_label(value: str) -> str:
         f"Unsupported round label {value!r}; expected a positive round number "
         f"or one of: {allowed}"
     )
+
+
+def is_grouped_first_finals_label(value: str) -> bool:
+    """Return whether a provider label combines qualifying and elimination finals."""
+    normalized = " ".join(value.replace("\xa0", " ").split()).casefold()
+    return normalized in GROUPED_FIRST_FINALS_LABELS

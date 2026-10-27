@@ -7,7 +7,7 @@ from functools import cache
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from ..rounds import normalize_round_label
+from ..rounds import is_grouped_first_finals_label, normalize_round_label
 from ..transform.match import parse_match_datetime, resolve_venue
 from ..transformer.teams import transform_team_name
 from .models import (
@@ -20,15 +20,6 @@ from .models import (
 
 
 _CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
-_COMBINED_FIRST_FINALS_KEYS = frozenset(
-    {
-        "qe",
-        "fw1",
-        "finals week 1",
-        "qualifying & elimination final",
-        "qualifying & elimination finals",
-    }
-)
 _OFFICIAL_FINALS_WEEKS = {
     "qe": {"qf", "ef"},
     "fw1": {"qf", "ef"},
@@ -59,10 +50,9 @@ def _load_jsonc(path: Path) -> dict:
 
 
 def _round_key(value: str) -> str:
-    source_key = " ".join(value.casefold().split())
-    if source_key in _COMBINED_FIRST_FINALS_KEYS:
-        # Preserve the broader source meaning while matching metadata. The
-        # canonical database value for this group is QF.
+    if is_grouped_first_finals_label(value):
+        # Preserve the broader source meaning while matching metadata. It must
+        # be resolved to QF or EF before transforming an individual game.
         return "qe"
     return normalize_round_label(value).casefold()
 

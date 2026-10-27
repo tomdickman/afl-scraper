@@ -189,3 +189,15 @@ def test_qe_merge_migration_removes_qe_from_canonical_rounds():
     assert 'down_revision: str | Sequence[str] | None = "6d2f319ec61a"' in migration
     assert "SET round = 'QF' WHERE round = 'QE'" in migration
     assert "|QE|" not in current_schema
+
+
+def test_grouped_elimination_final_migration_uses_source_identities():
+    migration = (
+        MIGRATIONS / "c51e0f33a219_correct_grouped_elimination_finals.py"
+    ).read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "a37bd1fd30ec"' in migration
+    assert "identity.source = 'afl_official'" in migration
+    assert '"9022"' in migration
+    assert '"9025"' in migration
+    assert '_set_round("EF")' in migration

@@ -1,6 +1,6 @@
 import pytest
 
-from afl_scraper.rounds import normalize_round_label
+from afl_scraper.rounds import AmbiguousRoundLabelError, normalize_round_label
 
 
 @pytest.mark.parametrize(
@@ -12,9 +12,6 @@ from afl_scraper.rounds import normalize_round_label
         ("Opening Round", "OR"),
         ("WCF", "WF"),
         ("Wildcard Finals", "WF"),
-        ("QE", "QF"),
-        ("Finals Week 1", "QF"),
-        ("Qualifying & Elimination Finals", "QF"),
         ("1QF", "QF"),
         ("Second Qualifying Final", "QF"),
         ("2EF", "EF"),
@@ -34,4 +31,12 @@ def test_normalizes_provider_round_labels(source, expected):
 @pytest.mark.parametrize("source", ["", "Round 0", "Round Two", "Mystery Final"])
 def test_rejects_unknown_or_non_positive_round_labels(source):
     with pytest.raises(ValueError, match="Unsupported round label"):
+        normalize_round_label(source)
+
+
+@pytest.mark.parametrize(
+    "source", ["QE", "FW1", "Finals Week 1", "Qualifying & Elimination Finals"]
+)
+def test_rejects_grouped_first_finals_labels(source):
+    with pytest.raises(AmbiguousRoundLabelError, match="resolve.*QF or EF"):
         normalize_round_label(source)

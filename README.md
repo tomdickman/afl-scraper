@@ -353,7 +353,10 @@ uv run afl-scraper scrape round OR --year 2026
 Raw providers use several spellings for the same stage. The transform layer
 stores only positive round numbers without a `Round` prefix, or the canonical
 special-round values `OR`, `WF`, `QF`, `EF`, `SF`, `PF`, and `GF`. Combined
-qualifying-and-elimination fixture groups are stored as `QF`.
+qualifying-and-elimination fixture labels such as `QE` and `Finals Week 1` are
+not canonical stages. Each affected official match is resolved to `QF` or `EF`
+only when its cached AFL Tables and AustralianFootball records agree; a missing
+or conflicting classification stops the preflight before database writes.
 
 To scrape a round without loading its transformed records into PostgreSQL:
 
