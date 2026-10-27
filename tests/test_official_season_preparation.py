@@ -231,3 +231,70 @@ def test_canonical_mapping_cannot_alias_match_participants(monkeypatch, tmp_path
 
     cursor.execute.assert_called_once()
     connection.transaction.assert_not_called()
+
+
+def test_grouped_first_final_is_resolved_before_transform(monkeypatch, tmp_path):
+    manifest_root, raw_root = _complete_cache(tmp_path, (100,))
+    cached = _match()
+    cached = cached.model_copy(
+        update={"details": cached.details.model_copy(update={"round": "Finals Week 1"})}
+    )
+    save_raw_match_data(cached, 100, raw_root)
+    connection, _ = _connection(
+        [
+            [("101", "Alex_Smith"), ("202", "Bob_Jones")],
+            [("Alex_Smith",), ("Bob_Jones",)],
+            [("Carlton",), ("Collingwood",)],
+            [("M.C.G.",)],
+        ]
+    )
+    monkeypatch.setattr(official_season, "connection_pool", _pool(connection))
+    load_catalog = MagicMock(return_value=object())
+    load_finals = MagicMock(return_value=[])
+    resolve = MagicMock(return_value="EF")
+    monkeypatch.setattr(official_season, "load_match_metadata_catalog", load_catalog)
+    monkeypatch.setattr(
+        official_season, "_australian_football_first_finals", load_finals
+    )
+    monkeypatch.setattr(official_season, "_resolve_grouped_first_final", resolve)
+
+    prepared = official_season.prepare_official_season(
+        2012, manifest_root=manifest_root, raw_root=raw_root
+    )
+
+    assert prepared[0].game.round == "EF"
+    load_catalog.assert_called_once()
+    load_finals.assert_called_once()
+    resolve.assert_called_once()
+
+
+def test_grouped_first_final_requires_external_sources_to_agree(monkeypatch):
+    raw_match = _match()
+    raw_match = raw_match.model_copy(
+        update={
+            "details": raw_match.details.model_copy(update={"round": "Finals Week 1"})
+        }
+    )
+    australian_football_match = MagicMock()
+    australian_football_match.details.round = "1EF"
+    afl_tables_record = MagicMock(source_match_id="tables-1", round="QF")
+    manifest = MagicMock()
+    monkeypatch.setattr(
+        official_season,
+        "resolve_fallback_match_record",
+        MagicMock(return_value=afl_tables_record),
+    )
+    monkeypatch.setattr(
+        official_season,
+        "_australian_football_candidate_matches",
+        MagicMock(return_value=True),
+    )
+
+    with pytest.raises(ValueError, match="Conflicting first-finals classification"):
+        official_season._resolve_grouped_first_final(
+            100,
+            raw_match,
+            manifest,
+            object(),
+            [(200, australian_football_match)],
+        )

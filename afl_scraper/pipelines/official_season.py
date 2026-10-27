@@ -5,15 +5,30 @@ from pathlib import Path
 
 from ..diagnostics import summarize_identifiers
 from ..models import Game, PlayerGameStats
+from ..rounds import is_grouped_first_finals_label, normalize_round_label
 from ..scraper import (
     afl_official_cancelled_fixture,
+    load_australian_football_manifest,
+    load_australian_football_match,
+    load_match_metadata_catalog,
     load_raw_match_data,
     load_season_manifest,
 )
-from ..scraper.models import RawMatchData
+from ..scraper.metadata_fallback import resolve_fallback_match_record
+from ..scraper.models import (
+    AustralianFootballMatchData,
+    MatchMetadataCatalog,
+    RawMatchData,
+    SeasonManifest,
+)
 from ..scraper.season_identities import collect_match_identities
 from ..storage import connection_pool, load_player_source_id_map
-from ..transform.match import parse_match_datetime, transform_match
+from ..transform.match import (
+    parse_match_datetime,
+    resolve_team,
+    resolve_venue,
+    transform_match,
+)
 
 SOURCE = "afl_official"
 
@@ -197,10 +212,100 @@ def _validate_database_references(conn, prepared: list[PreparedOfficialMatch]) -
         raise ValueError("AFL Official season preparation failed; " + "; ".join(errors))
 
 
+def _australian_football_first_finals(
+    year: int, raw_root: Path
+) -> list[tuple[int, AustralianFootballMatchData]]:
+    manifest = load_australian_football_manifest(year, raw_root)
+    match_ids = []
+    for round_ in manifest.rounds:
+        try:
+            stage = normalize_round_label(round_.label)
+        except ValueError:
+            continue
+        if stage in {"QF", "EF"}:
+            match_ids.extend(round_.match_ids)
+    return [
+        (match_id, load_australian_football_match(match_id, raw_root))
+        for match_id in match_ids
+    ]
+
+
+def _australian_football_candidate_matches(
+    official: RawMatchData,
+    historical: AustralianFootballMatchData,
+) -> bool:
+    official_details = official.details
+    historical_details = historical.details
+    official_teams = (
+        resolve_team(official_details.home_team),
+        resolve_team(official_details.away_team),
+    )
+    historical_teams = (
+        resolve_team(historical_details.home_team),
+        resolve_team(historical_details.away_team),
+    )
+    if official_teams not in {
+        historical_teams,
+        tuple(reversed(historical_teams)),
+    }:
+        return False
+    # AustralianFootball records the end-of-regulation score for at least one
+    # extra-time final, so scores are corroborating data rather than identity.
+    # Team pair, local date and canonical venue uniquely identify these four
+    # first-week finals within each season.
+    return parse_match_datetime(
+        official_details.date, official_details.time
+    ).date() == historical_details.date and resolve_venue(
+        official_details.venue, SOURCE
+    ) == resolve_venue(historical_details.venue, "australian_football")
+
+
+def _resolve_grouped_first_final(
+    source_match_id: int,
+    raw_match: RawMatchData,
+    manifest: SeasonManifest,
+    afl_tables_catalog: MatchMetadataCatalog,
+    australian_football_matches: list[tuple[int, AustralianFootballMatchData]],
+) -> str:
+    fixture = manifest.fixture_for(source_match_id)
+    record = resolve_fallback_match_record(fixture, afl_tables_catalog)
+    afl_tables_stage = normalize_round_label(record.round)
+
+    candidates = [
+        (match_id, match)
+        for match_id, match in australian_football_matches
+        if _australian_football_candidate_matches(raw_match, match)
+    ]
+    if len(candidates) != 1:
+        sample = ", ".join(str(match_id) for match_id, _ in candidates[:5]) or "none"
+        raise ValueError(
+            f"Official match {source_match_id} resolved to {len(candidates)} "
+            "AustralianFootball first-finals candidates; "
+            f"candidates={sample}"
+        )
+    australian_football_id, australian_football_match = candidates[0]
+    australian_football_stage = normalize_round_label(
+        australian_football_match.details.round
+    )
+    stages = {afl_tables_stage, australian_football_stage}
+    if not stages <= {"QF", "EF"} or len(stages) != 1:
+        raise ValueError(
+            f"Conflicting first-finals classification for official match "
+            f"{source_match_id}: AFL Tables {record.source_match_id}="
+            f"{afl_tables_stage}, AustralianFootball {australian_football_id}="
+            f"{australian_football_stage}"
+        )
+    return stages.pop()
+
+
 def _prepare_official_matches(
     conn,
     year: int,
+    manifest: SeasonManifest,
     matches: list[tuple[int, RawMatchData]],
+    *,
+    afl_tables_root: Path = Path("data/raw/afl_tables"),
+    australian_football_root: Path = Path("data/raw/australian_football"),
 ) -> list[PreparedOfficialMatch]:
     source_player_ids = {
         stat.afl_official_id
@@ -209,14 +314,43 @@ def _prepare_official_matches(
     }
     player_id_map = load_player_source_id_map(conn, SOURCE, year, source_player_ids)
 
+    grouped_matches = [
+        item for item in matches if is_grouped_first_finals_label(item[1].details.round)
+    ]
+    afl_tables_catalog: MatchMetadataCatalog | None = None
+    australian_football_matches: list[
+        tuple[int, AustralianFootballMatchData]
+    ] = []
+    if grouped_matches:
+        afl_tables_catalog = load_match_metadata_catalog(year, afl_tables_root)
+        australian_football_matches = _australian_football_first_finals(
+            year, australian_football_root
+        )
+
     prepared = []
     for placeholder_id, (source_match_id, raw_match) in enumerate(matches, start=1):
 
         def resolve_player_id(stat, _team, _year):
             return player_id_map.get(stat.afl_official_id)
 
+        resolved_match = raw_match
+        if is_grouped_first_finals_label(raw_match.details.round):
+            assert afl_tables_catalog is not None
+            stage = _resolve_grouped_first_final(
+                source_match_id,
+                raw_match,
+                manifest,
+                afl_tables_catalog,
+                australian_football_matches,
+            )
+            resolved_match = raw_match.model_copy(
+                update={
+                    "details": raw_match.details.model_copy(update={"round": stage})
+                }
+            )
+
         game, player_stats = transform_match(
-            raw_match,
+            resolved_match,
             match_id=placeholder_id,
             source=SOURCE,
             resolve_player_id=resolve_player_id,
@@ -238,6 +372,8 @@ def prepare_official_season(
     *,
     manifest_root: Path = Path("data/raw/afl_official/season"),
     raw_root: Path = Path("data/raw/afl_official/match"),
+    afl_tables_root: Path = Path("data/raw/afl_tables"),
+    australian_football_root: Path = Path("data/raw/australian_football"),
 ) -> list[PreparedOfficialMatch]:
     """Transform a complete official season after read-only preflight.
 
@@ -259,7 +395,14 @@ def prepare_official_season(
     ]
 
     with connection_pool() as conn:
-        return _prepare_official_matches(conn, year, matches)
+        return _prepare_official_matches(
+            conn,
+            year,
+            manifest,
+            matches,
+            afl_tables_root=afl_tables_root,
+            australian_football_root=australian_football_root,
+        )
 
 
 def preflight_official_season(
@@ -268,6 +411,8 @@ def preflight_official_season(
     *,
     manifest_root: Path = Path("data/raw/afl_official/season"),
     raw_root: Path = Path("data/raw/afl_official/match"),
+    afl_tables_root: Path = Path("data/raw/afl_tables"),
+    australian_football_root: Path = Path("data/raw/australian_football"),
 ) -> list[PreparedOfficialMatch]:
     """Prepare a complete cached official season using an existing connection."""
     report = preflight_official_season_cache(
@@ -282,4 +427,11 @@ def preflight_official_season(
         for match_id in manifest.match_ids
         if match_id not in cancelled_ids
     ]
-    return _prepare_official_matches(conn, year, matches)
+    return _prepare_official_matches(
+        conn,
+        year,
+        manifest,
+        matches,
+        afl_tables_root=afl_tables_root,
+        australian_football_root=australian_football_root,
+    )

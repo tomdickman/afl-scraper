@@ -161,3 +161,43 @@ def test_long_round_label_downgrade_reports_values_that_do_not_fit(monkeypatch):
         migration.downgrade()
 
     drop_view.assert_not_called()
+
+
+def test_round_normalization_migration_updates_existing_rows_and_adds_constraint():
+    migration = (MIGRATIONS / "6d2f319ec61a_normalize_game_rounds.py").read_text()
+    current_schema = (REPO_ROOT / "afl_scraper/storage/tables/game.sql").read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "f2a68bfac932"' in migration
+    for source in (
+        "round",
+        "opening round",
+        "qualifying & elimination finals",
+        "finals week 1",
+        "semi finals",
+        "preliminary finals",
+        "grand final",
+    ):
+        assert source in migration.lower()
+    assert "game_round_format" in migration
+    assert "game_round_format" in current_schema
+
+
+def test_qe_merge_migration_removes_qe_from_canonical_rounds():
+    migration = (MIGRATIONS / "a37bd1fd30ec_merge_qe_into_qf.py").read_text()
+    current_schema = (REPO_ROOT / "afl_scraper/storage/tables/game.sql").read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "6d2f319ec61a"' in migration
+    assert "SET round = 'QF' WHERE round = 'QE'" in migration
+    assert "|QE|" not in current_schema
+
+
+def test_grouped_elimination_final_migration_uses_source_identities():
+    migration = (
+        MIGRATIONS / "c51e0f33a219_correct_grouped_elimination_finals.py"
+    ).read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "a37bd1fd30ec"' in migration
+    assert "identity.source = 'afl_official'" in migration
+    assert '"9022"' in migration
+    assert '"9025"' in migration
+    assert '_set_round("EF")' in migration
