@@ -86,6 +86,25 @@ def test_historical_transform_uses_date_aware_venue_timezone_and_sparse_stats():
     assert stats[0].fantasy_points is None
 
 
+def test_historical_transform_preserves_long_source_round_label():
+    match = _match()
+    match = match.model_copy(
+        update={
+            "details": match.details.model_copy(
+                update={"round": "Qualifying & Elimination Finals"}
+            )
+        }
+    )
+
+    game, _ = transform_australian_football_match(
+        match,
+        game_id=9000,
+        player_id_map={"14797": "Scott_Pendlebury", "200": "Alex_Example"},
+    )
+
+    assert game.round == "Qualifying & Elimination Finals"
+
+
 def test_historical_transform_preserves_unavailable_jumper_number():
     match = _match().model_copy(
         update={

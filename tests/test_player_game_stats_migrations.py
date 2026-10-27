@@ -1,6 +1,10 @@
 """Regression tests for deterministic player-game-stat schema migrations."""
 
+from importlib import import_module
 from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TABLES = REPO_ROOT / "afl_scraper/storage/tables"
@@ -110,3 +114,50 @@ def test_negative_fantasy_points_migration_replaces_legacy_check():
     assert "op.drop_constraint" in migration
     assert "op.create_check_constraint" in migration
     assert 'NON_NEGATIVE_STAT_CHECK + " AND fantasy_points >= 0"' in migration
+
+
+def test_long_round_label_migration_follows_current_head():
+    migration = (MIGRATIONS / "f2a68bfac932_allow_long_round_labels.py").read_text()
+
+    assert 'down_revision: str | Sequence[str] | None = "d3c7f8a91b24"' in migration
+    assert '"game"' in migration
+    assert '"round"' in migration
+    assert "type_=sa.Text()" in migration
+    assert "type_=sa.String(length=20)" in migration
+    assert "DROP VIEW IF EXISTS player_game_stats_with_career_number" in migration
+    assert "player_game_stats_with_career_number.sql" in migration
+    assert "WHERE CHAR_LENGTH(round) > 20" in migration
+    assert "Cannot downgrade game.round to VARCHAR(20)" in migration
+    upgrade = migration[
+        migration.index("def upgrade") : migration.index("def downgrade")
+    ]
+    assert upgrade.index("_drop_career_game_view()") < upgrade.index("op.alter_column")
+    assert upgrade.index("_create_career_game_view()") > upgrade.index(
+        "op.alter_column"
+    )
+    downgrade = migration[migration.index("def downgrade") :]
+    assert downgrade.index("_require_rounds_fit_legacy_column()") < downgrade.index(
+        "_drop_career_game_view()"
+    )
+
+    current_schema = (REPO_ROOT / "afl_scraper/storage/tables/game.sql").read_text()
+    assert "round TEXT NOT NULL" in current_schema
+
+
+def test_long_round_label_downgrade_reports_values_that_do_not_fit(monkeypatch):
+    migration = import_module(
+        "afl_scraper.storage.migrations.versions."
+        "f2a68bfac932_allow_long_round_labels"
+    )
+    bind = MagicMock()
+    bind.execute.return_value.fetchall.return_value = [(17, 34)]
+    drop_view = MagicMock()
+    monkeypatch.setattr(migration.op, "get_bind", MagicMock(return_value=bind))
+    monkeypatch.setattr(migration, "_drop_career_game_view", drop_view)
+
+    with pytest.raises(
+        RuntimeError, match=r"Cannot downgrade.*game 17 \(34 chars\)"
+    ):
+        migration.downgrade()
+
+    drop_view.assert_not_called()
