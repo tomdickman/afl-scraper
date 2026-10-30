@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime
+
 from playwright.async_api import async_playwright
-from playwright.sync_api import sync_playwright, BrowserContext, Page
+from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 
 @asynccontextmanager

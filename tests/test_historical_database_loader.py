@@ -89,11 +89,7 @@ def test_historical_transform_uses_date_aware_venue_timezone_and_sparse_stats():
 def test_historical_transform_normalizes_individual_final_round_label():
     match = _match()
     match = match.model_copy(
-        update={
-            "details": match.details.model_copy(
-                update={"round": "1EF"}
-            )
-        }
+        update={"details": match.details.model_copy(update={"round": "1EF"})}
     )
 
     game, _ = transform_australian_football_match(

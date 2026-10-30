@@ -9,8 +9,8 @@ class Player(DBModel):
     """A database player record transformed from AFL Tables."""
 
     __table_name__ = "player"
-    __conflict_cols__ = ["id"]
-    __exclude_updates_cols__ = []
+    __conflict_cols__ = ("id",)
+    __exclude_updates_cols__ = ()
 
     id: str
     givenname: str

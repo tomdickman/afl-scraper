@@ -1,6 +1,6 @@
 import json
 from contextlib import contextmanager
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -73,7 +73,7 @@ def _manifest():
         year=2012,
         season_id=2,
         fixture_url="https://example.test/fixture",
-        discovered_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 1, 1, tzinfo=UTC),
         rounds=[DiscoveredRound(label="1", match_ids=[100])],
         fixtures=[
             OfficialFixtureMetadata(
@@ -81,7 +81,7 @@ def _manifest():
                 round="1",
                 home_team="Carlton",
                 away_team="Collingwood",
-                scheduled_at=datetime(2012, 3, 24, 19, 30, tzinfo=timezone.utc),
+                scheduled_at=datetime(2012, 3, 24, 19, 30, tzinfo=UTC),
                 venue="MCG",
                 home_total=7,
                 away_total=8,
@@ -97,7 +97,7 @@ def _legacy_manifest():
         year=2012,
         season_id=2,
         fixture_url="https://example.test/fixture",
-        discovered_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 1, 1, tzinfo=UTC),
         rounds=[DiscoveredRound(label="1", match_ids=[100])],
     )
 
@@ -106,7 +106,7 @@ def _tables_catalog():
     return MatchMetadataCatalog(
         year=2012,
         source_url="https://afltables.com/afl/seas/2012.html",
-        fetched_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        fetched_at=datetime(2026, 1, 1, tzinfo=UTC),
         matches=[
             MatchMetadataRecord(
                 source_match_id="test-match",
@@ -143,7 +143,9 @@ def _mock_secondary_sources(monkeypatch):
     monkeypatch.setattr(
         raw_all,
         "audit_match_metadata",
-        Mock(return_value={"match_count": 1, "resolved_count": 1, "unresolved_count": 0}),
+        Mock(
+            return_value={"match_count": 1, "resolved_count": 1, "unresolved_count": 0}
+        ),
     )
 
 
@@ -320,9 +322,7 @@ def test_scrape_all_help_promises_no_postgresql_access():
 def test_year_manifest_records_complete_and_unavailable_sources(monkeypatch, tmp_path):
     monkeypatch.setattr(raw_all, "CATALOG_ROOT", tmp_path)
     reports = [
-        raw_all.RawSeasonReport(
-            2006, "afl_tables", 185, 0, 600, 16, 12, "tables.json"
-        ),
+        raw_all.RawSeasonReport(2006, "afl_tables", 185, 0, 600, 16, 12, "tables.json"),
         raw_all.RawSeasonReport(
             2006, "australian_football", 185, 8140, 600, 16, 12, "af.json"
         ),
@@ -397,9 +397,7 @@ def test_historical_audit_records_source_score_conflicts(monkeypatch):
         Mock(return_value=SimpleNamespace(details=details)),
     )
 
-    report = raw_all._historical_metadata_audit(
-        2012, _manifest(), _tables_catalog()
-    )
+    report = raw_all._historical_metadata_audit(2012, _manifest(), _tables_catalog())
 
     assert report["status"] == "conflict"
     assert report["resolved_count"] == 1
@@ -487,13 +485,12 @@ def test_historical_audit_classifies_reviewed_source_omission():
     catalog = MatchMetadataCatalog(
         year=2020,
         source_url="https://afltables.com/afl/seas/2020.html",
-        fetched_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        fetched_at=datetime(2026, 1, 1, tzinfo=UTC),
         matches=[
             MatchMetadataRecord(
                 source_match_id="031420200319",
                 source_url=(
-                    "https://afltables.com/afl/stats/games/2020/"
-                    "031420200319.html"
+                    "https://afltables.com/afl/stats/games/2020/" "031420200319.html"
                 ),
                 year=2020,
                 round="Round 1",
@@ -619,8 +616,12 @@ def test_official_consensus_keeps_ambiguous_evidence_unresolved(
     agreeing_sources,
     outlier_sources,
 ):
-    fixture = _manifest().fixtures[0].model_copy(
-        update={"home_total": official_totals[0], "away_total": official_totals[1]}
+    fixture = (
+        _manifest()
+        .fixtures[0]
+        .model_copy(
+            update={"home_total": official_totals[0], "away_total": official_totals[1]}
+        )
     )
     report = {
         "conflicts": [
@@ -644,9 +645,7 @@ def test_official_consensus_keeps_ambiguous_evidence_unresolved(
         ]
     }
 
-    raw_all._add_official_consensus(
-        report, SimpleNamespace(fixtures=[fixture])
-    )
+    raw_all._add_official_consensus(report, SimpleNamespace(fixtures=[fixture]))
 
     assert report["conflicts"][0]["resolution"] == {
         "status": "unresolved",

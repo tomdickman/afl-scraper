@@ -1,7 +1,8 @@
 """Unit tests for the teams transformation module."""
 
 import pytest
-from afl_scraper.transformer.teams import transform_team_name
+
+from afl_scraper.transform.teams import transform_team_name
 
 
 class TestTransformTeamName:
@@ -36,26 +37,6 @@ class TestTransformTeamName:
 
     def test_transform_all_teams(self):
         """Test transformation for all unique team IDs."""
-        expected_teams = {
-            "Adelaide",
-            "Brisbane Lions",
-            "Carlton",
-            "Essendon",
-            "Collingwood",
-            "Fremantle",
-            "Geelong",
-            "Gold Coast",
-            "Greater Western Sydney",
-            "Hawthorn",
-            "Melbourne",
-            "North Melbourne",
-            "Port Adelaide",
-            "Richmond",
-            "St Kilda",
-            "Sydney",
-            "West Coast",
-            "Western Bulldogs",
-        }
 
         # Test at least one variant for each team
         test_cases = [

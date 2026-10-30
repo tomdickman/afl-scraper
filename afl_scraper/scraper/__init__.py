@@ -1,4 +1,3 @@
-from .browser import sync_browser_context, async_browser_context, get_team_page
 from .australian_football import (
     afl_official_cancelled_fixture,
     australian_football_cancellation_cache_path,
@@ -24,46 +23,8 @@ from .australian_football import (
     save_australian_football_source_omission,
     scrape_australian_football_match,
 )
-from .scrape import (
-    discover_official_season,
-    load_raw_match_data,
-    load_season_manifest,
-    raw_match_data_path,
-    save_raw_match_data,
-    save_season_manifest,
-    scrape_match_ids,
-    scrape_match,
-    scrape_players,
-)
-from .scrape_player_ids import (
-    scrape_player_ids,
-    save_player_id_snapshots,
-    save_player_ids_to_json,
-)
-from .sources import (
-    PlayerSource,
-    PlayerSourceFactory,
-    AFLTablesSource,
-    AFLOfficialSource,
-)
+from .browser import async_browser_context, get_team_page, sync_browser_context
 from .fixture import get_fixture_page, get_fixture_url, get_round_buttons
-from .models import (
-    AustralianFootballCancelledFixture,
-    AustralianFootballMatchData,
-    AustralianFootballMatchDetails,
-    AustralianFootballPlayerStat,
-    AustralianFootballSeasonManifest,
-    AustralianFootballSourceOmission,
-    CachedAustralianFootballCancellation,
-    CachedRawMatch,
-    CachedAustralianFootballMatch,
-    CachedAustralianFootballSourceOmission,
-    DiscoveredRound,
-    RawMatchData,
-    RawMatchDetails,
-    SeasonManifest,
-)
-from .season_identities import collect_match_identities, scrape_season_player_ids
 from .match_metadata import (
     afl_tables_season_url,
     get_match_metadata_catalog,
@@ -72,7 +33,46 @@ from .match_metadata import (
     parse_afl_tables_match_catalog,
 )
 from .metadata_audit import audit_match_metadata, save_match_metadata_audit
+from .models import (
+    AustralianFootballCancelledFixture,
+    AustralianFootballMatchData,
+    AustralianFootballMatchDetails,
+    AustralianFootballPlayerStat,
+    AustralianFootballSeasonManifest,
+    AustralianFootballSourceOmission,
+    CachedAustralianFootballCancellation,
+    CachedAustralianFootballMatch,
+    CachedAustralianFootballSourceOmission,
+    CachedRawMatch,
+    DiscoveredRound,
+    RawMatchData,
+    RawMatchDetails,
+    SeasonManifest,
+)
 from .player_stats_fallback import cache_afl_tables_season_matches
+from .scrape import (
+    discover_official_season,
+    load_raw_match_data,
+    load_season_manifest,
+    raw_match_data_path,
+    save_raw_match_data,
+    save_season_manifest,
+    scrape_match,
+    scrape_match_ids,
+    scrape_players,
+)
+from .scrape_player_ids import (
+    save_player_id_snapshots,
+    save_player_ids_to_json,
+    scrape_player_ids,
+)
+from .season_identities import collect_match_identities, scrape_season_player_ids
+from .sources import (
+    AFLOfficialSource,
+    AFLTablesSource,
+    PlayerSource,
+    PlayerSourceFactory,
+)
 
 __all__ = [
     # Browser context managers

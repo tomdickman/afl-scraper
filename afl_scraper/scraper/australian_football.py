@@ -1,10 +1,9 @@
 """Fail-closed extraction for AustralianFootball historical match pages."""
 
-import json
 import re
 import time as time_module
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import cache
 from pathlib import Path
 from uuid import uuid4
@@ -13,9 +12,14 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 from playwright.sync_api import (
     BrowserContext,
     Page,
+)
+from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
+from afl_scraper.paths import data_path
+
+from ..config import load_config
 from .constants import competition_rules_for_year
 from .models import (
     AustralianFootballCancelledFixture,
@@ -31,18 +35,7 @@ from .models import (
 )
 from .models.australian_football import MAX_AVAILABLE_YEAR, MIN_SUPPORTED_YEAR
 
-
 BASE_URL = "https://australianfootball.com"
-_CONFIG_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "config"
-    / "australian_football_match_exceptions.jsonc"
-)
-_SOURCE_OMISSIONS_CONFIG_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "config"
-    / "australian_football_source_omissions.jsonc"
-)
 MATCH_PATH_PATTERN = re.compile(r"^/game/view/(?P<match_id>\d+)$")
 PLAYER_PATH_PATTERN = re.compile(
     r"^/players/player/[^/]+/(?P<player_id>\d+)$", re.IGNORECASE
@@ -84,8 +77,7 @@ class _IncompleteMatchPageError(ValueError):
 
 @cache
 def _reviewed_cancelled_fixtures() -> dict[int, AustralianFootballCancelledFixture]:
-    content = _CONFIG_PATH.read_text(encoding="utf-8")
-    raw = json.loads(re.sub(r"(?m)(^|\s)//.*$", r"\1", content))
+    raw = load_config("australian_football_match_exceptions.jsonc")
     fixtures = {
         int(match_id): AustralianFootballCancelledFixture.model_validate(value)
         for match_id, value in raw.items()
@@ -121,8 +113,7 @@ def australian_football_cancelled_fixture(
 
 @cache
 def _reviewed_source_omissions() -> dict[int, AustralianFootballSourceOmission]:
-    content = _SOURCE_OMISSIONS_CONFIG_PATH.read_text(encoding="utf-8")
-    raw = json.loads(re.sub(r"(?m)(^|\s)//.*$", r"\1", content))
+    raw = load_config("australian_football_source_omissions.jsonc")
     omissions = {}
     for year_key, season in raw.items():
         year = int(year_key)
@@ -341,7 +332,7 @@ def parse_australian_football_season(
     return AustralianFootballSeasonManifest(
         year=year,
         season_url=source_url or australian_football_season_url(year),
-        discovered_at=discovered_at or datetime.now(timezone.utc),
+        discovered_at=discovered_at or datetime.now(UTC),
         rounds=rounds,
     )
 
@@ -648,7 +639,7 @@ def discover_australian_football_season(
 
 def australian_football_manifest_path(
     year: int,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     _validate_year(year)
     return raw_root / "season" / str(year) / "manifest.json"
@@ -667,7 +658,7 @@ def _atomic_write_text(path: Path, content: str, temporary_prefix: str) -> None:
 
 def save_australian_football_manifest(
     manifest: AustralianFootballSeasonManifest,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     """Atomically save a validated source-specific season manifest."""
     path = australian_football_manifest_path(manifest.year, raw_root)
@@ -677,7 +668,7 @@ def save_australian_football_manifest(
 
 def load_australian_football_manifest(
     year: int,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> AustralianFootballSeasonManifest:
     path = australian_football_manifest_path(year, raw_root)
     if not path.exists():
@@ -697,21 +688,21 @@ def load_australian_football_manifest(
 
 def australian_football_match_cache_path(
     match_id: int | str,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     return raw_root / "match" / str(_normalize_match_id(match_id)) / "match.json"
 
 
 def australian_football_cancellation_cache_path(
     match_id: int | str,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     return raw_root / "match" / str(_normalize_match_id(match_id)) / "cancellation.json"
 
 
 def australian_football_source_omission_cache_path(
     match_id: int | str,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     return raw_root / "match" / str(_normalize_match_id(match_id)) / "omission.json"
 
@@ -719,7 +710,7 @@ def australian_football_source_omission_cache_path(
 def save_australian_football_match(
     data: AustralianFootballMatchData,
     match_id: int | str,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     """Atomically save a fully validated historical match cache."""
     normalized_match_id = _normalize_match_id(match_id)
@@ -728,7 +719,7 @@ def save_australian_football_match(
     envelope = CachedAustralianFootballMatch(
         match_id=normalized_match_id,
         source_url=australian_football_match_url(normalized_match_id),
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=datetime.now(UTC),
         data=validated_data,
     )
     _atomic_write_text(path, envelope.model_dump_json(indent=2) + "\n", "match")
@@ -737,7 +728,7 @@ def save_australian_football_match(
 
 def load_australian_football_match(
     match_id: int | str,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> AustralianFootballMatchData:
     normalized_match_id = _normalize_match_id(match_id)
     path = australian_football_match_cache_path(normalized_match_id, raw_root)
@@ -756,14 +747,14 @@ def load_australian_football_match(
 
 def save_australian_football_cancellation(
     fixture: AustralianFootballCancelledFixture,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     """Cache reviewed evidence for a fixture that was never played."""
     path = australian_football_cancellation_cache_path(fixture.match_id, raw_root)
     envelope = CachedAustralianFootballCancellation(
         match_id=fixture.match_id,
         source_url=australian_football_match_url(fixture.match_id),
-        recorded_at=datetime.now(timezone.utc),
+        recorded_at=datetime.now(UTC),
         data=fixture,
     )
     _atomic_write_text(path, envelope.model_dump_json(indent=2) + "\n", "cancellation")
@@ -772,7 +763,7 @@ def save_australian_football_cancellation(
 
 def load_australian_football_cancellation(
     match_id: int | str,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> AustralianFootballCancelledFixture:
     normalized_match_id = _normalize_match_id(match_id)
     path = australian_football_cancellation_cache_path(normalized_match_id, raw_root)
@@ -791,14 +782,14 @@ def load_australian_football_cancellation(
 
 def save_australian_football_source_omission(
     omission: AustralianFootballSourceOmission,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     """Cache reviewed evidence for a played match missing source data."""
     path = australian_football_source_omission_cache_path(omission.match_id, raw_root)
     envelope = CachedAustralianFootballSourceOmission(
         match_id=omission.match_id,
         source_url=australian_football_match_url(omission.match_id),
-        recorded_at=datetime.now(timezone.utc),
+        recorded_at=datetime.now(UTC),
         data=omission,
     )
     _atomic_write_text(path, envelope.model_dump_json(indent=2) + "\n", "omission")
@@ -807,7 +798,7 @@ def save_australian_football_source_omission(
 
 def load_australian_football_source_omission(
     match_id: int | str,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> AustralianFootballSourceOmission:
     normalized_match_id = _normalize_match_id(match_id)
     path = australian_football_source_omission_cache_path(normalized_match_id, raw_root)
@@ -828,7 +819,7 @@ def scrape_australian_football_match(
     browser: BrowserContext,
     match_id: int | str,
     year: int,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> Path:
     """Navigate, validate, and cache one AustralianFootball historical match."""
     _validate_year(year)
@@ -871,7 +862,7 @@ def cache_australian_football_season_matches(
     refresh: bool = False,
     delay_ms: int = 500,
     progress: ProgressCallback | None = None,
-    raw_root: Path = Path("data/raw/australian_football"),
+    raw_root: Path = data_path("raw", "australian_football"),
 ) -> list[Path]:
     """Cache all season matches, resuming only from missing validated caches."""
     if delay_ms < 0:
@@ -931,9 +922,11 @@ def cache_australian_football_season_matches(
             path = (
                 save_australian_football_cancellation(cancellation, raw_root)
                 if cache_needs_upgrade
-                else australian_football_cancellation_cache_path(match_id, raw_root)
-                if cached
-                else save_australian_football_cancellation(cancellation, raw_root)
+                else (
+                    australian_football_cancellation_cache_path(match_id, raw_root)
+                    if cached
+                    else save_australian_football_cancellation(cancellation, raw_root)
+                )
             )
             paths.append(path)
             if progress is not None:

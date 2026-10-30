@@ -1,7 +1,7 @@
 """AFL Tables match-metadata catalogue extraction and caching."""
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 from uuid import uuid4
@@ -9,8 +9,9 @@ from uuid import uuid4
 from bs4 import BeautifulSoup, Tag
 from playwright.sync_api import BrowserContext
 
-from .models import MatchMetadataCatalog, MatchMetadataRecord
+from afl_scraper.paths import data_path
 
+from .models import MatchMetadataCatalog, MatchMetadataRecord
 
 BASE_URL = "https://afltables.com/afl/"
 _MATCH_LINK_PATTERN = re.compile(r"stats/games/(?P<year>\d{4})/(?P<id>[^/]+)\.html$")
@@ -33,7 +34,7 @@ def afl_tables_season_url(year: int) -> str:
 
 
 def metadata_catalog_path(
-    year: int, raw_root: Path = Path("data/raw/afl_tables")
+    year: int, raw_root: Path = data_path("raw", "afl_tables")
 ) -> Path:
     return raw_root / "season" / str(year) / "matches.json"
 
@@ -153,7 +154,7 @@ def parse_afl_tables_match_catalog(
     return MatchMetadataCatalog(
         year=year,
         source_url=source_url,
-        fetched_at=fetched_at or datetime.now(timezone.utc),
+        fetched_at=fetched_at or datetime.now(UTC),
         matches=records,
     )
 
@@ -169,7 +170,7 @@ def _atomic_text(path: Path, content: str) -> None:
 
 
 def load_match_metadata_catalog(
-    year: int, raw_root: Path = Path("data/raw/afl_tables")
+    year: int, raw_root: Path = data_path("raw", "afl_tables")
 ) -> MatchMetadataCatalog:
     path = metadata_catalog_path(year, raw_root)
     if not path.exists():
@@ -189,7 +190,7 @@ def get_match_metadata_catalog(
     year: int,
     *,
     refresh: bool = False,
-    raw_root: Path = Path("data/raw/afl_tables"),
+    raw_root: Path = data_path("raw", "afl_tables"),
 ) -> MatchMetadataCatalog:
     """Load a valid catalogue or fetch and atomically cache the complete season."""
     if not refresh:

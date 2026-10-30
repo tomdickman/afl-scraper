@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from pydantic import BaseModel
 
 
@@ -6,19 +8,19 @@ class DBModel(BaseModel):
     The base model for database records
     """
 
-    __table_name__: str
+    __table_name__: ClassVar[str]
     """
     The table name this model pertains to.
     """
-    __conflict_cols__: list[str]
+    __conflict_cols__: ClassVar[tuple[str, ...]]
     """
     Column names which, when a value conflict is found in table with an existing row,
     `UPDATE` is conducted instead of an `INSERT`.
     """
-    __exclude_updates_cols__: list[str]
+    __exclude_updates_cols__: ClassVar[tuple[str, ...]]
     """
     Columns which are immutable, i.e. these column values are only entered on initial `INSERT`.
     If a conflict is found and an `UPDATE` is conducted instead of an `INSERT`, these columns are skipped.
     """
-    __preserve_existing_on_null_cols__: list[str] = []
+    __preserve_existing_on_null_cols__: ClassVar[tuple[str, ...]] = ()
     """Columns whose existing value wins when an UPSERT supplies ``None``."""

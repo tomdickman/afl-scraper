@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
+from afl_scraper.paths import data_path
+
 from ..models import Player, PlayerInfo
 from ..scraper import sync_browser_context
 from ..scraper.constants import MAX_CONFIGURED_YEAR, MIN_HISTORY_YEAR
@@ -19,13 +21,12 @@ from ..scraper.scrape_player_ids import (
 )
 from ..scraper.sources import PlayerSourceFactory
 from ..storage import admin_connection_pool, save_model
-from ..transformer.player import transform_player_page
+from ..transform.player import transform_player_page
 from ..utils.identity import normalize_person_name
 
-
 SOURCE = "afl_tables"
-MAPPING_ROOT = Path("data/mapping")
-RAW_ROOT = Path("data/raw/afl_tables")
+MAPPING_ROOT = data_path("mapping")
+RAW_ROOT = data_path("raw", "afl_tables")
 logger = logging.getLogger(__name__)
 
 
@@ -414,14 +415,13 @@ def _prepare_players(
     inserted = 0
     updated = 0
     if load:
-        with admin_connection_pool() as connection:
-            with connection.transaction():
-                for player_id in sorted(players):
-                    result = save_model(connection, players[player_id])
-                    if result.was_inserted:
-                        inserted += 1
-                    else:
-                        updated += 1
+        with admin_connection_pool() as connection, connection.transaction():
+            for player_id in sorted(players):
+                result = save_model(connection, players[player_id])
+                if result.was_inserted:
+                    inserted += 1
+                else:
+                    updated += 1
 
     return HistoricalPlayerPreparationReport(
         start_year=start_year,

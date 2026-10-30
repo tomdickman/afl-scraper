@@ -1,5 +1,5 @@
-import json
 import importlib
+import json
 from contextlib import contextmanager
 from unittest.mock import Mock
 
@@ -10,7 +10,6 @@ import afl_scraper.cli as cli_module
 from afl_scraper.cli import cli
 from afl_scraper.models.player import PlayerInfo
 from afl_scraper.scraper.scrape_player_ids import save_player_id_snapshots
-
 
 snapshot_module = importlib.import_module("afl_scraper.scraper.scrape_player_ids")
 scraper_package = importlib.import_module("afl_scraper.scraper")

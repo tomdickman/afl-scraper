@@ -44,9 +44,7 @@ def test_identity_migration_follows_and_transforms_legacy_schema():
         MIGRATIONS / "4f2a6c89d2ef_use_game_for_player_stats_identity.py"
     ).read_text()
 
-    assert (
-        'down_revision: Union[str, Sequence[str], None] = "098560416458"' in migration
-    )
+    assert 'down_revision: str | Sequence[str] | None = "098560416458"' in migration
     assert 'op.drop_column("player_game_stats", "player_game_number")' in migration
     assert '["player_id", "game_id"]' in migration
 
@@ -56,9 +54,7 @@ def test_unavailable_stats_migration_is_latest_and_reversible():
         MIGRATIONS / "7d1d45f2a3c8_allow_unavailable_player_stats.py"
     ).read_text()
 
-    assert (
-        'down_revision: Union[str, Sequence[str], None] = "81ca20df131b"' in migration
-    )
+    assert 'down_revision: str | Sequence[str] | None = "81ca20df131b"' in migration
     assert "nullable=True" in migration
     assert "nullable=False" in migration
 
@@ -69,9 +65,7 @@ def test_historical_loader_migration_qualifies_identities_and_sparse_stats():
     ).read_text()
     current_schema = _normalized(TABLES / "player_game_stats.sql")
 
-    assert (
-        'down_revision: Union[str, Sequence[str], None] = "7d1d45f2a3c8"' in migration
-    )
+    assert 'down_revision: str | Sequence[str] | None = "7d1d45f2a3c8"' in migration
     assert "player_source_identity.sql" in migration
     assert "game_source_identity.sql" in migration
     assert "game_internal_id_seq" in migration
@@ -155,9 +149,7 @@ def test_long_round_label_downgrade_reports_values_that_do_not_fit(monkeypatch):
     monkeypatch.setattr(migration.op, "get_bind", MagicMock(return_value=bind))
     monkeypatch.setattr(migration, "_drop_career_game_view", drop_view)
 
-    with pytest.raises(
-        RuntimeError, match=r"Cannot downgrade.*game 17 \(34 chars\)"
-    ):
+    with pytest.raises(RuntimeError, match=r"Cannot downgrade.*game 17 \(34 chars\)"):
         migration.downgrade()
 
     drop_view.assert_not_called()

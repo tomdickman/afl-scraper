@@ -9,8 +9,10 @@ from uuid import uuid4
 from bs4 import BeautifulSoup, Tag
 from playwright.sync_api import BrowserContext
 
+from afl_scraper.paths import data_path
+
 from ..models.player import PlayerInfo
-from ..transform.map_players import normalize_team
+from ..normalization import normalize_team
 from ..utils.identity import normalize_person_name
 from .constants import competition_rules_for_year
 from .models import MatchMetadataRecord, RawMatchData, RawMatchDetails, RawPlayerStat
@@ -94,9 +96,7 @@ def _names_match(left: str, right: str) -> bool:
         return False
     if left_parts[1:] != right_parts[1:]:
         return False
-    if frozenset((left_parts[0], right_parts[0])) in (
-        _CROSS_SOURCE_GIVEN_NAME_ALIASES
-    ):
+    if frozenset((left_parts[0], right_parts[0])) in (_CROSS_SOURCE_GIVEN_NAME_ALIASES):
         return True
     shorter, longer = sorted((left_parts[0], right_parts[0]), key=len)
     return len(shorter) >= 3 and longer.startswith(shorter)
@@ -324,7 +324,9 @@ def validate_afl_tables_player_stats_html(
         ]
         missing = sorted(_SOURCE_REQUIRED_HEADERS - set(headers))
         if missing:
-            raise ValueError(f"AFL Tables player-stat table is missing fields: {missing}")
+            raise ValueError(
+                f"AFL Tables player-stat table is missing fields: {missing}"
+            )
         if len(headers) != len(set(headers)):
             raise ValueError("AFL Tables player-stat table has duplicate fields")
 
@@ -362,9 +364,10 @@ def validate_afl_tables_player_stats_html(
         if len(player_ids) != len(set(player_ids)):
             raise ValueError(f"AFL Tables {team} table contains duplicate player IDs")
         ids_by_team[canonical_team] = set(player_ids)
-    if ids_by_team[normalize_team(record.home_team)] & ids_by_team[
-        normalize_team(record.away_team)
-    ]:
+    if (
+        ids_by_team[normalize_team(record.home_team)]
+        & ids_by_team[normalize_team(record.away_team)]
+    ):
         raise ValueError("AFL Tables player statistics contain cross-team identities")
     return expected_players * 2
 
@@ -392,7 +395,7 @@ def fetch_afl_tables_player_stats(
 def save_afl_tables_match_html(
     html: str,
     record: MatchMetadataRecord,
-    raw_root: Path = Path("data/raw/afl_tables/match"),
+    raw_root: Path = data_path("raw", "afl_tables", "match"),
 ) -> Path:
     """Atomically retain the alternate raw evidence used by a fallback."""
     path = raw_root / record.source_match_id / "match.html"
@@ -412,7 +415,7 @@ def cache_afl_tables_season_matches(
     *,
     refresh: bool = False,
     delay_ms: int = 500,
-    raw_root: Path = Path("data/raw/afl_tables/match"),
+    raw_root: Path = data_path("raw", "afl_tables", "match"),
     progress: ProgressCallback | None = None,
 ) -> list[Path]:
     """Cache and revalidate a season, returning each validated raw HTML path."""

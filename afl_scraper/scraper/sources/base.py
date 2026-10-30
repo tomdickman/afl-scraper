@@ -4,6 +4,7 @@ from pathlib import Path
 from playwright.sync_api import Page
 
 from ...models.player import PlayerInfo
+from ...paths import data_path
 
 
 class PlayerSource(ABC):
@@ -16,7 +17,7 @@ class PlayerSource(ABC):
 
     def get_raw_data_dir(self) -> Path:
         """Directory for storing raw scraped data from this source."""
-        return Path(f"data/raw/{self.name}")
+        return data_path("raw", self.name)
 
     @abstractmethod
     def get_list_page_url(self, year: int) -> str:

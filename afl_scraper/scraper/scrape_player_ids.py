@@ -1,21 +1,19 @@
-from collections import Counter
-from datetime import datetime
 import json
 import logging
 import os
-from pathlib import Path
 import tempfile
-from typing import TypeVar
+from collections import Counter
+from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
-from ..models.player import PlayerInfo
+from afl_scraper.paths import data_path
+
 from ..diagnostics import summarize_identifiers
+from ..models.player import PlayerInfo
 from .sources import PlayerSourceFactory
 
-
 logger = logging.getLogger(__name__)
-
-_SnapshotKey = TypeVar("_SnapshotKey", str, int)
 
 
 def _unlink_best_effort(path: Path) -> None:
@@ -31,7 +29,7 @@ def scrape_player_ids(
     browser, year: int | None = None, source: str = "afl_tables"
 ) -> list[PlayerInfo]:
     if year is None:
-        year = datetime.now().year
+        year = datetime.now(UTC).year
 
     source_obj = PlayerSourceFactory.get(source)
 
@@ -94,14 +92,16 @@ def _write_temporary_snapshot(players: list[PlayerInfo], path: Path) -> Path:
     return temporary_path
 
 
-def _promote_snapshot_files(
-    snapshots: dict[_SnapshotKey, list[PlayerInfo]],
-    paths: dict[_SnapshotKey, Path],
+def _promote_snapshot_files[
+    SnapshotKey: (str, int)
+](
+    snapshots: dict[SnapshotKey, list[PlayerInfo]],
+    paths: dict[SnapshotKey, Path],
 ) -> None:
     """Atomically promote a related set of validated snapshot files."""
-    temporary_paths: dict[_SnapshotKey, Path] = {}
-    backup_paths: dict[_SnapshotKey, Path] = {}
-    promoted: list[_SnapshotKey] = []
+    temporary_paths: dict[SnapshotKey, Path] = {}
+    backup_paths: dict[SnapshotKey, Path] = {}
+    promoted: list[SnapshotKey] = []
     try:
         for key, players in snapshots.items():
             temporary_paths[key] = _write_temporary_snapshot(players, paths[key])
@@ -150,7 +150,7 @@ def save_player_id_snapshots(
     for source_name, players in snapshots.items():
         _validate_snapshot(players, source_name, year)
 
-    mapping_dir = Path("data/mapping")
+    mapping_dir = data_path("mapping")
     mapping_dir.mkdir(parents=True, exist_ok=True)
     paths = {
         source_name: mapping_dir / f"{year}_{source_name}.json"
@@ -169,7 +169,7 @@ def save_player_id_snapshot_range(
     for year, players in snapshots.items():
         _validate_snapshot(players, source_name, year)
 
-    mapping_dir = Path("data/mapping")
+    mapping_dir = data_path("mapping")
     mapping_dir.mkdir(parents=True, exist_ok=True)
     paths = {year: mapping_dir / f"{year}_{source_name}.json" for year in snapshots}
     _promote_snapshot_files(snapshots, paths)

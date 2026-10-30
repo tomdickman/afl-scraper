@@ -1,16 +1,15 @@
 """Tests for match-derived historical AFL Official identities."""
 
-from contextlib import contextmanager
-from datetime import datetime, timezone
-from decimal import Decimal
 import importlib
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from click.testing import CliRunner
 
 import afl_scraper.cli as cli_module
 import afl_scraper.transform as transform_package
-from afl_scraper.transform import map_players
 from afl_scraper.models.player import PlayerInfo, PlayerMapping
 from afl_scraper.scraper import scrape, season_identities
 from afl_scraper.scraper.constants import official_season_id
@@ -21,8 +20,8 @@ from afl_scraper.scraper.models import (
     RawPlayerStat,
     SeasonManifest,
 )
+from afl_scraper.transform import map_players
 from afl_scraper.transform.map_players import validate_mapping_coverage
-
 
 scraper_package = importlib.import_module("afl_scraper.scraper")
 snapshot_module = importlib.import_module("afl_scraper.scraper.scrape_player_ids")
@@ -87,7 +86,7 @@ def manifest(match_ids=(100, 101), *, year=2012) -> SeasonManifest:
         fixture_url=(
             f"https://www.afl.com.au/fixture?Competition=1&Season={season_id}"
         ),
-        discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 8, 15, tzinfo=UTC),
         rounds=[DiscoveredRound(label="1", match_ids=list(match_ids))],
     )
 

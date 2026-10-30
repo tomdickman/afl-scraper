@@ -14,7 +14,6 @@ from pydantic import (
 
 from .season import DiscoveredRound
 
-
 SOURCE_NAME = "australian_football"
 MIN_SUPPORTED_YEAR = 2006
 # The historical load pipeline remains deliberately bounded to its reviewed

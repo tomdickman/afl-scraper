@@ -2,7 +2,6 @@
 
 import re
 
-
 _TERMINAL_NAME_SUFFIXES = {
     "jr",
     "jnr",
