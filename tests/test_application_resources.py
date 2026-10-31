@@ -1,5 +1,7 @@
 """Contracts for packaged configuration and overridable artifact paths."""
 
+import pytest
+
 from afl_scraper.config import load_config, load_jsonc_path
 from afl_scraper.paths import data_path
 
@@ -18,6 +20,14 @@ def test_jsonc_loader_preserves_comment_markers_inside_strings(tmp_path):
     )
 
     assert load_jsonc_path(path) == {"url": "https://example.test/evidence"}
+
+
+def test_jsonc_loader_rejects_duplicate_keys(tmp_path):
+    path = tmp_path / "duplicate.jsonc"
+    path.write_text('{"venue": "first", "venue": "second"}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Duplicate key.*venue"):
+        load_jsonc_path(path)
 
 
 def test_data_root_can_be_overridden(monkeypatch, tmp_path):
