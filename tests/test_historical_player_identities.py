@@ -28,6 +28,7 @@ snapshot_module = importlib.import_module("afl_scraper.scraper.scrape_player_ids
 historical_players_module = importlib.import_module(
     "afl_scraper.pipelines.historical_players"
 )
+mapping_command_module = importlib.import_module("afl_scraper.commands.mapping")
 
 
 def stat(official_id: str, name: str) -> RawPlayerStat:
@@ -499,8 +500,8 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
 ):
     class CurrentDate:
         @classmethod
-        def now(cls):
-            return datetime(2026, 10, 3)
+        def now(cls, tz=None):
+            return datetime(2026, 10, 3, tzinfo=tz)
 
     official = PlayerInfo(
         id="101",
@@ -516,8 +517,8 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
     def browser_context(_headless):
         yield object()
 
-    monkeypatch.setattr(cli_module, "datetime", CurrentDate)
-    monkeypatch.setattr(cli_module, "sync_browser_context", browser_context)
+    monkeypatch.setattr(mapping_command_module, "datetime", CurrentDate)
+    monkeypatch.setattr(mapping_command_module, "sync_browser_context", browser_context)
     monkeypatch.setattr(
         scraper_package,
         "load_season_manifest",
@@ -551,11 +552,11 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
 def test_scrape_season_mapping_cli_rejects_future_year_before_manifest(monkeypatch):
     class CurrentDate:
         @classmethod
-        def now(cls):
-            return datetime(2026, 10, 3)
+        def now(cls, tz=None):
+            return datetime(2026, 10, 3, tzinfo=tz)
 
     manifest_calls = []
-    monkeypatch.setattr(cli_module, "datetime", CurrentDate)
+    monkeypatch.setattr(mapping_command_module, "datetime", CurrentDate)
     monkeypatch.setattr(
         scraper_package,
         "load_season_manifest",
