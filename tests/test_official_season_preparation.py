@@ -1,7 +1,7 @@
 """Tests for read-only AFL Official season preparation."""
 
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -71,7 +71,7 @@ def _manifest(match_ids=(100, 101), *, year: int = 2012) -> SeasonManifest:
         year=year,
         season_id=official_season_id(year),
         fixture_url=f"https://www.afl.com.au/fixture?year={year}",
-        discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 8, 15, tzinfo=UTC),
         rounds=[DiscoveredRound(label="1", match_ids=list(match_ids))],
     )
 

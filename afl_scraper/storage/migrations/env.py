@@ -1,10 +1,9 @@
 from logging.config import fileConfig
 
-from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
-from sqlalchemy import pool
-
 from alembic import context
+from sqlalchemy import create_engine, pool
+from sqlalchemy.engine import URL
+
 from afl_scraper.storage.db_config import get_write_db_config
 
 # this is the Alembic Config object, which provides

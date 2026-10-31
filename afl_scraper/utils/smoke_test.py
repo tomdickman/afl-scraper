@@ -14,13 +14,10 @@ def smoke_test_fixture(headless: bool = True) -> bool:
         page = get_fixture_page(browser)
         buttons = get_round_buttons(page)
 
-        if "OR" not in buttons.keys():
-            print("🚨   Fixture smoke test failed")
-        else:
-            print("✅   Fixture smoke test passed")
-
+        passed = "OR" in buttons
         browser.close()
+        return passed
 
 
-def smoke_test(headless: bool):
-    smoke_test_fixture(headless)
+def smoke_test(headless: bool) -> bool:
+    return smoke_test_fixture(headless)

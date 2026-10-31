@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from afl_scraper.paths import data_path
+
 from ..diagnostics import summarize_identifiers
 from ..models import Game, PlayerGameStats
 from ..rounds import is_grouped_first_finals_label, normalize_round_label
@@ -84,8 +86,8 @@ def _match_year(match: RawMatchData) -> int:
 def inspect_official_season_cache(
     year: int,
     *,
-    manifest_root: Path = Path("data/raw/afl_official/season"),
-    raw_root: Path = Path("data/raw/afl_official/match"),
+    manifest_root: Path = data_path("raw", "afl_official", "season"),
+    raw_root: Path = data_path("raw", "afl_official", "match"),
 ) -> OfficialSeasonCacheReport:
     """Inspect cached manifest members without browser or database access.
 
@@ -152,8 +154,8 @@ def inspect_official_season_cache(
 def preflight_official_season_cache(
     year: int,
     *,
-    manifest_root: Path = Path("data/raw/afl_official/season"),
-    raw_root: Path = Path("data/raw/afl_official/match"),
+    manifest_root: Path = data_path("raw", "afl_official", "season"),
+    raw_root: Path = data_path("raw", "afl_official", "match"),
 ) -> OfficialSeasonCacheReport:
     """Require exact, valid cache coverage for one official season."""
     report = inspect_official_season_cache(
@@ -257,7 +259,9 @@ def _australian_football_candidate_matches(
         official_details.date, official_details.time
     ).date() == historical_details.date and resolve_venue(
         official_details.venue, SOURCE
-    ) == resolve_venue(historical_details.venue, "australian_football")
+    ) == resolve_venue(
+        historical_details.venue, "australian_football"
+    )
 
 
 def _resolve_grouped_first_final(
@@ -304,8 +308,8 @@ def _prepare_official_matches(
     manifest: SeasonManifest,
     matches: list[tuple[int, RawMatchData]],
     *,
-    afl_tables_root: Path = Path("data/raw/afl_tables"),
-    australian_football_root: Path = Path("data/raw/australian_football"),
+    afl_tables_root: Path = data_path("raw", "afl_tables"),
+    australian_football_root: Path = data_path("raw", "australian_football"),
 ) -> list[PreparedOfficialMatch]:
     source_player_ids = {
         stat.afl_official_id
@@ -318,9 +322,7 @@ def _prepare_official_matches(
         item for item in matches if is_grouped_first_finals_label(item[1].details.round)
     ]
     afl_tables_catalog: MatchMetadataCatalog | None = None
-    australian_football_matches: list[
-        tuple[int, AustralianFootballMatchData]
-    ] = []
+    australian_football_matches: list[tuple[int, AustralianFootballMatchData]] = []
     if grouped_matches:
         afl_tables_catalog = load_match_metadata_catalog(year, afl_tables_root)
         australian_football_matches = _australian_football_first_finals(
@@ -370,10 +372,10 @@ def _prepare_official_matches(
 def prepare_official_season(
     year: int,
     *,
-    manifest_root: Path = Path("data/raw/afl_official/season"),
-    raw_root: Path = Path("data/raw/afl_official/match"),
-    afl_tables_root: Path = Path("data/raw/afl_tables"),
-    australian_football_root: Path = Path("data/raw/australian_football"),
+    manifest_root: Path = data_path("raw", "afl_official", "season"),
+    raw_root: Path = data_path("raw", "afl_official", "match"),
+    afl_tables_root: Path = data_path("raw", "afl_tables"),
+    australian_football_root: Path = data_path("raw", "australian_football"),
 ) -> list[PreparedOfficialMatch]:
     """Transform a complete official season after read-only preflight.
 
@@ -409,10 +411,10 @@ def preflight_official_season(
     conn,
     year: int,
     *,
-    manifest_root: Path = Path("data/raw/afl_official/season"),
-    raw_root: Path = Path("data/raw/afl_official/match"),
-    afl_tables_root: Path = Path("data/raw/afl_tables"),
-    australian_football_root: Path = Path("data/raw/australian_football"),
+    manifest_root: Path = data_path("raw", "afl_official", "season"),
+    raw_root: Path = data_path("raw", "afl_official", "match"),
+    afl_tables_root: Path = data_path("raw", "afl_tables"),
+    australian_football_root: Path = data_path("raw", "australian_football"),
 ) -> list[PreparedOfficialMatch]:
     """Prepare a complete cached official season using an existing connection."""
     report = preflight_official_season_cache(

@@ -144,9 +144,9 @@ def test_stat_failure_escapes_transaction_and_cannot_partially_commit(save, tran
             return_value=(42, True),
         ),
         patch("afl_scraper.pipelines.match.save_game_source_identity"),
+        pytest.raises(RuntimeError, match="stat write failed"),
     ):
-        with pytest.raises(RuntimeError, match="stat write failed"):
-            load_match_data(_raw_match(), 42)
+        load_match_data(_raw_match(), 42)
 
     transaction = connection.transaction.return_value
     exit_args = transaction.__exit__.call_args.args
@@ -160,11 +160,13 @@ def test_stat_failure_escapes_transaction_and_cannot_partially_commit(save, tran
 def test_missing_official_id_mapping_fails_before_any_write(save, transform):
     connection, _ = _connection_with_mappings((("101", "player-1"),))
 
-    with patch(
-        "afl_scraper.pipelines.match.admin_connection_pool", _pool_for(connection)
+    with (
+        patch(
+            "afl_scraper.pipelines.match.admin_connection_pool", _pool_for(connection)
+        ),
+        pytest.raises(ValueError, match="Missing 1.*102"),
     ):
-        with pytest.raises(ValueError, match="Missing 1.*102"):
-            load_match_data(_raw_match(), 42)
+        load_match_data(_raw_match(), 42)
 
     transform.assert_not_called()
     save.assert_not_called()

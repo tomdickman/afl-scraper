@@ -10,7 +10,6 @@ from psycopg import sql
 
 from .connection import admin_connection_pool
 
-
 _LOCAL_DATABASE_HOSTS = frozenset({"localhost", "127.0.0.1"})
 _SYSTEM_DATABASES = frozenset({"postgres", "template0", "template1"})
 
@@ -63,28 +62,27 @@ def get_development_database_target() -> DevelopmentDatabaseTarget:
 
 def reset_public_schema(target: DevelopmentDatabaseTarget) -> None:
     """Delete every object in public and restore the project's schema grants."""
-    with admin_connection_pool() as connection:
-        with connection.transaction():
-            database_name, database_user = connection.execute(
-                "SELECT current_database(), current_user"
-            ).fetchone()
-            if (database_name, database_user) != (target.name, target.owner):
-                raise RuntimeError(
-                    "connected database identity does not match the confirmed target"
-                )
-            connection.execute("DROP SCHEMA public CASCADE")
-            connection.execute("CREATE SCHEMA public")
-            connection.execute("REVOKE ALL ON SCHEMA public FROM PUBLIC")
-            connection.execute(
-                sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(
-                    sql.Identifier(target.app_user)
-                )
+    with admin_connection_pool() as connection, connection.transaction():
+        database_name, database_user = connection.execute(
+            "SELECT current_database(), current_user"
+        ).fetchone()
+        if (database_name, database_user) != (target.name, target.owner):
+            raise RuntimeError(
+                "connected database identity does not match the confirmed target"
             )
-            connection.execute(
-                sql.SQL("REVOKE CREATE ON SCHEMA public FROM {}").format(
-                    sql.Identifier(target.app_user)
-                )
+        connection.execute("DROP SCHEMA public CASCADE")
+        connection.execute("CREATE SCHEMA public")
+        connection.execute("REVOKE ALL ON SCHEMA public FROM PUBLIC")
+        connection.execute(
+            sql.SQL("GRANT USAGE ON SCHEMA public TO {}").format(
+                sql.Identifier(target.app_user)
             )
+        )
+        connection.execute(
+            sql.SQL("REVOKE CREATE ON SCHEMA public FROM {}").format(
+                sql.Identifier(target.app_user)
+            )
+        )
 
 
 def upgrade_database_to_head() -> None:

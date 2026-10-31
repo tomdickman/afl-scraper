@@ -1,10 +1,12 @@
-from .base import PlayerSource
-from .afl_tables import AFLTablesSource
+from typing import ClassVar
+
 from .afl_official import AFLOfficialSource
+from .afl_tables import AFLTablesSource
+from .base import PlayerSource
 
 
 class PlayerSourceFactory:
-    _sources: dict[str, type[PlayerSource]] = {}
+    _sources: ClassVar[dict[str, type[PlayerSource]]] = {}
 
     @classmethod
     def register(cls, source_cls: type[PlayerSource]) -> None:
@@ -15,7 +17,9 @@ class PlayerSourceFactory:
     def get(cls, name: str) -> PlayerSource:
         source_cls = cls._sources.get(name)
         if source_cls is None:
-            raise KeyError(f"Unknown player source: {name}. Available: {list(cls._sources.keys())}")
+            raise KeyError(
+                f"Unknown player source: {name}. Available: {list(cls._sources.keys())}"
+            )
         return source_cls()
 
     @classmethod
@@ -28,8 +32,8 @@ PlayerSourceFactory.register(AFLOfficialSource)
 
 
 __all__ = [
+    "AFLOfficialSource",
+    "AFLTablesSource",
     "PlayerSource",
     "PlayerSourceFactory",
-    "AFLTablesSource",
-    "AFLOfficialSource",
 ]

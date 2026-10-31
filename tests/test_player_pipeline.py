@@ -55,12 +55,14 @@ def test_player_failure_rolls_back_the_complete_batch(save, transform):
     save.side_effect = [SaveResult(True, {"id": "player-1"}), failure]
     connection = MagicMock()
 
-    with patch(
-        "afl_scraper.pipelines.player.admin_connection_pool",
-        _pool_for(connection),
+    with (
+        patch(
+            "afl_scraper.pipelines.player.admin_connection_pool",
+            _pool_for(connection),
+        ),
+        pytest.raises(RuntimeError, match="player write failed"),
     ):
-        with pytest.raises(RuntimeError, match="player write failed"):
-            players_pipeline()
+        players_pipeline()
 
     transaction = connection.transaction.return_value
     exit_args = transaction.__exit__.call_args.args
@@ -81,9 +83,11 @@ def test_failed_fresh_scrape_never_loads_stale_cached_players(
     def browser_context(_headless):
         yield object()
 
-    with patch("afl_scraper.pipelines.player.sync_browser_context", browser_context):
-        with pytest.raises(RuntimeError, match="source unavailable"):
-            players_pipeline(extract=True, year=2026)
+    with (
+        patch("afl_scraper.pipelines.player.sync_browser_context", browser_context),
+        pytest.raises(RuntimeError, match="source unavailable"),
+    ):
+        players_pipeline(extract=True, year=2026)
 
     transform.assert_not_called()
     open_pool.assert_not_called()

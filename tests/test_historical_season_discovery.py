@@ -2,7 +2,7 @@
 
 import json
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from click.testing import CliRunner
@@ -130,7 +130,7 @@ def test_manifest_save_is_year_scoped_and_valid_json(tmp_path):
         year=2012,
         season_id=2,
         fixture_url=fixture.get_fixture_url(2012),
-        discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 8, 15, tzinfo=UTC),
         rounds=[DiscoveredRound(label="1", match_ids=[100])],
     )
 
@@ -149,7 +149,7 @@ def test_manifest_rejects_unreviewed_id_and_naive_timestamp():
             year=2012,
             season_id=999,
             fixture_url=fixture.get_fixture_url(2012),
-            discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+            discovered_at=datetime(2026, 8, 15, tzinfo=UTC),
             rounds=[DiscoveredRound(label="1", match_ids=[100])],
         )
 
@@ -168,7 +168,7 @@ def test_scrape_season_cli_reports_manifest(monkeypatch, tmp_path):
         year=2012,
         season_id=2,
         fixture_url=fixture.get_fixture_url(2012),
-        discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 8, 15, tzinfo=UTC),
         rounds=[DiscoveredRound(label="1", match_ids=[100, 101])],
     )
 

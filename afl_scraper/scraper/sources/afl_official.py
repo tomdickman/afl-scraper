@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -7,7 +7,6 @@ from playwright.sync_api import Locator, Page
 
 from ...models.player import PlayerInfo
 from .base import PlayerSource
-
 
 TEAM_SLUGS = {
     "adelaide-crows": "Adelaide Crows",
@@ -109,7 +108,7 @@ class AFLOfficialSource(PlayerSource):
     def scrape_player_ids_from_browser(
         self, browser, year: int | None = None
     ) -> list[PlayerInfo]:
-        current_year = datetime.now().year
+        current_year = datetime.now(UTC).year
         year = current_year if year is None else year
         if year != current_year:
             raise ValueError(

@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from afl_scraper.paths import data_path
+
 from ..models import PlayerInfo
 from ..scraper import (
     afl_official_cancelled_fixture,
@@ -44,7 +46,7 @@ from ..transform.match import parse_match_datetime, resolve_team, resolve_venue
 from ..utils.identity import normalize_person_name
 from .historical_players import load_player_snapshot, prepare_player_raw_data
 
-CATALOG_ROOT = Path("data/raw/catalog")
+CATALOG_ROOT = data_path("raw", "catalog")
 
 
 @dataclass(frozen=True)
@@ -350,8 +352,14 @@ def _write_afl_tables_catalog(
         },
     )
     return RawSeasonReport(
-        year, "afl_tables", len(catalog.matches), player_stats, len(players),
-        len(teams), len(venues), str(path)
+        year,
+        "afl_tables",
+        len(catalog.matches),
+        player_stats,
+        len(players),
+        len(teams),
+        len(venues),
+        str(path),
     )
 
 
@@ -613,39 +621,49 @@ def _write_year_manifest(year: int, reports, validations) -> Path:
     by_source = {report.source: report for report in reports}
     sources = []
     for source, supported, data_types in (
-        ("afl_official", year >= OFFICIAL_FIXTURE_MIN_YEAR,
-         ["fixtures", "match_details", "player_stats"]),
-        ("afl_tables", True,
-         ["match_metadata", "player_stats", "season_roster", "player_profiles"]),
-        ("australian_football", True,
-         ["fixtures", "match_details", "player_stats"]),
+        (
+            "afl_official",
+            year >= OFFICIAL_FIXTURE_MIN_YEAR,
+            ["fixtures", "match_details", "player_stats"],
+        ),
+        (
+            "afl_tables",
+            True,
+            ["match_metadata", "player_stats", "season_roster", "player_profiles"],
+        ),
+        ("australian_football", True, ["fixtures", "match_details", "player_stats"]),
     ):
         report = by_source.get(source)
         if report is not None:
-            sources.append({
-                "source": source,
-                "status": "complete",
-                "data_types": data_types,
-                "matches": report.matches,
-                "player_stats": report.player_stats,
-                "participants": report.participants,
-                "catalog_path": report.catalog_path,
-                "reason": None,
-            })
+            sources.append(
+                {
+                    "source": source,
+                    "status": "complete",
+                    "data_types": data_types,
+                    "matches": report.matches,
+                    "player_stats": report.player_stats,
+                    "participants": report.participants,
+                    "catalog_path": report.catalog_path,
+                    "reason": None,
+                }
+            )
         else:
-            sources.append({
-                "source": source,
-                "status": "unavailable" if not supported else "failed",
-                "data_types": data_types,
-                "matches": 0,
-                "player_stats": 0,
-                "participants": 0,
-                "catalog_path": None,
-                "reason": (
-                    f"AFL Official fixture catalogue starts in {OFFICIAL_FIXTURE_MIN_YEAR}"
-                    if source == "afl_official" else "source did not complete"
-                ),
-            })
+            sources.append(
+                {
+                    "source": source,
+                    "status": "unavailable" if not supported else "failed",
+                    "data_types": data_types,
+                    "matches": 0,
+                    "player_stats": 0,
+                    "participants": 0,
+                    "catalog_path": None,
+                    "reason": (
+                        f"AFL Official fixture catalogue starts in {OFFICIAL_FIXTURE_MIN_YEAR}"
+                        if source == "afl_official"
+                        else "source did not complete"
+                    ),
+                }
+            )
     return _atomic_json(
         _catalog_path(year),
         {
@@ -822,13 +840,9 @@ def scrape_all_raw_data(
                     fallback_player_identities=list(official_player_history),
                 )
                 official_player_history.extend(players)
-                official_report = _write_official_catalog(
-                    year, manifest, players
-                )
+                official_report = _write_official_catalog(year, manifest, players)
                 year_reports.append(official_report)
-                official_audit = audit_match_metadata(
-                    manifest, afl_tables_catalog
-                )
+                official_audit = audit_match_metadata(manifest, afl_tables_catalog)
                 if historical_audit is not None:
                     _add_official_consensus(historical_audit, manifest)
                 if official_audit["unresolved_count"]:
@@ -837,28 +851,30 @@ def scrape_all_raw_data(
                         f"found {official_audit['unresolved_count']} unresolved "
                         "matches; recording details in the manifest"
                     )
-                validations.append({
-                    "sources": ["afl_official", "afl_tables"],
-                    "status": (
-                        "passed"
-                        if not official_audit["unresolved_count"]
-                        else "conflict"
-                    ),
-                    "match_count": official_audit["match_count"],
-                    "resolved_count": official_audit["resolved_count"],
-                    "unresolved_count": official_audit["unresolved_count"],
-                    "expected_absence_count": official_audit.get(
-                        "expected_absence_count", 0
-                    ),
-                    "expected_absences": official_audit.get(
-                        "expected_absences", []
-                    ),
-                    "unresolved": [
-                        item
-                        for item in official_audit.get("matches", ())
-                        if item["status"] == "unresolved"
-                    ],
-                })
+                validations.append(
+                    {
+                        "sources": ["afl_official", "afl_tables"],
+                        "status": (
+                            "passed"
+                            if not official_audit["unresolved_count"]
+                            else "conflict"
+                        ),
+                        "match_count": official_audit["match_count"],
+                        "resolved_count": official_audit["resolved_count"],
+                        "unresolved_count": official_audit["unresolved_count"],
+                        "expected_absence_count": official_audit.get(
+                            "expected_absence_count", 0
+                        ),
+                        "expected_absences": official_audit.get(
+                            "expected_absences", []
+                        ),
+                        "unresolved": [
+                            item
+                            for item in official_audit.get("matches", ())
+                            if item["status"] == "unresolved"
+                        ],
+                    }
+                )
 
             _write_year_manifest(year, year_reports, validations)
             season_reports.extend(year_reports)

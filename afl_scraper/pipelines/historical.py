@@ -22,7 +22,6 @@ from ..storage import (
 from ..transform import transform_australian_football_match
 from ..utils.identity import normalize_person_name
 
-
 SOURCE = "australian_football"
 
 

@@ -1,8 +1,8 @@
 """Tests for resumable range orchestration and database reconciliation."""
 
-from contextlib import contextmanager
-from datetime import datetime, timezone
 import json
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -21,7 +21,7 @@ def _prepared(year=2006, source_match_id="13127"):
     game = Game(
         id=1,
         venue="M.C.G.",
-        start_date=datetime(year, 3, 24, 8, 30, tzinfo=timezone.utc),
+        start_date=datetime(year, 3, 24, 8, 30, tzinfo=UTC),
         round="Round 1",
         home_team="Collingwood",
         away_team="Carlton",

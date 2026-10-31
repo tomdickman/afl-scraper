@@ -3,7 +3,7 @@ Mapping of lower case versions of raw site parsed strings of team names to
 their corresponding team ID.
 """
 
-team_mappings = {
+TEAM_MAPPINGS = {
     "adelaide": "Adelaide",
     "crows": "Adelaide",
     "adelaide crows": "Adelaide",

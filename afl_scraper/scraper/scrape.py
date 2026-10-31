@@ -1,18 +1,21 @@
 import logging
 import re
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import shutil
 import tempfile
-from typing import List
+from datetime import UTC, datetime, timedelta, timezone
+from pathlib import Path
 from urllib.parse import urljoin
 from uuid import uuid4
 
 from playwright.sync_api import (
     BrowserContext,
     Locator,
+)
+from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
+
+from afl_scraper.paths import data_path
 
 from ..models.player import PlayerInfo
 from .constants import FIXTURE_CLASSNAMES, PATHS, official_season_id
@@ -34,12 +37,11 @@ from .parser import (
     OfficialMatchDetailsUnavailable,
     OfficialPlayerStatsUnavailable,
     display_player_stats,
-    extract_team_player_identities,
     extract_table_data,
+    extract_team_player_identities,
     select_team_stats,
 )
 from .sources import PlayerSourceFactory
-
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +260,7 @@ def discover_official_season(browser: BrowserContext, year: int) -> SeasonManife
             year=year,
             season_id=official_season_id(year),
             fixture_url=get_fixture_url(year),
-            discovered_at=datetime.now(timezone.utc),
+            discovered_at=datetime.now(UTC),
             rounds=rounds,
             fixtures=fixtures,
         )
@@ -268,7 +270,7 @@ def discover_official_season(browser: BrowserContext, year: int) -> SeasonManife
 
 def save_season_manifest(
     manifest: SeasonManifest,
-    output_root: Path = Path("data/raw/afl_official/season"),
+    output_root: Path = data_path("raw", "afl_official", "season"),
 ) -> Path:
     """Atomically save a year-scoped, validated season manifest."""
     output_dir = output_root / str(manifest.year)
@@ -288,7 +290,7 @@ def save_season_manifest(
 
 def load_season_manifest(
     year: int,
-    input_root: Path = Path("data/raw/afl_official/season"),
+    input_root: Path = data_path("raw", "afl_official", "season"),
 ) -> SeasonManifest:
     """Load and revalidate a previously discovered official season."""
     path = input_root / str(year) / "manifest.json"
@@ -306,7 +308,7 @@ def load_season_manifest(
 
 def raw_match_data_path(
     match_id: int | str,
-    raw_root: Path = Path("data/raw/afl_official/match"),
+    raw_root: Path = data_path("raw", "afl_official", "match"),
 ) -> Path:
     """Return the canonical validated JSON path for an official match."""
     return raw_root / str(_normalise_match_id(match_id)) / "match.json"
@@ -315,7 +317,7 @@ def raw_match_data_path(
 def save_raw_match_data(
     raw_data: RawMatchData,
     match_id: int | str,
-    raw_root: Path = Path("data/raw/afl_official/match"),
+    raw_root: Path = data_path("raw", "afl_official", "match"),
     *,
     provenance: MatchDataProvenance | None = None,
 ) -> Path:
@@ -329,7 +331,7 @@ def save_raw_match_data(
         schema_version=2 if provenance is not None else 1,
         match_id=normalized_match_id,
         source_url=f"{PATHS['MATCH'].rstrip('/')}/{normalized_match_id}",
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=datetime.now(UTC),
         data=raw_match,
         provenance=provenance,
     )
@@ -346,7 +348,7 @@ def save_raw_match_data(
 
 def load_raw_match_data(
     match_id: int | str,
-    raw_root: Path = Path("data/raw/afl_official/match"),
+    raw_root: Path = data_path("raw", "afl_official", "match"),
 ) -> RawMatchData:
     """Load and revalidate a cached official match."""
     normalized_match_id = _normalise_match_id(match_id)
@@ -455,7 +457,7 @@ def scrape_match(
                 error,
             )
 
-        raw_dir = Path("data/raw/afl_official/match") / str(match_id)
+        raw_dir = data_path("raw", "afl_official", "match") / str(match_id)
         fallback_identities = list(player_identities or [])
 
         try:
@@ -570,7 +572,7 @@ def scrape_match(
 
 def scrape_players(
     browser: BrowserContext, year: int, source: str = "afl_tables"
-) -> List[Path]:
+) -> list[Path]:
     source_obj = PlayerSourceFactory.get(source)
     page = browser.new_page()
     list_url = source_obj.get_list_page_url(year)

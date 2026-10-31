@@ -2,9 +2,11 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
+
+from afl_scraper.paths import data_path
 
 from ..models import (
     HistoricalBackfillCheckpoint,
@@ -20,7 +22,6 @@ from .historical import (
     reconcile_historical_season,
     require_reconciled,
 )
-
 
 SOURCE = "australian_football"
 ProgressCallback = Callable[[int, str], None]
@@ -49,7 +50,7 @@ def validate_historical_year_range(start_year: int, end_year: int) -> list[int]:
 def historical_checkpoint_path(
     start_year: int,
     end_year: int,
-    root: Path = Path("data/checkpoints/australian_football"),
+    root: Path = data_path("checkpoints", "australian_football"),
 ) -> Path:
     validate_historical_year_range(start_year, end_year)
     return root / f"{start_year}-{end_year}.json"
@@ -58,7 +59,7 @@ def historical_checkpoint_path(
 def historical_report_path(
     start_year: int,
     end_year: int,
-    root: Path = Path("data/reports/australian_football"),
+    root: Path = data_path("reports", "australian_football"),
 ) -> Path:
     validate_historical_year_range(start_year, end_year)
     return root / f"{start_year}-{end_year}.json"
@@ -160,7 +161,7 @@ def historical_backfill_pipeline(
         start_year, end_year
     )
     report_path = report_path or historical_report_path(start_year, end_year)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     checkpoint = _load_or_create_checkpoint(years, checkpoint_path, resume, now)
     previously_completed = {
         year
@@ -207,7 +208,7 @@ def historical_backfill_pipeline(
                             else "Previously completed year no longer reconciles"
                         ),
                     ),
-                    datetime.now(timezone.utc),
+                    datetime.now(UTC),
                 )
                 save_historical_checkpoint(checkpoint, checkpoint_path)
             except Exception as exc:
@@ -218,7 +219,7 @@ def historical_backfill_pipeline(
                     previous.model_copy(
                         update={"status": "failed", "error": str(exc)[:2000]}
                     ),
-                    datetime.now(timezone.utc),
+                    datetime.now(UTC),
                 )
                 save_historical_checkpoint(checkpoint, checkpoint_path)
                 save_historical_report(
@@ -227,7 +228,7 @@ def historical_backfill_pipeline(
                         reconciliations,
                         dry_run=not load,
                         resume=resume,
-                        now=datetime.now(timezone.utc),
+                        now=datetime.now(UTC),
                     ),
                     report_path,
                 )
@@ -247,11 +248,11 @@ def historical_backfill_pipeline(
                         current.model_copy(
                             update={
                                 "status": "verified",
-                                "completed_at": datetime.now(timezone.utc),
+                                "completed_at": datetime.now(UTC),
                                 "error": None,
                             }
                         ),
-                        datetime.now(timezone.utc),
+                        datetime.now(UTC),
                     )
                     save_historical_checkpoint(checkpoint, checkpoint_path)
                     continue
@@ -269,7 +270,7 @@ def historical_backfill_pipeline(
                                 ),
                             }
                         ),
-                        datetime.now(timezone.utc),
+                        datetime.now(UTC),
                     )
                     save_historical_checkpoint(checkpoint, checkpoint_path)
                     save_historical_report(
@@ -278,7 +279,7 @@ def historical_backfill_pipeline(
                             reconciliations,
                             dry_run=False,
                             resume=resume,
-                            now=datetime.now(timezone.utc),
+                            now=datetime.now(UTC),
                         ),
                         report_path,
                     )
@@ -305,9 +306,9 @@ def historical_backfill_pipeline(
                             differences=reconciliation.mismatch_count,
                             inserted_games=load_report.inserted_games,
                             updated_games=load_report.updated_games,
-                            completed_at=datetime.now(timezone.utc),
+                            completed_at=datetime.now(UTC),
                         ),
-                        datetime.now(timezone.utc),
+                        datetime.now(UTC),
                     )
                     save_historical_checkpoint(checkpoint, checkpoint_path)
                     save_historical_report(
@@ -316,7 +317,7 @@ def historical_backfill_pipeline(
                             reconciliations,
                             dry_run=False,
                             resume=resume,
-                            now=datetime.now(timezone.utc),
+                            now=datetime.now(UTC),
                         ),
                         report_path,
                     )
@@ -337,7 +338,7 @@ def historical_backfill_pipeline(
                                 "error": str(exc)[:2000],
                             }
                         ),
-                        datetime.now(timezone.utc),
+                        datetime.now(UTC),
                     )
                     save_historical_checkpoint(checkpoint, checkpoint_path)
                     save_historical_report(
@@ -346,7 +347,7 @@ def historical_backfill_pipeline(
                             reconciliations,
                             dry_run=False,
                             resume=resume,
-                            now=datetime.now(timezone.utc),
+                            now=datetime.now(UTC),
                         ),
                         report_path,
                     )
@@ -357,7 +358,7 @@ def historical_backfill_pipeline(
         reconciliations,
         dry_run=not load,
         resume=resume,
-        now=datetime.now(timezone.utc),
+        now=datetime.now(UTC),
     )
     save_historical_report(report, report_path)
     return HistoricalBackfillResult(

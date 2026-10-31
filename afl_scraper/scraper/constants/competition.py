@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 
-
 MIN_HISTORY_YEAR = 2006
 MAX_CONFIGURED_YEAR = 2026
 

@@ -252,7 +252,7 @@ def test_player_model_has_database_upsert_metadata():
     player = database_player()
 
     assert player.__table_name__ == "player"
-    assert player.__conflict_cols__ == ["id"]
+    assert player.__conflict_cols__ == ("id",)
 
 
 def test_cli_reports_preparation_counts(monkeypatch):

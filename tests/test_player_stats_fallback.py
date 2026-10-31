@@ -58,9 +58,10 @@ def test_reviewed_cross_source_given_name_aliases(official_name, tables_name):
         year=2023,
     )
 
-    assert player_stats_fallback._official_id(
-        tables_name, "Gold Coast SUNS", [identity]
-    ) == "101"
+    assert (
+        player_stats_fallback._official_id(tables_name, "Gold Coast SUNS", [identity])
+        == "101"
+    )
 
 
 def _table(team, player, player_id, values):

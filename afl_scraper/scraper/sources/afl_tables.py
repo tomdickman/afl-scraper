@@ -1,12 +1,12 @@
 import re
 from collections import Counter
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from playwright.sync_api import Locator, Page, Response
 
-from ...models.player import PlayerInfo
 from ...diagnostics import summarize_identifiers
+from ...models.player import PlayerInfo
 from ..constants import MIN_HISTORY_YEAR, competition_rules_for_year
 from .base import PlayerSource
 
@@ -127,7 +127,7 @@ class AFLTablesSource(PlayerSource):
     def scrape_player_ids(
         self, page: Page, year: int | None = None
     ) -> list[PlayerInfo]:
-        year = datetime.now().year if year is None else year
+        year = datetime.now(UTC).year if year is None else year
         players = []
         for team_name, links in self._validated_team_links(page, year).items():
             for link in links:
@@ -235,7 +235,7 @@ class AFLTablesSource(PlayerSource):
 
     def scrape_players_links(self, page: Page, year: int | None = None) -> list[str]:
         """Return unique links after validating the season's club sections."""
-        year = datetime.now().year if year is None else year
+        year = datetime.now(UTC).year if year is None else year
         hrefs = []
         for links in self._validated_team_links(page, year).values():
             hrefs.extend(link.get_attribute("href") for link in links)

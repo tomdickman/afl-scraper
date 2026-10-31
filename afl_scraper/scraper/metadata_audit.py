@@ -1,8 +1,10 @@
 """Cache-only preflight for cross-source match metadata identity."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
+
+from afl_scraper.paths import data_path
 
 from .australian_football import afl_official_cancelled_fixture
 from .metadata_fallback import resolve_fallback_match_details
@@ -63,7 +65,7 @@ def audit_match_metadata(
     return {
         "schema_version": 1,
         "year": manifest.year,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "match_count": len(results),
         "completed_match_count": len(results) - len(expected_absences),
         "resolved_count": resolved,
@@ -76,7 +78,7 @@ def audit_match_metadata(
 
 def save_match_metadata_audit(
     report: dict,
-    output_root: Path = Path("data/reports/match_metadata"),
+    output_root: Path = data_path("reports", "match_metadata"),
 ) -> Path:
     """Atomically save a metadata audit report."""
     import json

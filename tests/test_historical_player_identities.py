@@ -1,16 +1,15 @@
 """Tests for match-derived historical AFL Official identities."""
 
-from contextlib import contextmanager
-from datetime import datetime, timezone
-from decimal import Decimal
 import importlib
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from click.testing import CliRunner
 
 import afl_scraper.cli as cli_module
 import afl_scraper.transform as transform_package
-from afl_scraper.transform import map_players
 from afl_scraper.models.player import PlayerInfo, PlayerMapping
 from afl_scraper.scraper import scrape, season_identities
 from afl_scraper.scraper.constants import official_season_id
@@ -21,14 +20,15 @@ from afl_scraper.scraper.models import (
     RawPlayerStat,
     SeasonManifest,
 )
+from afl_scraper.transform import map_players
 from afl_scraper.transform.map_players import validate_mapping_coverage
-
 
 scraper_package = importlib.import_module("afl_scraper.scraper")
 snapshot_module = importlib.import_module("afl_scraper.scraper.scrape_player_ids")
 historical_players_module = importlib.import_module(
     "afl_scraper.pipelines.historical_players"
 )
+mapping_command_module = importlib.import_module("afl_scraper.commands.mapping")
 
 
 def stat(official_id: str, name: str) -> RawPlayerStat:
@@ -87,7 +87,7 @@ def manifest(match_ids=(100, 101), *, year=2012) -> SeasonManifest:
         fixture_url=(
             f"https://www.afl.com.au/fixture?Competition=1&Season={season_id}"
         ),
-        discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 8, 15, tzinfo=UTC),
         rounds=[DiscoveredRound(label="1", match_ids=list(match_ids))],
     )
 
@@ -500,8 +500,8 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
 ):
     class CurrentDate:
         @classmethod
-        def now(cls):
-            return datetime(2026, 10, 3)
+        def now(cls, tz=None):
+            return datetime(2026, 10, 3, tzinfo=tz)
 
     official = PlayerInfo(
         id="101",
@@ -517,8 +517,8 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
     def browser_context(_headless):
         yield object()
 
-    monkeypatch.setattr(cli_module, "datetime", CurrentDate)
-    monkeypatch.setattr(cli_module, "sync_browser_context", browser_context)
+    monkeypatch.setattr(mapping_command_module, "datetime", CurrentDate)
+    monkeypatch.setattr(mapping_command_module, "sync_browser_context", browser_context)
     monkeypatch.setattr(
         scraper_package,
         "load_season_manifest",
@@ -552,11 +552,11 @@ def test_scrape_season_mapping_cli_promotes_both_sources_together(
 def test_scrape_season_mapping_cli_rejects_future_year_before_manifest(monkeypatch):
     class CurrentDate:
         @classmethod
-        def now(cls):
-            return datetime(2026, 10, 3)
+        def now(cls, tz=None):
+            return datetime(2026, 10, 3, tzinfo=tz)
 
     manifest_calls = []
-    monkeypatch.setattr(cli_module, "datetime", CurrentDate)
+    monkeypatch.setattr(mapping_command_module, "datetime", CurrentDate)
     monkeypatch.setattr(
         scraper_package,
         "load_season_manifest",

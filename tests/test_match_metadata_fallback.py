@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 import pytest
@@ -6,11 +6,11 @@ import pytest
 import afl_scraper.scraper.metadata_fallback as metadata_fallback
 from afl_scraper.scraper.constants import official_season_id
 from afl_scraper.scraper.match_metadata import parse_afl_tables_match_catalog
+from afl_scraper.scraper.metadata_audit import audit_match_metadata
 from afl_scraper.scraper.metadata_fallback import (
     cross_check_official_match_details,
     resolve_fallback_match_details,
 )
-from afl_scraper.scraper.metadata_audit import audit_match_metadata
 from afl_scraper.scraper.models import (
     DiscoveredRound,
     MatchMetadataCatalog,
@@ -19,7 +19,6 @@ from afl_scraper.scraper.models import (
     SeasonManifest,
 )
 from afl_scraper.transform.match import parse_match_datetime
-
 
 FIXTURE = Path(__file__).parent / "fixtures/afl_tables_2013_match_292_season.html"
 
@@ -41,7 +40,7 @@ def _catalog():
         FIXTURE.read_text(encoding="utf-8"),
         2013,
         source_url="https://afltables.com/afl/seas/2013.html",
-        fetched_at=datetime(2026, 10, 7, tzinfo=timezone.utc),
+        fetched_at=datetime(2026, 10, 7, tzinfo=UTC),
     )
 
 
@@ -243,18 +242,14 @@ def test_reviewed_2025_postponements_keep_original_afl_tables_round(
     match_id, official_round
 ):
     fixture = _official_fixture(match_id=match_id, round=official_round)
-    record = _catalog().matches[0].model_copy(
-        update={"year": 2025, "round": "Round 1"}
-    )
+    record = _catalog().matches[0].model_copy(update={"year": 2025, "round": "Round 1"})
 
     assert metadata_fallback._candidate_matches(fixture, record)
 
 
 def test_unreviewed_postponed_round_pair_still_fails_closed():
     fixture = _official_fixture(match_id=7755, round="24")
-    record = _catalog().matches[0].model_copy(
-        update={"year": 2025, "round": "Round 1"}
-    )
+    record = _catalog().matches[0].model_copy(update={"year": 2025, "round": "Round 1"})
 
     assert not metadata_fallback._candidate_matches(fixture, record)
 
@@ -322,7 +317,7 @@ def test_cache_only_audit_reports_every_manifest_member():
         year=2013,
         season_id=4,
         fixture_url="https://www.afl.com.au/fixture?Season=11",
-        discovered_at=datetime(2026, 10, 7, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 10, 7, tzinfo=UTC),
         rounds=[DiscoveredRound(label="5", match_ids=[292])],
         fixtures=[fixture],
     )
@@ -354,14 +349,14 @@ def test_cache_only_audit_classifies_cancelled_official_fixture_as_expected_abse
         year=2015,
         season_id=official_season_id(2015),
         fixture_url="https://www.afl.com.au/fixture",
-        discovered_at=datetime(2026, 10, 18, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 10, 18, tzinfo=UTC),
         rounds=[DiscoveredRound(label="14", match_ids=[847])],
         fixtures=[fixture],
     )
     catalog = MatchMetadataCatalog(
         year=2015,
         source_url="https://afltables.com/afl/seas/2015.html",
-        fetched_at=datetime(2026, 10, 18, tzinfo=timezone.utc),
+        fetched_at=datetime(2026, 10, 18, tzinfo=UTC),
         matches=[
             MatchMetadataRecord(
                 source_match_id="irrelevant",
