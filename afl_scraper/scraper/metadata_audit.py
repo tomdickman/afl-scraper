@@ -4,8 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from afl_scraper.paths import data_path
-
+from ..paths import data_path
 from .australian_football import afl_official_cancelled_fixture
 from .metadata_fallback import resolve_fallback_match_details
 from .models import MatchMetadataCatalog, SeasonManifest

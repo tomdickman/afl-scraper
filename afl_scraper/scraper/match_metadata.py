@@ -9,8 +9,7 @@ from uuid import uuid4
 from bs4 import BeautifulSoup, Tag
 from playwright.sync_api import BrowserContext
 
-from afl_scraper.paths import data_path
-
+from ..paths import data_path
 from .models import MatchMetadataCatalog, MatchMetadataRecord
 
 BASE_URL = "https://afltables.com/afl/"

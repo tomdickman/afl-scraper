@@ -9,10 +9,9 @@ from uuid import uuid4
 from bs4 import BeautifulSoup, Tag
 from playwright.sync_api import BrowserContext
 
-from afl_scraper.paths import data_path
-
 from ..models.player import PlayerInfo
 from ..normalization import normalize_team
+from ..paths import data_path
 from ..utils.identity import normalize_person_name
 from .constants import competition_rules_for_year
 from .models import MatchMetadataRecord, RawMatchData, RawMatchDetails, RawPlayerStat

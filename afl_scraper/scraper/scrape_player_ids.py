@@ -7,10 +7,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from afl_scraper.paths import data_path
-
 from ..diagnostics import summarize_identifiers
 from ..models.player import PlayerInfo
+from ..paths import data_path
 from .sources import PlayerSourceFactory
 
 logger = logging.getLogger(__name__)

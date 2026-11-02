@@ -6,14 +6,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from afl_scraper.paths import data_path
-
 from ..models import (
     HistoricalBackfillCheckpoint,
     HistoricalBackfillReport,
     HistoricalBackfillYear,
     HistoricalReconciliationReport,
 )
+from ..paths import data_path
 from ..scraper.models.australian_football import MAX_SUPPORTED_YEAR, MIN_SUPPORTED_YEAR
 from ..storage import admin_connection_pool
 from .historical import (

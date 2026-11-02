@@ -3,10 +3,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from afl_scraper.paths import data_path
-
 from ..diagnostics import summarize_identifiers
 from ..models import Game, PlayerGameStats
+from ..paths import data_path
 from ..rounds import is_grouped_first_finals_label, normalize_round_label
 from ..scraper import (
     afl_official_cancelled_fixture,

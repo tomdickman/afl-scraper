@@ -9,9 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from afl_scraper.paths import data_path
-
 from ..models import Player, PlayerInfo
+from ..paths import data_path
 from ..scraper import sync_browser_context
 from ..scraper.constants import MAX_CONFIGURED_YEAR, MIN_HISTORY_YEAR
 from ..scraper.models.australian_football import MAX_SUPPORTED_YEAR, MIN_SUPPORTED_YEAR

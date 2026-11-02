@@ -17,9 +17,8 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from afl_scraper.paths import data_path
-
 from ..config import load_config
+from ..paths import data_path
 from .constants import competition_rules_for_year
 from .models import (
     AustralianFootballCancelledFixture,

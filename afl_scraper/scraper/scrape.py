@@ -15,9 +15,8 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from afl_scraper.paths import data_path
-
 from ..models.player import PlayerInfo
+from ..paths import data_path
 from .constants import FIXTURE_CLASSNAMES, PATHS, official_season_id
 from .fixture import (
     get_fixture_page,

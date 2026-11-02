@@ -6,9 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from afl_scraper.paths import data_path
-
 from ..models import PlayerInfo
+from ..paths import data_path
 from ..scraper import (
     afl_official_cancelled_fixture,
     audit_match_metadata,
