@@ -1,7 +1,7 @@
-from datetime import datetime
-from playwright.sync_api import BrowserContext, Page, Locator
-from typing import Dict
+from datetime import UTC, datetime
 from urllib.parse import urlencode
+
+from playwright.sync_api import BrowserContext, Locator, Page
 
 from .constants import FIXTURE_CLASSNAMES, PATHS, official_season_id
 
@@ -29,7 +29,7 @@ def get_fixture_page(browser: BrowserContext, year: int | None = None) -> Page:
     """
     page = browser.new_page()
 
-    selected_year = datetime.now().year if year is None else year
+    selected_year = datetime.now(UTC).year if year is None else year
 
     try:
         page.goto(get_fixture_url(selected_year))
@@ -39,7 +39,7 @@ def get_fixture_page(browser: BrowserContext, year: int | None = None) -> Page:
         raise
 
 
-def get_round_buttons(page: Page) -> Dict[str, Locator]:
+def get_round_buttons(page: Page) -> dict[str, Locator]:
     """
     Fetches button Locators for navigating between rounds
 

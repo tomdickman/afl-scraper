@@ -8,10 +8,10 @@ from unittest.mock import Mock
 import pytest
 from click.testing import CliRunner
 
+import afl_scraper.transform as transform_package
 from afl_scraper.cli import cli
 from afl_scraper.models import SourcePlayerMapping
 from afl_scraper.models.player import MatchResult, PlayerInfo, PlayerMapping
-import afl_scraper.transform as transform_package
 from afl_scraper.transform import map_players, source_mappings
 
 

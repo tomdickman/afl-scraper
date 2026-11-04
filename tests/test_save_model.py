@@ -1,7 +1,6 @@
 """Unit tests for generic model UPSERT persistence."""
 
 from datetime import datetime
-
 from unittest.mock import MagicMock
 
 from psycopg import sql

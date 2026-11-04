@@ -1,15 +1,11 @@
 """Deterministic reconciliation of official fixtures with external metadata."""
 
-import json
-import re
-from datetime import datetime, timedelta, timezone
-from functools import cache
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ..config import load_config, load_jsonc_path
+from ..normalization import canonical_team, canonical_venue, parse_aware_datetime
 from ..rounds import is_grouped_first_finals_label, normalize_round_label
-from ..transform.match import parse_match_datetime, resolve_venue
-from ..transformer.teams import transform_team_name
 from .models import (
     MatchDataProvenance,
     MatchMetadataCatalog,
@@ -18,8 +14,7 @@ from .models import (
     RawMatchDetails,
 )
 
-
-_CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
+_load_jsonc = load_jsonc_path
 _COMBINED_FIRST_FINALS_STAGES = frozenset({"qf", "ef"})
 _OPENING_ROUND_YEARS = frozenset({2024, 2025, 2026})
 _OPENING_ROUND_KEYS = frozenset({"or", "opening round"})
@@ -32,11 +27,6 @@ _REVIEWED_POSTPONED_ROUNDS = {
 # AFL Official exposes the scheduled start, while AFL Tables can record the
 # actual bounce time after a short delay (for example, match 721 in 2014).
 _MAX_SCHEDULED_TIME_DRIFT = timedelta(minutes=15)
-
-
-@cache
-def _load_jsonc(path: Path) -> dict:
-    return json.loads(re.sub(r"//.*", "", path.read_text(encoding="utf-8")))
 
 
 def _round_key(value: str) -> str:
@@ -53,30 +43,28 @@ def _rounds_match(official: str, external: str, year: int) -> bool:
     if official_key == external_key:
         return True
     if year in _OPENING_ROUND_YEARS:
-        if (
-            official_key in _OPENING_ROUND_KEYS
-            and external_key in _OPENING_ROUND_KEYS
-        ):
+        if official_key in _OPENING_ROUND_KEYS and external_key in _OPENING_ROUND_KEYS:
             return True
         if official_key in _OPENING_ROUND_KEYS and external_key == "1":
             return True
-        if official_key.isdigit() and external_key.isdigit():
-            if int(external_key) == int(official_key) + 1:
-                return True
+        if (
+            official_key.isdigit()
+            and external_key.isdigit()
+            and int(external_key) == int(official_key) + 1
+        ):
+            return True
     if (
         year in _WILDCARD_ROUND_YEARS
         and official_key in _WILDCARD_ROUND_KEYS
         and external_key == "25"
     ):
         return True
-    return (
-        official_key == "qe" and external_key in _COMBINED_FIRST_FINALS_STAGES
-    )
+    return official_key == "qe" and external_key in _COMBINED_FIRST_FINALS_STAGES
 
 
 def _external_datetime(record: MatchMetadataRecord) -> datetime:
-    venue_id = resolve_venue(record.venue, "afl_tables")
-    timezone_name = _load_jsonc(_CONFIG_ROOT / "venue_timezones.jsonc").get(venue_id)
+    venue_id = canonical_venue(record.venue, "afl_tables")
+    timezone_name = load_config("venue_timezones.jsonc").get(venue_id)
     if timezone_name is None:
         raise KeyError(f"No timezone mapping found for canonical venue {venue_id!r}")
     try:
@@ -88,7 +76,7 @@ def _external_datetime(record: MatchMetadataRecord) -> datetime:
     value = datetime.combine(record.local_date, record.local_time).replace(
         tzinfo=venue_timezone
     )
-    round_trip = value.astimezone(timezone.utc).astimezone(venue_timezone)
+    round_trip = value.astimezone(UTC).astimezone(venue_timezone)
     if round_trip.replace(tzinfo=None) != value.replace(tzinfo=None):
         raise ValueError(
             f"Nonexistent local match time {value.replace(tzinfo=None).isoformat()} "
@@ -98,7 +86,7 @@ def _external_datetime(record: MatchMetadataRecord) -> datetime:
 
 
 def _scheduled_times_match(left: datetime, right: datetime) -> bool:
-    return abs(left.astimezone(timezone.utc) - right.astimezone(timezone.utc)) <= (
+    return abs(left.astimezone(UTC) - right.astimezone(UTC)) <= (
         _MAX_SCHEDULED_TIME_DRIFT
     )
 
@@ -106,10 +94,10 @@ def _scheduled_times_match(left: datetime, right: datetime) -> bool:
 def _team_orientation(
     fixture: OfficialFixtureMetadata, record: MatchMetadataRecord
 ) -> str | None:
-    fixture_home = transform_team_name(fixture.home_team)
-    fixture_away = transform_team_name(fixture.away_team)
-    record_home = transform_team_name(record.home_team)
-    record_away = transform_team_name(record.away_team)
+    fixture_home = canonical_team(fixture.home_team)
+    fixture_away = canonical_team(fixture.away_team)
+    record_home = canonical_team(record.home_team)
+    record_away = canonical_team(record.away_team)
     if (fixture_home, fixture_away) == (record_home, record_away):
         return "same"
     if (fixture_home, fixture_away) == (record_away, record_home):
@@ -124,16 +112,14 @@ def _candidate_matches(
     if orientation is None:
         return False
     observed_rounds = (_round_key(fixture.round), _round_key(record.round))
-    reviewed_rounds = _REVIEWED_POSTPONED_ROUNDS.get(
-        (record.year, fixture.match_id)
-    )
+    reviewed_rounds = _REVIEWED_POSTPONED_ROUNDS.get((record.year, fixture.match_id))
     if not _rounds_match(fixture.round, record.round, record.year) and (
         reviewed_rounds is None or observed_rounds != reviewed_rounds
     ):
         return False
     if fixture.venue is None or fixture.scheduled_at is None:
         return False
-    if resolve_venue(fixture.venue, "afl_official") != resolve_venue(
+    if canonical_venue(fixture.venue, "afl_official") != canonical_venue(
         record.venue, "afl_tables"
     ):
         return False
@@ -147,9 +133,9 @@ def _candidate_matches(
     )
     if fixture.home_total is not None and fixture.home_total != record_home_total:
         return False
-    if fixture.away_total is not None and fixture.away_total != record_away_total:
-        return False
-    return True
+    return not (
+        fixture.away_total is not None and fixture.away_total != record_away_total
+    )
 
 
 def resolve_fallback_match_record(
@@ -266,20 +252,20 @@ def cross_check_official_match_details(
     external: RawMatchDetails,
 ) -> None:
     """Fail with a field-level diagnostic when complete sources disagree."""
-    official_scheduled_at = parse_match_datetime(official.date, official.time)
-    external_scheduled_at = parse_match_datetime(external.date, external.time)
+    official_scheduled_at = parse_aware_datetime(official.date, official.time)
+    external_scheduled_at = parse_aware_datetime(external.date, external.time)
     comparisons = {
         "home_team": (
-            transform_team_name(official.home_team),
-            transform_team_name(external.home_team),
+            canonical_team(official.home_team),
+            canonical_team(external.home_team),
         ),
         "away_team": (
-            transform_team_name(official.away_team),
-            transform_team_name(external.away_team),
+            canonical_team(official.away_team),
+            canonical_team(external.away_team),
         ),
         "venue": (
-            resolve_venue(official.venue, "afl_official"),
-            resolve_venue(external.venue, "afl_official"),
+            canonical_venue(official.venue, "afl_official"),
+            canonical_venue(external.venue, "afl_official"),
         ),
         "home_goals": (official.home_team_goals, external.home_team_goals),
         "home_behinds": (official.home_team_behinds, external.home_team_behinds),
@@ -295,12 +281,10 @@ def cross_check_official_match_details(
     }
     if not _scheduled_times_match(official_scheduled_at, external_scheduled_at):
         conflicts["scheduled_at"] = {
-            "afl_official": official_scheduled_at.astimezone(timezone.utc),
-            "afl_tables": external_scheduled_at.astimezone(timezone.utc),
+            "afl_official": official_scheduled_at.astimezone(UTC),
+            "afl_tables": external_scheduled_at.astimezone(UTC),
         }
-    if not _rounds_match(
-        official.round, external.round, official_scheduled_at.year
-    ):
+    if not _rounds_match(official.round, external.round, official_scheduled_at.year):
         conflicts["round"] = {
             "afl_official": official.round,
             "afl_tables": external.round,

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from .paths import data_path
 from .scraper.constants import (
     MAX_CONFIGURED_YEAR,
     MIN_HISTORY_YEAR,
@@ -22,14 +23,18 @@ class SeasonPlan:
     @property
     def approved_mapping_path(self) -> Path:
         if self.match_source == "australian_football":
-            return Path(f"data/mapping/{self.year}_australian_football_approved.json")
-        return Path(f"data/mapping/{self.year}_approved.json")
+            return data_path(
+                "mapping", f"{self.year}_australian_football_approved.json"
+            )
+        return data_path("mapping", f"{self.year}_approved.json")
 
     @property
     def review_mapping_path(self) -> Path:
         if self.match_source == "australian_football":
-            return Path(f"data/mapping/{self.year}_australian_football_to_review.json")
-        return Path(f"data/mapping/{self.year}_to_review.json")
+            return data_path(
+                "mapping", f"{self.year}_australian_football_to_review.json"
+            )
+        return data_path("mapping", f"{self.year}_to_review.json")
 
 
 def season_plan(year: int) -> SeasonPlan:

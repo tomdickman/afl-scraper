@@ -1,10 +1,27 @@
+"""Round-level orchestration with typed per-match outcomes."""
+
+from dataclasses import dataclass
+
 from ..scraper import (
     load_season_manifest,
     scrape_match,
     scrape_match_ids,
     sync_browser_context,
 )
+from ..scraper.models import RawMatchData
 from .match import load_match_data
+
+
+@dataclass(frozen=True)
+class RoundMatchResult:
+    match_id: int
+    raw_data: RawMatchData | None = None
+    loaded: bool = False
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
 
 
 def round_pipeline(
@@ -12,7 +29,9 @@ def round_pipeline(
     year: int | None = None,
     headless: bool = True,
     load: bool = True,
-) -> list[dict]:
+    progress=None,
+) -> list[RoundMatchResult]:
+    """Process a round while isolating and reporting individual match failures."""
     results = []
 
     with sync_browser_context(headless) as browser:
@@ -21,12 +40,10 @@ def round_pipeline(
             manifest = load_season_manifest(year)
         except FileNotFoundError:
             manifest = None
-        print(
-            f"Found {len(ids)} matches in round {round_number} of {year or 'current'}"
-        )
+        if progress is not None:
+            progress("discovered", None, f"{len(ids)} matches")
 
         for match_id in ids:
-            print(f"\n--- Match {match_id} ---")
             try:
                 raw_data = scrape_match(
                     browser,
@@ -35,13 +52,17 @@ def round_pipeline(
                     fixture=manifest.fixture_for(match_id) if manifest else None,
                 )
                 if load:
-                    result = load_match_data(raw_data, int(match_id))
-                else:
-                    result = {"raw_data": raw_data}
-                results.append(result)
-                print(f"--- Match {match_id} done ---")
-            except Exception as e:
-                print(f"  Error processing match {match_id}: {e}")
-                results.append({"error": str(e)})
+                    load_match_data(raw_data, int(match_id))
+                results.append(
+                    RoundMatchResult(
+                        match_id=int(match_id), raw_data=raw_data, loaded=load
+                    )
+                )
+                if progress is not None:
+                    progress("completed", match_id, None)
+            except Exception as error:
+                results.append(RoundMatchResult(int(match_id), error=str(error)))
+                if progress is not None:
+                    progress("failed", match_id, str(error))
 
     return results

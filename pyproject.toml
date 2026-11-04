@@ -12,6 +12,7 @@ dependencies = [
     "alembic>=1.17.2",
     "beautifulsoup4>=4.14.3",
     "click>=8.2.1",
+    "json5>=0.12.1",
     "pandas>=2.3.3",
     "playwright>=1.52.0",
     "psycopg[pool]>=3.3.2",
@@ -25,6 +26,9 @@ afl-scraper = "afl_scraper.__main__:cli"
 dev = [
     "black>=25.11.0",
     "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "pyright>=1.1.407",
+    "ruff>=0.14.3",
 ]
 
 [tool.pytest.ini_options]
@@ -33,3 +37,35 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+
+[tool.black]
+target-version = ["py312"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "SIM", "UP", "RUF", "DTZ"]
+ignore = [
+    "B008",  # Path defaults document and preserve the established artifact API.
+    "DTZ007",  # Several parsers intentionally create date/time components first.
+    "RUF001",  # Source names legitimately contain typographic apostrophes.
+    "RUF022",  # Public exports are grouped by responsibility, not alphabetically.
+    "RUF043",  # Pytest match values intentionally use regular expressions.
+    "SIM108",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["DTZ", "RUF005", "RUF012"]
+"afl_scraper/storage/migrations/versions/**" = ["E501"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+include = [
+    "afl_scraper/config",
+    "afl_scraper/models",
+    "afl_scraper/normalization.py",
+    "afl_scraper/paths.py",
+]

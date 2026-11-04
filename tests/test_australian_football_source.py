@@ -1,8 +1,8 @@
 """Contract tests for the AustralianFootball 2006-2011 adapter."""
 
-from contextlib import contextmanager
-from datetime import datetime, timezone
 import importlib
+from contextlib import contextmanager
+from datetime import UTC, datetime
 
 import pytest
 from bs4 import BeautifulSoup
@@ -10,7 +10,6 @@ from click.testing import CliRunner
 
 import afl_scraper.cli as cli_module
 from afl_scraper.scraper import australian_football as source
-
 
 scraper_package = importlib.import_module("afl_scraper.scraper")
 
@@ -157,7 +156,7 @@ def test_2006_season_contract_discovers_all_matches_and_deduplicates_links(monke
     manifest = source.parse_australian_football_season(
         season_html(),
         2006,
-        discovered_at=datetime(2026, 8, 15, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 8, 15, tzinfo=UTC),
     )
 
     assert manifest.match_count == 185
@@ -216,9 +215,7 @@ def test_season_url_is_resolved_from_calendar_year_selector():
     </select>
     """
 
-    assert source._resolve_australian_football_season_url(html, 2023).endswith(
-        "/2024"
-    )
+    assert source._resolve_australian_football_season_url(html, 2023).endswith("/2024")
 
 
 def test_access_refusal_suggests_visible_browser_retry():
@@ -498,7 +495,7 @@ def test_reviewed_cancelled_fixture_is_cached_without_scraping(monkeypatch, tmp_
     manifest = source.AustralianFootballSeasonManifest(
         year=2015,
         season_url=source.australian_football_season_url(2015),
-        discovered_at=datetime(2026, 10, 16, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 10, 16, tzinfo=UTC),
         rounds=[source.DiscoveredRound(label="Round 14", match_ids=[43084])],
     )
 
@@ -543,7 +540,7 @@ def test_reviewed_source_omission_is_cached_without_scraping(tmp_path):
     manifest = source.AustralianFootballSeasonManifest(
         year=2020,
         season_url=source.australian_football_season_url(2020),
-        discovered_at=datetime(2026, 10, 23, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 10, 23, tzinfo=UTC),
         rounds=[source.DiscoveredRound(label="Round 1", match_ids=[126186])],
     )
 
@@ -562,10 +559,7 @@ def test_reviewed_source_omission_is_cached_without_scraping(tmp_path):
 
     assert paths == [tmp_path / "match/126186/omission.json"]
     assert progress == [(1, 1, 126186, False)]
-    assert (
-        source.load_australian_football_source_omission(126186, tmp_path)
-        == omission
-    )
+    assert source.load_australian_football_source_omission(126186, tmp_path) == omission
     assert not (tmp_path / "match/126186/match.json").exists()
 
     progress.clear()
@@ -601,7 +595,7 @@ def test_reviewed_cancellation_migrates_cache_missing_cross_source_id(
     manifest = source.AustralianFootballSeasonManifest(
         year=2015,
         season_url=source.australian_football_season_url(2015),
-        discovered_at=datetime(2026, 10, 22, tzinfo=timezone.utc),
+        discovered_at=datetime(2026, 10, 22, tzinfo=UTC),
         rounds=[source.DiscoveredRound(label="Round 14", match_ids=[43084])],
     )
 

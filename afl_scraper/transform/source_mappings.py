@@ -46,12 +46,11 @@ def upsert_source_mapping_years(
         validate_source_mappings(mappings)
 
     counts = {}
-    with admin_connection_pool() as conn:
-        with conn.transaction():
-            for (source, year), mappings in mappings_by_source_year.items():
-                for mapping in mappings:
-                    conn.execute(
-                        """
+    with admin_connection_pool() as conn, conn.transaction():
+        for (source, year), mappings in mappings_by_source_year.items():
+            for mapping in mappings:
+                conn.execute(
+                    """
                         INSERT INTO player_source_identity
                           (source, source_player_id, player_id, year)
                         VALUES (%(source)s, %(source_player_id)s, %(player_id)s, %(year)s)
@@ -59,12 +58,12 @@ def upsert_source_mapping_years(
                         SET player_id = EXCLUDED.player_id,
                             updated_at = NOW()
                         """,
-                        {
-                            "source": source,
-                            "source_player_id": mapping.source_player_id,
-                            "player_id": mapping.player_id,
-                            "year": year,
-                        },
-                    )
-                counts[(source, year)] = len(mappings)
+                    {
+                        "source": source,
+                        "source_player_id": mapping.source_player_id,
+                        "player_id": mapping.player_id,
+                        "year": year,
+                    },
+                )
+            counts[(source, year)] = len(mappings)
     return counts

@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VIEW_SQL = (
     REPO_ROOT / "afl_scraper/storage/tables/player_game_stats_with_career_number.sql"
@@ -34,5 +33,5 @@ def test_view_exposes_match_context_for_analysis():
 def test_migration_is_stacked_after_player_stat_identity_change():
     source = MIGRATION.read_text()
 
-    assert 'down_revision: Union[str, Sequence[str], None] = "4f2a6c89d2ef"' in source
+    assert 'down_revision: str | Sequence[str] | None = "4f2a6c89d2ef"' in source
     assert "DROP VIEW IF EXISTS player_game_stats_with_career_number" in source

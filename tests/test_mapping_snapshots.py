@@ -1,22 +1,21 @@
-import json
 import importlib
+import json
 from contextlib import contextmanager
 from unittest.mock import Mock
 
 import pytest
 from click.testing import CliRunner
 
-import afl_scraper.cli as cli_module
 from afl_scraper.cli import cli
 from afl_scraper.models.player import PlayerInfo
 from afl_scraper.scraper.scrape_player_ids import save_player_id_snapshots
-
 
 snapshot_module = importlib.import_module("afl_scraper.scraper.scrape_player_ids")
 scraper_package = importlib.import_module("afl_scraper.scraper")
 historical_players_module = importlib.import_module(
     "afl_scraper.pipelines.historical_players"
 )
+mapping_command_module = importlib.import_module("afl_scraper.commands.mapping")
 
 
 def player(player_id, source_team="Carlton"):
@@ -175,7 +174,7 @@ def test_map_scrape_does_not_promote_official_when_tables_snapshot_fails(monkeyp
 
     save = Mock()
 
-    monkeypatch.setattr(cli_module, "sync_browser_context", browser_context)
+    monkeypatch.setattr(mapping_command_module, "sync_browser_context", browser_context)
     monkeypatch.setattr(
         scraper_package,
         "load_season_manifest",

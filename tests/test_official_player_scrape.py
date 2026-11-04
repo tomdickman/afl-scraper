@@ -6,11 +6,11 @@ from afl_scraper.models.player import PlayerInfo
 from afl_scraper.scraper import browser as browser_helpers
 from afl_scraper.scraper.scrape_player_ids import save_player_ids_to_json
 from afl_scraper.scraper.sources.afl_official import (
-    AFLOfficialSource,
     MAX_PLAYERS_PER_TEAM,
     MIN_PLAYERS_PER_TEAM,
     PLAYER_CARD_SELECTOR,
     TEAM_SLUGS,
+    AFLOfficialSource,
 )
 
 

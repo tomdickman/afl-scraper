@@ -1,7 +1,8 @@
 from contextlib import contextmanager
+
 from psycopg_pool import ConnectionPool
 
-from ..storage.db_config import get_write_conninfo, get_read_conninfo
+from ..storage.db_config import get_read_conninfo, get_write_conninfo
 
 
 @contextmanager

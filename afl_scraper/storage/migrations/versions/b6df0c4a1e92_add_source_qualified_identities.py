@@ -6,17 +6,16 @@ Create Date: 2026-08-16 00:00:00.000000
 
 """
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
-
 revision: str = "b6df0c4a1e92"
-down_revision: Union[str, Sequence[str], None] = "7d1d45f2a3c8"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "7d1d45f2a3c8"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 HISTORICALLY_UNAVAILABLE_STATS = (

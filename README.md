@@ -58,6 +58,9 @@ For development, install the development dependency group and run the test suite
 ```sh
 uv sync --dev
 uv run pytest
+uv run black --check afl_scraper tests
+uv run ruff check afl_scraper tests
+uv run pyright
 ```
 
 ## Database setup
@@ -628,7 +631,13 @@ The application is split into four main layers:
 
 Generated data under the root `data/` directory is intentionally excluded from Git. Match scraping also retains captured player-stat HTML under `data/raw/afl_official/match/<match-id>/` for inspection.
 
-Team and venue names from source sites are normalised before database loading. Venue aliases are maintained in `config/venue_name_mappings.jsonc`; update that file when a source introduces a venue name the transformer does not recognise.
+Team and venue names from source sites are normalised before database loading.
+Venue aliases are packaged in
+`afl_scraper/config/venue_name_mappings.jsonc`; update that file when a source
+introduces a venue name the transformer does not recognise.
+
+The local artifact root defaults to `data/`. Set `AFL_SCRAPER_DATA_DIR` to use a
+different location in automation or deployments.
 
 ## Tooling
 

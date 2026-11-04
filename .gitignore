@@ -8,6 +8,13 @@ wheels/
 
 # Testing
 .pytest_cache/
+.coverage
+htmlcov/
+
+# Linters and type checkers
+.ruff_cache/
+.mypy_cache/
+.pyright/
 
 # Virtual environments
 .venv
@@ -20,3 +27,6 @@ data/
 
 # Agents
 .aider*
+
+# Local generated visualizations
+.visualizations/

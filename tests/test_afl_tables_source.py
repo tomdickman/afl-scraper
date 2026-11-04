@@ -1,12 +1,10 @@
-from pathlib import Path
-
 import pytest
 
-from afl_scraper.scraper.sources.afl_tables import (
-    AFLTablesSource,
-    MIN_PLAYERS_PER_TEAM,
-)
 from afl_scraper.scraper.constants import competition_rules_for_year
+from afl_scraper.scraper.sources.afl_tables import (
+    MIN_PLAYERS_PER_TEAM,
+    AFLTablesSource,
+)
 
 
 class LocatorList:

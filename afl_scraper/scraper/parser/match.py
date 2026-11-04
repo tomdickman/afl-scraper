@@ -4,8 +4,10 @@ from decimal import Decimal, InvalidOperation
 from playwright.sync_api import (
     Locator,
     Page,
-    TimeoutError as PlaywrightTimeoutError,
     expect,
+)
+from playwright.sync_api import (
+    TimeoutError as PlaywrightTimeoutError,
 )
 
 from ...models.player import PlayerInfo

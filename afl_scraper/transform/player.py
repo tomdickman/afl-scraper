@@ -1,10 +1,11 @@
 import re
-
-from bs4 import BeautifulSoup
 from datetime import datetime
 from pathlib import Path
 
+from bs4 import BeautifulSoup
+
 from ..models import Player
+from ..paths import data_path
 
 
 def transform_player_page(page_path: Path | str) -> Player:
@@ -13,17 +14,17 @@ def transform_player_page(page_path: Path | str) -> Player:
     if not path.exists():
         raise FileNotFoundError(f"Player file not found {page_path}")
 
-    with open(page_path, mode="r", encoding="utf-8", errors="replace") as f:
+    with open(page_path, encoding="utf-8", errors="replace") as f:
         soup = BeautifulSoup(markup=f, features="html.parser")
 
     player_name = soup.find("h1")
 
-    if player_name == None:
+    if player_name is None:
         raise RuntimeError(f"Player name could not be parsed {page_path}")
 
     birthdate_content = soup.find(string=re.compile(r"(\d{1,2}-[A-Za-z]{3}-\d{4})"))
 
-    if birthdate_content == None:
+    if birthdate_content is None:
         raise RuntimeError(f"Player date of birth could not be parsed {page_path}")
 
     id = re.sub(".html", "", path.name)
@@ -51,7 +52,7 @@ def transform_player_data(source: str = "afl_tables") -> list[Player]:
     -------
         list[Player]
     """
-    player_page_dir = Path(f"data/raw/{source}/player/")
+    player_page_dir = data_path("raw", source, "player")
     player_page_files = [
         p for p in player_page_dir.iterdir() if p.is_file() and p.suffix == ".html"
     ]

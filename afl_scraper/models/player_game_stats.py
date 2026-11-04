@@ -5,11 +5,11 @@ from .db import DBModel
 
 class PlayerGameStats(DBModel):
     __table_name__ = "player_game_stats"
-    __conflict_cols__ = ["player_id", "game_id"]
-    __exclude_updates_cols__ = []
+    __conflict_cols__ = ("player_id", "game_id")
+    __exclude_updates_cols__ = ()
     # Some sources omit these fields. A non-null value can enrich a row, but
     # replaying a sparse source must not erase one.
-    __preserve_existing_on_null_cols__ = [
+    __preserve_existing_on_null_cols__ = (
         "jumper_number",
         "rebound_50s",
         "inside_50s",
@@ -26,7 +26,7 @@ class PlayerGameStats(DBModel):
         "goal_assists",
         "time_on_ground_percent",
         "fantasy_points",
-    ]
+    )
 
     player_id: str
     team: str

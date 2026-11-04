@@ -3,16 +3,17 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from ..models.player import PlayerInfo, PlayerMapping, MatchResult
+from ..models.player import MatchResult, PlayerInfo, PlayerMapping
+from ..normalization import normalize_team
+from ..paths import data_path
 from ..storage import admin_connection_pool
 from ..utils.identity import normalize_person_name
-
 
 _QUOTED_NICKNAME_PATTERN = re.compile(r'(?:"[^"]+"|[\'’][^\'’]+[\'’])')
 
 
 def load_player_ids_from_json(source: str, year: int) -> list[PlayerInfo]:
-    path = Path(f"data/mapping/{year}_{source}.json")
+    path = data_path("mapping", f"{year}_{source}.json")
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
@@ -44,46 +45,6 @@ def name_boundaries_match(left: PlayerInfo, right: PlayerInfo) -> bool:
         and left_parts[0] == right_parts[0]
         and left_parts[-1] == right_parts[-1]
     )
-
-
-_TEAM_ALIASES = {
-    "adelaide": "adelaide",
-    "adelaide crows": "adelaide",
-    "brisbane": "brisbane",
-    "brisbane lions": "brisbane",
-    "carlton": "carlton",
-    "collingwood": "collingwood",
-    "essendon": "essendon",
-    "fremantle": "fremantle",
-    "fremantle dockers": "fremantle",
-    "geelong": "geelong",
-    "geelong cats": "geelong",
-    "gold coast": "gold coast",
-    "gold coast suns": "gold coast",
-    "greater western sydney": "gws",
-    "gws": "gws",
-    "gws giants": "gws",
-    "hawthorn": "hawthorn",
-    "melbourne": "melbourne",
-    "kangaroos": "north melbourne",
-    "north melbourne": "north melbourne",
-    "port adelaide": "port adelaide",
-    "richmond": "richmond",
-    "st. kilda": "st kilda",
-    "st kilda": "st kilda",
-    "sydney": "sydney",
-    "sydney swans": "sydney",
-    "swans": "sydney",
-    "west coast": "west coast",
-    "west coast eagles": "west coast",
-    "western bulldogs": "western bulldogs",
-    "footscray": "western bulldogs",
-}
-
-
-def normalize_team(team: str) -> str:
-    normalized = " ".join(team.casefold().strip().split())
-    return _TEAM_ALIASES.get(normalized, normalized)
 
 
 def teams_match(afl_team: str, tables_team: str) -> bool:
@@ -245,7 +206,7 @@ def validate_mapping_coverage(
 
 
 def save_matches_to_json(matches: MatchResult, year: int) -> Path:
-    path = Path(f"data/mapping/{year}_to_review.json")
+    path = data_path("mapping", f"{year}_to_review.json")
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(path, "w") as f:
@@ -286,10 +247,9 @@ def upsert_mapping_years(
         validate_mappings(mappings)
 
     counts = {}
-    with admin_connection_pool() as conn:
-        with conn.transaction():
-            for year, mappings in mappings_by_year.items():
-                counts[year] = _upsert_mappings_for_year(conn, mappings, year)
+    with admin_connection_pool() as conn, conn.transaction():
+        for year, mappings in mappings_by_year.items():
+            counts[year] = _upsert_mappings_for_year(conn, mappings, year)
     return counts
 
 

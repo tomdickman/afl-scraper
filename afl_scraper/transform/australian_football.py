@@ -1,27 +1,21 @@
 """Transform validated AustralianFootball caches into canonical DB models."""
 
-import json
-import re
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from ..config import load_config
 from ..models import Game, PlayerGameStats
 from ..rounds import normalize_round_label
 from ..scraper.models import AustralianFootballMatchData
 from .match import resolve_team, resolve_venue
 
-
 SOURCE = "australian_football"
-_CONFIG_ROOT = Path(__file__).resolve().parents[2] / "config"
 
 
-def _load_jsonc(path: Path) -> dict:
-    return json.loads(re.sub(r"//.*", "", path.read_text(encoding="utf-8")))
-
-
-def historical_match_datetime(match: AustralianFootballMatchData, venue_id: str):
-    mappings = _load_jsonc(_CONFIG_ROOT / "venue_timezones.jsonc")
+def historical_match_datetime(
+    match: AustralianFootballMatchData, venue_id: str
+) -> datetime:
+    mappings = load_config("venue_timezones.jsonc")
     timezone_name = mappings.get(venue_id)
     if timezone_name is None:
         raise KeyError(f"No timezone mapping found for canonical venue {venue_id!r}")
@@ -34,7 +28,7 @@ def historical_match_datetime(match: AustralianFootballMatchData, venue_id: str)
 
     naive = datetime.combine(match.details.date, match.details.local_time)
     aware = naive.replace(tzinfo=venue_timezone)
-    round_trip = aware.astimezone(timezone.utc).astimezone(venue_timezone)
+    round_trip = aware.astimezone(UTC).astimezone(venue_timezone)
     if round_trip.replace(tzinfo=None) != naive:
         raise ValueError(
             f"Nonexistent local match time {naive.isoformat()} at {venue_id}"
